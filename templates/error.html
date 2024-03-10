@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="error-page">
+    <p class="error-message">{{error_message}}</p>
+    <img src="{{image_url}}" alt="Server Error" class="error-image">
+</div>
+
+{% endblock content %}

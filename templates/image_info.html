@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="imageinfo">
+    <h1>{{title}}</h1>
+    <time>{{created_at}}</time>
+    <figure>
+        <img src="/image/{{image_id}}" alt="{{title}}">
+        <figcaption>{{prompt}}</figcaption>
+    </figure>
+    <p>Used in <a href="/content/{{slug}}">"{{content_title}}"</a></p>
+</div>
+{% endblock content %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+
+<h1>
+    Select an Article to Generate
+</h1>
+
+{% for proposal in proposals %}
+<div class="proposal">
+    <a href="/generate/{{ proposal.id }}">
+        <h2>
+            {{ proposal.title }}
+        </h2>
+        <p>
+            {{ proposal.description }}
+        </p>
+    </a>
+</div>
+{% endfor %}
+
+{% endblock content %}

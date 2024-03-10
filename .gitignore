@@ -1,0 +1,6 @@
+/target
+.trigger
+.env
+.vscode/
+.idea/
+/compose.yaml

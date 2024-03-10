@@ -1,0 +1,21 @@
+{% extends "base_pt.html" %}
+
+{% block content %}
+
+<h1>
+    Instruções
+</h1>
+
+<p>
+    Digite qualquer coisa aqui para guiar a IA e ela tentará adivinhar o que 
+    você quer dizer. Você pode tentar um título, parte de um título, 
+    palavras-chave, instruções ou qualquer outra coisa que você possa imaginar.
+</p>
+<form action="/pt/create" method="post">
+    <textarea name="prompt" placeholder="Instruções aqui" rows="10" autoFocus></textarea>
+    <button type="submit">
+        Enviar
+    </button>
+</form>
+
+{% endblock content %}
