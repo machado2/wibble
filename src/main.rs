@@ -37,6 +37,7 @@ mod repository;
 mod tasklist;
 mod translate;
 mod wibble_request;
+mod get_images;
 
 // #[debug_handler(state = AppState)]
 async fn get_index(
@@ -145,6 +146,7 @@ async fn main() {
         .route("/content/:slug", get(get_content))
         .route("/wait/:id", get(get_wait))
         .route("/create", post(create_en).get(get_create))
+        .route("/images", get(get_images::get_images))
         .fallback_service(serve_dir)
         .layer(middleware::from_fn_with_state(state.clone(), handle_error))
         .with_state(state);

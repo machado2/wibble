@@ -1,4 +1,5 @@
 use axum::response::{IntoResponse, Response};
+use sea_orm::DbErr;
 use static_assertions::assert_impl_all;
 use tracing::{event, Level};
 
@@ -23,11 +24,19 @@ where
     Image(#[from] image::ImageError),
     #[error("Template error: {0}")]
     Template(tera::Error),
+    #[error("Not implemented")]
+    NotImplemented,
 }
 
 assert_impl_all!(Error: Send, Sync);
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<DbErr> for Error {
+    fn from(e: DbErr) -> Self {
+        Error::Database(e.to_string())
+    }
+}
 
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
