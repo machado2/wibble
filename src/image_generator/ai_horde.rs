@@ -3,17 +3,18 @@
 use std::env;
 use std::future::Future;
 use std::io::Cursor;
+use std::iter::empty;
 use std::time::Duration;
 
-use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use backoff::future::retry;
 use futures::future::BoxFuture;
 use http::StatusCode;
 use image::ImageFormat;
 use rand::{Rng, SeedableRng};
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use serde_json::{json, Value};
-use tracing::error;
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+use serde_json::{json, Map, Value};
+use tracing::{error, event, Level};
 
 use crate::error::Error;
 use crate::image_generator::{CreatedImage, ImageGenerator};
@@ -22,7 +23,7 @@ use crate::image_generator::{CreatedImage, ImageGenerator};
 pub struct AiHordeImageGenerator {
     client: reqwest::Client,
     headers: HeaderMap,
-    model: String,
+    style: Option<Value>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -75,10 +76,13 @@ impl AiHordeImageGenerator {
                 .to_owned(),
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        let style: Option<Value> = env::var("AI_HORDE_STYLE")
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok());
         let model = env::var("SD_MODEL").unwrap_or("SDXL 1.0".to_string());
         AiHordeImageGenerator {
             client: reqwest::Client::new(),
-            model,
+            style,
             headers,
         }
     }
@@ -102,6 +106,12 @@ impl AiHordeImageGenerator {
     }
 
     async fn post(&self, path: &str, body: Value) -> Result<Value, HordeError> {
+        event!(
+            Level::DEBUG,
+            "POST to AI Horde: {} with body: {:?}",
+            path,
+            body
+        );
         let res = self
             .client
             .post(format!("{}{}", BASE_URL, path))
@@ -138,32 +148,53 @@ impl AiHordeImageGenerator {
     }
 
     async fn ai_horde_generate(&self, prompt: &str) -> Result<String, HordeError> {
-        let mut parameters = json!({
-            "sampler_name": "k_euler_a",
-            "width": 512,
-            "height": 512,
-            "hires_fix": false,
-        });
         let mut rng = rand::rngs::StdRng::from_entropy();
         let seed = rng.gen_range(0..1000000).to_string();
-        if self.model.contains("XL") {
-            parameters = json!({
-                "sampler_name": "k_euler_a",
-                "width": 1024,
-                "height": 576,
-                "hires_fix": false,
-                "seed": seed,
-            });
-        }
+        let (final_prompt, parameters, model) = match (&self.style) {
+            Some(style) => {
+                let final_prompt = match (style.get("prompt")) {
+                    Some(style_prompt) => style_prompt
+                        .as_str()
+                        .unwrap()
+                        .replace("{p}", prompt)
+                        .replace("{np}", "")
+                        .to_string(),
+                    None => prompt.to_string(),
+                };
+                let mut parameters = style.clone().as_object_mut().unwrap().clone();
+                let model: Option<String> = parameters
+                    .get("model")
+                    .and_then(|m| m.as_str())
+                    .and_then(|m| Some(m.to_string()));
+                parameters.remove("prompt");
+                if model.is_some() {
+                    parameters.remove("model");
+                }
+                if !parameters.contains_key("seed") {
+                    parameters.insert("seed".to_string(), json!(seed));
+                }
+                if !parameters.contains_key("sampler_name") {
+                    parameters.insert("sampler_name".to_string(), json!("k_dpmpp_sde"));
+                    if !parameters.contains_key("karras") {
+                        parameters.insert("karras".to_string(), json!(true));
+                    }
+                }
+                let parameters = serde_json::to_value(parameters).ok().unwrap();
+                (final_prompt, parameters, model)
+            }
+            None => (prompt.to_string(), json!({}), None),
+        };
 
-        let body = json!({
-            "prompt": prompt,
+        let mut body = json!({
+            "prompt": final_prompt,
             "params": parameters,
-            "models": [self.model],
             "nsfw": true,
             "censor_nsfw": false,
             "slow_workers": false,
         });
+        if let Some(model) = model {
+            body["model"] = json!(model);
+        }
 
         let res = self.post("/generate/async", body).await?;
         let id = res
@@ -276,7 +307,7 @@ impl AiHordeImageGenerator {
             })?;
         Ok(CreatedImage {
             data: buffer.into_inner(),
-            model: self.model.clone(),
+            model: "".to_string(),
         })
     }
 }

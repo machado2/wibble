@@ -13,15 +13,15 @@ Examples:
 
 Image example 1:
 
-<GeneratedImage prompt="a dachshund working on the coffee maker in the morning in the kitchen, masterpiece, best quality, high quality, extremely detailed cg unity 8k wallpaper, scenery, award winning photography, hdr, trending on artstation, trending on cgsociety, intricate, high detail, art by midjourney" alt="Dachshund making coffee" />
+<GeneratedImage prompt="a dachshund working on the coffee maker in the morning in the kitchen" alt="Dachshund making coffee" />
 
 Image example 2:
 
-<GeneratedImage prompt="crisp raw photo of an Alien scene with a strange alien creature walking on its eight legs to the horizon, mist in the background, strange alien planet, hyper realistic, beautiful, intricate details, photo-realism, octane render, 4k, dramatic lighting, presentable,flamboyant,glorious,bonny,lovely,telegenic,well-favored,elegant,striking,showstopping,appealing" alt="Alien creature on its planet" />
+<GeneratedImage prompt="an Alien scene with a strange alien creature walking on its eight legs to the horizon, mist in the background, strange alien planet" alt="Alien creature on its planet" />
 
 Image example 3:
 
-<GeneratedImage prompt="1970s teenager disorded and messy bedroom, posters on the wall, vinyl records on the floor, old guitar in the corner, day outside of the window courtains, hippy movement, hyperdetailed analog atmospheric natural lighting, sharp focus, concept art trending on artstation by Stephen Darbishire and greg rutkowski and Kilian Eng, cozy atmospheric and cinematic lighting, hyperdetailed, photorealistic, neat and tidy, magical, ambient light, sharp focus" alt="Cozy room" />
+<GeneratedImage prompt="1970s teenager disorded and messy bedroom, posters on the wall, vinyl records on the floor, old guitar in the corner, day outside of the window courtains" alt="Cozy room" />
 
 * Don't use the markdown image syntax.
 * Don't use any external links.
