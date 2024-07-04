@@ -3,7 +3,6 @@
 use std::env;
 use std::future::Future;
 use std::io::Cursor;
-use std::iter::empty;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
@@ -13,11 +12,18 @@ use http::StatusCode;
 use image::ImageFormat;
 use rand::{Rng, SeedableRng};
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use tracing::{error, event, Level};
 
 use crate::error::Error;
 use crate::image_generator::{CreatedImage, ImageGenerator};
+
+#[derive(Debug, Clone)]
+struct GenerateImageResponse {
+    id: String,
+    url: Option<String>,
+    parameters: String
+}
 
 #[derive(Debug, Clone)]
 pub struct AiHordeImageGenerator {
@@ -79,7 +85,6 @@ impl AiHordeImageGenerator {
         let style: Option<Value> = env::var("AI_HORDE_STYLE")
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok());
-        let model = env::var("SD_MODEL").unwrap_or("SDXL 1.0".to_string());
         AiHordeImageGenerator {
             client: reqwest::Client::new(),
             style,
@@ -147,12 +152,12 @@ impl AiHordeImageGenerator {
         Ok(r)
     }
 
-    async fn ai_horde_generate(&self, prompt: &str) -> Result<String, HordeError> {
+    async fn ai_horde_generate(&self, prompt: &str) -> Result<GenerateImageResponse, HordeError> {
         let mut rng = rand::rngs::StdRng::from_entropy();
         let seed = rng.gen_range(0..1000000).to_string();
-        let (final_prompt, parameters, model) = match (&self.style) {
+        let (final_prompt, parameters, model) = match &self.style {
             Some(style) => {
-                let final_prompt = match (style.get("prompt")) {
+                let final_prompt = match style.get("prompt") {
                     Some(style_prompt) => style_prompt
                         .as_str()
                         .unwrap()
@@ -165,7 +170,7 @@ impl AiHordeImageGenerator {
                 let model: Option<String> = parameters
                     .get("model")
                     .and_then(|m| m.as_str())
-                    .and_then(|m| Some(m.to_string()));
+                    .map(|m| m.to_string());
                 parameters.remove("prompt");
                 if model.is_some() {
                     parameters.remove("model");
@@ -204,7 +209,14 @@ impl AiHordeImageGenerator {
                 "AI horde response without id".into(),
             ))?
             .to_string();
-        Ok(id)
+
+        let parameters_str = serde_json::to_string(&parameters).unwrap();
+        let generated_image_response = GenerateImageResponse {
+            id,
+            url: None,
+            parameters: parameters_str
+        };
+        Ok(generated_image_response)
     }
 
     async fn get_status(&self, id: &str) -> Result<String, HordeError> {
@@ -229,7 +241,7 @@ impl AiHordeImageGenerator {
         }
     }
 
-    async fn generate_with_backoff(&self, prompt: String) -> Result<String, HordeError> {
+    async fn generate_with_backoff(&self, prompt: String) -> Result<GenerateImageResponse, HordeError> {
         retry(
             ExponentialBackoff {
                 max_elapsed_time: Some(TIMEOUT),
@@ -247,8 +259,9 @@ impl AiHordeImageGenerator {
         }
     }
 
-    async fn generate_image(&self, prompt: &str) -> Result<String, HordeError> {
-        let id = self.generate_with_backoff(prompt.to_string()).await?;
+    async fn generate_image(&self, prompt: &str) -> Result<GenerateImageResponse, HordeError> {
+        let gen_response = self.generate_with_backoff(prompt.to_string()).await?;
+        let id = gen_response.id;
         retry(
             ExponentialBackoff {
                 max_elapsed_time: Some(TIMEOUT),
@@ -268,7 +281,11 @@ impl AiHordeImageGenerator {
                         _ => Err(backoff::Error::Permanent(e)),
                     },
                 };
-                r
+                r.map(|s| GenerateImageResponse {
+                    id: id.clone(),
+                    url: Some(s),
+                    parameters: gen_response.parameters.clone()
+                })
             },
         )
         .await
@@ -285,9 +302,9 @@ impl AiHordeImageGenerator {
     }
 
     async fn create_image(&self, prompt: String) -> Result<CreatedImage, HordeError> {
-        let url = self.generate_image(&prompt).await?;
+        let generate_response = self.generate_image(&prompt).await?;
         let response = retry(ExponentialBackoff::default(), || async {
-            Ok(reqwest::get(url.clone()).await?)
+            Ok(reqwest::get(generate_response.url.clone().unwrap()).await?)
         })
         .await
         .map_err(|e| {
@@ -307,7 +324,7 @@ impl AiHordeImageGenerator {
             })?;
         Ok(CreatedImage {
             data: buffer.into_inner(),
-            model: "".to_string(),
+            parameters: generate_response.parameters,
         })
     }
 }

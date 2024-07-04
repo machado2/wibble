@@ -68,7 +68,7 @@ impl ImageGenerator for DallEImageGenerator {
                     })?;
                     Ok(CreatedImage {
                         data: buffer.into_inner(),
-                        model: model_name,
+                        parameters: model_name,
                     })
                 }
                 _ => Err(Error::NotFound),

@@ -24,8 +24,6 @@ where
     Image(#[from] image::ImageError),
     #[error("Template error: {0}")]
     Template(tera::Error),
-    #[error("Not implemented")]
-    NotImplemented,
 }
 
 assert_impl_all!(Error: Send, Sync);

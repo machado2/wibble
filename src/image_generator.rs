@@ -15,7 +15,7 @@ pub mod stability;
 
 pub struct CreatedImage {
     pub data: Vec<u8>,
-    pub model: String,
+    pub parameters: String,
 }
 
 pub trait ImageGenerator: Debug + Send + Sync {
@@ -33,7 +33,7 @@ pub struct ImageGenerated {
     pub id: String,
     pub img: ImageToCreate,
     pub data: Vec<u8>,
-    pub model: String,
+    pub parameters: String,
 }
 
 struct ImageGeneration {
@@ -62,7 +62,7 @@ impl ImageGeneration {
             id,
             img,
             data: data.data,
-            model: data.model,
+            parameters: data.parameters,
         })
     }
 

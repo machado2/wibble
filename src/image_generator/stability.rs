@@ -74,7 +74,7 @@ impl ImageGenerator for StabilityImageGenerator {
             })?;
             Ok(CreatedImage {
                 data: resp.to_vec(),
-                model: "Stable Diffusion 3".to_string(),
+                parameters: "Stable Diffusion 3".to_string(),
             })
         })
     }
