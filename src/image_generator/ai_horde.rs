@@ -201,7 +201,7 @@ impl AiHordeImageGenerator {
             body["model"] = json!(model);
         }
 
-        let res = self.post("/generate/async", body).await?;
+        let res = self.post("/generate/async", body.clone()).await?;
         let id = res
             .get("id")
             .and_then(|id| id.as_str())
@@ -210,7 +210,7 @@ impl AiHordeImageGenerator {
             ))?
             .to_string();
 
-        let parameters_str = serde_json::to_string(&parameters).unwrap();
+        let parameters_str = serde_json::to_string(&body).unwrap();
         let generated_image_response = GenerateImageResponse {
             id,
             url: None,
