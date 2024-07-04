@@ -10,7 +10,6 @@ use backoff::future::retry;
 use futures::future::BoxFuture;
 use http::StatusCode;
 use image::ImageFormat;
-use rand::{Rng, SeedableRng};
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde_json::{json, Value};
 use tracing::{error, event, Level};
@@ -22,6 +21,7 @@ use crate::image_generator::{CreatedImage, ImageGenerator};
 struct GenerateImageResponse {
     id: String,
     url: Option<String>,
+    model: String,
     parameters: String
 }
 
@@ -153,8 +153,6 @@ impl AiHordeImageGenerator {
     }
 
     async fn ai_horde_generate(&self, prompt: &str) -> Result<GenerateImageResponse, HordeError> {
-        let mut rng = rand::rngs::StdRng::from_entropy();
-        let seed = rng.gen_range(0..1000000).to_string();
         let (final_prompt, parameters, model) = match &self.style {
             Some(style) => {
                 let final_prompt = match style.get("prompt") {
@@ -175,9 +173,6 @@ impl AiHordeImageGenerator {
                 if model.is_some() {
                     parameters.remove("model");
                 }
-                if !parameters.contains_key("seed") {
-                    parameters.insert("seed".to_string(), json!(seed));
-                }
                 if !parameters.contains_key("sampler_name") {
                     parameters.insert("sampler_name".to_string(), json!("k_dpmpp_sde"));
                     if !parameters.contains_key("karras") {
@@ -197,7 +192,7 @@ impl AiHordeImageGenerator {
             "censor_nsfw": false,
             "slow_workers": false,
         });
-        if let Some(model) = model {
+        if let Some(model) = model.clone() {
             body["model"] = json!(model);
         }
 
@@ -209,11 +204,12 @@ impl AiHordeImageGenerator {
                 "AI horde response without id".into(),
             ))?
             .to_string();
-
+        
         let parameters_str = serde_json::to_string(&body).unwrap();
         let generated_image_response = GenerateImageResponse {
             id,
             url: None,
+            model: model.unwrap_or(String::from("unspecified")).to_string(),
             parameters: parameters_str
         };
         Ok(generated_image_response)
@@ -284,6 +280,7 @@ impl AiHordeImageGenerator {
                 r.map(|s| GenerateImageResponse {
                     id: id.clone(),
                     url: Some(s),
+                    model: gen_response.model.clone(),
                     parameters: gen_response.parameters.clone()
                 })
             },
