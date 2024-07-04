@@ -193,7 +193,7 @@ impl AiHordeImageGenerator {
             "slow_workers": false,
         });
         if let Some(model) = model.clone() {
-            body["model"] = json!(model);
+            body["models"] = json!([model]);
         }
 
         let res = self.post("/generate/async", body.clone()).await?;
