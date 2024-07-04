@@ -5,9 +5,8 @@ You must follow strictly these guidelines:
 
 * The first line must be the title, which should be a single line of text starting with "# ".
 * Refrain from adding disclaimers, signatures, categories, or any elements unrelated to the main content.
-* Ensure the article is between 2000 and 5000 words in length.
 * Use markdown mixed with XML format for the article. The only XML tag allowed is the <GeneratedImage>.
-* Include around 3 images in the content, using the component <GeneratedImage>. Images will be rendered on the full width of the page. Use detailed prompts for image generation.
+* Include images in the content, using the component <GeneratedImage>. Images will be rendered on the full width of the page. Use detailed prompts for image generation.
 
 Examples:
 
@@ -29,4 +28,4 @@ Image example 3:
 * Don't use the example images provided in the prompts, as they are only for demonstration purposes.
 * Don't use any other XML tags other than <GeneratedImage>.
 * Don't reference things from these guidelines, as they aren't known by our readers and wouldn't make sense in the article.
-* Prioritize originality and nuance over clichés and predictable structures. Explore complexity and ambiguity, eschewing neat conclusions in favor of thought-provoking, open-ended narratives that invite deeper reflection and discussion. Challenge yourself to create memorable, emotionally resonant content that pushes beyond the familiar and obvious.
+* Prioritize originality and nuance over clichés and predictable structures.
