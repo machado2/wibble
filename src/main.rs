@@ -131,7 +131,10 @@ async fn handle_error(
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    dotenv().ok();
+    if let Err(e) = dotenv() {
+        eprintln!("Failed to load .env file: {}", e);
+        panic!("Application cannot start without .env file");
+    }
     tracing_subscriber::fmt::init();
     let port: u16 = env::var("PORT")
         .unwrap_or("8000".to_string())
