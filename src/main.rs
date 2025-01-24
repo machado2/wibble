@@ -35,7 +35,6 @@ mod image_info;
 mod llm;
 mod repository;
 mod tasklist;
-mod translate;
 mod wibble_request;
 mod get_images;
 

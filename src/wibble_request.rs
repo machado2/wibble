@@ -11,7 +11,6 @@ use tracing::log;
 
 use crate::app_state::AppState;
 use crate::error::Error;
-use crate::translate::Translator;
 
 #[derive(Debug, Clone)]
 pub struct WibbleRequest
@@ -20,7 +19,6 @@ where
 {
     pub state: AppState,
     pub style: String,
-    pub lang: String,
 }
 
 pub struct Template<'a> {
@@ -62,7 +60,7 @@ impl WibbleRequest {
         context.insert("style", &busted_style);
         context.insert(
             "text_create_new_article",
-            &self.translate("Create new article").await,
+            "Create new article"
         );
         Template {
             name: format!("{}.html", name),
@@ -71,33 +69,6 @@ impl WibbleRequest {
         }
     }
 }
-
-// #[async_trait]
-// impl<S> FromRequest<S> for WibbleRequest
-// where
-//     AppState: FromRef<S>,
-//     S: Sync + Send,
-// {
-//     type Rejection = Error;
-//
-//     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-//         let query = Query::<HashMap<String, String>>::try_from_uri(req.uri()).ok();
-//         let lang = query
-//             .and_then(|q| q.get("lang").cloned())
-//             .or_else(|| {
-//                 req.headers()
-//                     .get("Accept-Language")
-//                     .and_then(|h| h.to_str().ok())
-//                     .map(String::from)
-//             })
-//             .unwrap_or("en-US".to_string());
-//         Ok(WibbleRequest {
-//             state: AppState::from_ref(state),
-//             style: None,
-//             lang: Some(lang),
-//         })
-//     }
-// }
 
 #[async_trait]
 impl<S> FromRequestParts<S> for WibbleRequest
@@ -110,22 +81,10 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let query = Query::<HashMap<String, String>>::try_from_uri(&parts.uri).ok();
-        let lang = query
-            .clone()
-            .and_then(|q| q.get("lang").cloned())
-            .or_else(|| {
-                parts
-                    .headers
-                    .get("Accept-Language")
-                    .and_then(|h| h.to_str().ok())
-                    .map(String::from)
-            })
-            .unwrap_or("en-US".to_string());
-
         let style = query
             .and_then(|q| q.get("theme").cloned())
             .unwrap_or("style".to_string());
         let state = AppState::from_ref(state);
-        Ok(WibbleRequest { state, style, lang })
+        Ok(WibbleRequest { state, style })
     }
 }

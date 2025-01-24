@@ -31,7 +31,7 @@ async fn create_article(state: &AppState, id: String, instructions: String) -> R
     let models = &state.llm.models;
     let mut attempts = 0;
 
-    let use_examples_env = env::var("USE_EXAMPLES").unwrap();
+    let use_examples_env = env::var("USE_EXAMPLES").unwrap_or("false".to_string());
     debug!("USE_EXAMPLES: {}", use_examples_env);
 
     let use_placeholders = env::var("USE_PLACEHOLDERS") == Ok("true".to_string());

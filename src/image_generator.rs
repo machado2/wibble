@@ -12,6 +12,7 @@ pub mod dalle;
 pub mod fallback;
 pub mod retrying;
 pub mod stability;
+pub mod huggingface;
 
 pub struct CreatedImage {
     pub data: Vec<u8>,
