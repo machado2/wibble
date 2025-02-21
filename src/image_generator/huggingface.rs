@@ -32,13 +32,19 @@ impl ImageGenerator for HuggingFaceImageGenerator {
     fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>> {
         Box::pin(async move {
             let api_url = &self.api_url; // Use configured or default API URL
+            let params = json!({
+                "inputs": prompt,
+                "num_inference_steps": 50,
+                "guidance_scale": 5.0,
+                "negative_prompt": "bad art, low quality, blurry, out of focus, simplistic colors, boring drawings"
+            });
             let resp = self
                 .reqwest
                 .post(api_url) // Use the API URL here
                 .header("Authorization", format!("Bearer {}", &self.api_key)) // API Key for HuggingFace
                 .header("Content-Type", "application/json") // HuggingFace API expects JSON
                 .header("Accept", "image/*") // Expect image response
-                .body(json!({"inputs": prompt}).to_string()) // Send prompt as JSON
+                .body(params.to_string())
                 .send()
                 .await
                 .map_err(|e| {
