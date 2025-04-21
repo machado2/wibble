@@ -6,7 +6,6 @@ use sea_orm::{Database, DatabaseConnection};
 use tera::Tera;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
-use crate::image_generator::dalle::DallEImageGenerator;
 use crate::image_generator::fallback::FallbackImageGenerator;
 use crate::image_generator::stability::StabilityImageGenerator;
 use crate::image_generator::ImageGenerator;
@@ -29,12 +28,7 @@ impl AppState {
         let task_list = TaskList::default();
         let tera = Tera::new("templates/**/*").expect("Failed to load templates");
         let llm = Llm::init();
-        let image_generator: Arc<dyn ImageGenerator> = if image_mode == "dalle" {
-            Arc::new(FallbackImageGenerator::new(
-                DallEImageGenerator::new(),
-                AiHordeImageGenerator::new(),
-            ))
-        } else if image_mode == "sd3" {
+        let image_generator: Arc<dyn ImageGenerator> = if image_mode == "sd3" {
             Arc::new(FallbackImageGenerator::new(
                 StabilityImageGenerator::new(),
                 AiHordeImageGenerator::new(),

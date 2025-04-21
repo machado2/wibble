@@ -60,6 +60,7 @@ impl FunctionDefinition {
             name: self.name.clone(),
             description: self.description.clone(),
             parameters: Some(self.parameters.to_json()),
+            strict: Some(true),
         }
     }
 

@@ -2,29 +2,36 @@ use axum::response::{IntoResponse, Response};
 use sea_orm::DbErr;
 use static_assertions::assert_impl_all;
 use tracing::{event, Level};
+use std::fmt;
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error
-where
-    Self: Send + Sync,
-{
-    #[error("Not found")]
+#[derive(Debug)]
+pub enum Error {
     NotFound,
-    #[error("Database error: {0}")]
     Database(String),
-    #[error("LLM error: {0}")]
     Llm(String),
-    #[error("Image generation error: {0}")]
     ImageGeneration(String),
-    #[error("Censored by Image generator")]
     ImageCensored,
-    #[error("Rate limited")]
     RateLimited,
-    #[error("Image error: {0}")]
-    Image(#[from] image::ImageError),
-    #[error("Template error: {0}")]
+    Image(image::ImageError),
     Template(tera::Error),
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::NotFound => write!(f, "Not found"),
+            Error::Database(msg) => write!(f, "Database error: {}", msg),
+            Error::Llm(msg) => write!(f, "LLM error: {}", msg),
+            Error::ImageGeneration(msg) => write!(f, "Image generation error: {}", msg),
+            Error::ImageCensored => write!(f, "Censored by Image generator"),
+            Error::RateLimited => write!(f, "Rate limited"),
+            Error::Image(err) => write!(f, "Image error: {}", err),
+            Error::Template(err) => write!(f, "Template error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 assert_impl_all!(Error: Send, Sync);
 

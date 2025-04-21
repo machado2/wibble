@@ -3,9 +3,12 @@ use sea_orm::prelude::*;
 use sea_orm::{ActiveValue, QuerySelect, TransactionTrait};
 use serde_json::Value;
 use slugify::slugify;
+use std::fs;
+use std::path::PathBuf;
+use uuid::Uuid;
 
 use crate::entities::prelude::*;
-use crate::entities::{content, content_image, examples, image_data};
+use crate::entities::{content, content_image, examples};
 use crate::error::Error;
 use crate::image_generator::ImageGenerated;
 
@@ -22,9 +25,7 @@ pub async fn get_examples(db: &DatabaseConnection) -> Result<Vec<(String, String
 
         if let Some(max_id) = max_id {
             // Step 2: Generate random new_id values
-            let mut rng = rand::rngs::StdRng::from_entropy();
-            let random_ids: Vec<i64> = (0..3).map(|_| rng.gen_range(1..=max_id)).collect();
-
+            let random_ids: Vec<i64> = (0..3).map(|_| rand::rng().random_range(1..=max_id)).collect();
             // Step 3: Fetch rows based on random new_id values
             let examples = Examples::find()
                 .filter(examples::Column::NewId.is_in(random_ids.clone()))
@@ -106,11 +107,13 @@ async fn save_image(
         .exec(db)
         .await
         .map_err(|e| Error::Database(format!("Error inserting content_image: {}", e)))?;
-    let image_data = image_data::Model { id, jpeg_data: img };
-    ImageData::insert(image_data::ActiveModel::from(image_data))
-        .exec(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error inserting image_data: {}", e)))?;
+    
+    let image_path = PathBuf::from("static/images").join(format!("{}.jpg", id));
+    fs::create_dir_all(image_path.parent().unwrap())
+        .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
+    fs::write(&image_path, img)
+        .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
+    
     Ok(())
 }
 

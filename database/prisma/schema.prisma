@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -130,32 +130,25 @@ model content_image {
   id                                        String      @id @db.VarChar(100)
   content_id                                String      @db.VarChar(36)
   prompt_hash                               String?     @db.VarChar(100)
-  prompt                                    String      @db.MediumText
+  prompt                                    String      @db.Text
   alt_text                                  String      @db.VarChar(1000)
-  created_at                                DateTime    @db.DateTime(0)
+  created_at                                DateTime    @db.Timestamp(0)
   flagged                                   Boolean     @default(false)
   regenerate                                Boolean     @default(false)
   fail_count                                Int         @default(0)
   generator                                 String?     @db.VarChar(100)
   model                                     String?     @db.VarChar(100)
   seed                                      String?     @db.VarChar(20)
-  parameters                                String?     @db.MediumText
+  parameters                                String?     @db.Text
   view_count                                Int         @default(0)
   content_content_image_idTocontent_image   content[]   @relation("content_image_idTocontent_image")
   content_content_image_content_idTocontent content     @relation("content_image_content_idTocontent", fields: [content_id], references: [id], onDelete: Cascade)
-  image_data                                image_data?
 
   @@unique([content_id, prompt_hash])
   @@index([content_id, prompt_hash])
   @@index([created_at])
   @@index([view_count])
   @@fulltext([prompt, model])
-}
-
-model image_data {
-  id            String        @id @db.VarChar(100)
-  jpeg_data     Bytes         @db.MediumBlob
-  content_image content_image @relation(fields: [id], references: [id], onDelete: Cascade)
 }
 
 model language {

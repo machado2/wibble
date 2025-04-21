@@ -8,7 +8,6 @@ use tracing::{event, Level};
 use crate::error::Error;
 
 pub mod ai_horde;
-pub mod dalle;
 pub mod fallback;
 pub mod retrying;
 pub mod stability;

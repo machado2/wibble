@@ -1,4 +1,5 @@
 use axum::response::Html;
+use markdown::{to_mdast, to_html, ParseOptions};
 use markdown::mdast::Node;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
@@ -47,7 +48,7 @@ fn mdast_to_html_inner(node: &Node, output: &mut String) {
         Node::Root(_) => {
             push_children(output);
         }
-        Node::BlockQuote(_) => {
+        Node::Blockquote(_) => {
             output.push_str("<blockquote>");
             push_children(output);
             output.push_str("</blockquote>");
@@ -181,13 +182,13 @@ fn mdast_to_html(node: &Node) -> String {
     output
 }
 
-fn markdown_to_html(markdown: &str) -> String {
-    let options = markdown::ParseOptions::default();
-    if let Ok(mut node) = markdown::to_mdast(markdown, &options) {
+fn markdown_to_html(markdown_str: &str) -> String {
+    let options = ParseOptions::default();
+    if let Ok(mut node) = to_mdast(markdown_str, &options) {
         preprocess_markdown_tree(&mut node);
         mdast_to_html(&node)
     } else {
-        markdown::to_html(markdown)
+        to_html(markdown_str)
     }
 }
 

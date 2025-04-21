@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
 
-use axum::async_trait;
 use axum::extract::{FromRef, FromRequestParts, Query};
 use axum::response::Html;
 use http::request::Parts;
@@ -70,7 +69,6 @@ impl WibbleRequest {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for WibbleRequest
 where
     AppState: FromRef<S>,

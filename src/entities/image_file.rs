@@ -3,13 +3,12 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "search_history")]
+#[sea_orm(table_name = "image_file")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
-    pub term: String,
-    pub created_at: DateTime,
-    pub result_count: i32,
+    #[sea_orm(column_type = "Text")]
+    pub file_path: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

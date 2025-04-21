@@ -4,14 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sea-orm = { version = "*", features = ["sqlx-mysql", "runtime-tokio", "macros"] }
+sea-orm = { version = "*", features = ["sqlx-postgres", "runtime-tokio", "macros"] }
 dotenvy = "0.15.7"
 serde = "1"
 serde_json = "1"
 chrono = "*"
 json = "*"
-thiserror = "1.0.58"
-markdown = "1.0.0-alpha.16"
+markdown = "1.0.0-alpha.23"
 reqwest = { version = "0.12.3", features = ["json"] }
 async-openai = "*"
 indoc = "2.0.5"
@@ -19,21 +18,23 @@ slugify = "0.1.0"
 tracing = "*"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 image = "0.25.1"
-axum = "0.7.5"
-axum-template = { version = "2.2.0", features = ["tera"] }
+axum = "0.8.3"
+axum-template = { version = "3.0.0", features = ["tera"] }
 tera = "1.19.1"
-tower-http = { version = "0.5.2", features = ["fs", "trace"] }
-axum-macros = "0.4.1"
-tower = "0.4.13"
+tower-http = { version = "0.6.2", features = ["fs", "trace"] }
+axum-macros = "0.5.0"
+tower = "0.5.2"
 http = "1.1.0"
-sqlx = { version = "0.7.4", features = ["runtime-tokio", "macros", "mysql" ] }
+sqlx = { version = "0.7.4", features = ["runtime-tokio", "macros", "postgres"] }
 sha2 = "0.10.8"
 tokio = { version="*", features = ["full"] }
 static_assertions = "1.1.0"
-rand = "0.8.5"
-bustdir = { version="0.1.1", features = ["tera"] }
+rand = "0.9.1"
+bustdir = { version="0.2.0", features = ["tera"] }
 regex = "1.10.4"
 futures = "0.3.30"
+thiserror = "2.0.12"
+async-trait = "0.1.62"
 
 
 [dependencies.backoff]

@@ -101,7 +101,7 @@ async fn handle_error(
     let status_code = response.status();
     match status_code {
         StatusCode::INTERNAL_SERVER_ERROR => {
-            let image_url = format!("/error{}.jpg", rand::thread_rng().gen_range(1..=8));
+            let image_url = format!("/error{}.jpg", rand::rng().random_range(1..=8));
             wr.template("error")
                 .await
                 .insert("image_url", &image_url)
@@ -113,7 +113,7 @@ async fn handle_error(
                 .into_response()
         }
         StatusCode::NOT_FOUND => {
-            let image_url = format!("/notfound{}.jpg", rand::thread_rng().gen_range(1..=4));
+            let image_url = format!("/notfound{}.jpg", rand::rng().random_range(1..=4));
             wr.template("error")
                 .await
                 .insert("image_url", &image_url)
@@ -140,10 +140,10 @@ async fn main() {
     let state = AppState::init().await;
     let app = Router::new()
         .route("/", get(get_index))
-        .route("/image/:id", get(get_image))
-        .route("/image_info/:id", get(get_image_info_handler))
-        .route("/content/:slug", get(get_content))
-        .route("/wait/:id", get(get_wait))
+        .route("/image/{id}", get(get_image))
+        .route("/image_info/{id}", get(get_image_info_handler))
+        .route("/content/{slug}", get(get_content))
+        .route("/wait/{id}", get(get_wait))
         .route("/create", post(create_en).get(get_create))
         .route("/images", get(get_images::get_images))
         .fallback_service(serve_dir)
