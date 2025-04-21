@@ -40,9 +40,6 @@ pub struct Model {
     pub last_lemmy_post_attempt: Option<DateTime>,
     pub longview_count: i32,
     pub umami_view_count: i32,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub json_content: Option<String>,
-    pub language_id: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
