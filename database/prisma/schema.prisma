@@ -1,6 +1,6 @@
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextIndex", "fullTextSearch"]
+  previewFeatures = ["fullTextIndex", "fullTextSearchPostgres"]
 }
 
 datasource db {
@@ -8,173 +8,167 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model content {
+  id                      String          @id @db.Char(36)
+  slug                    String          @unique @db.VarChar(500)
+  content                 String?
+  created_at              DateTime        @default(now()) @db.Timestamp(6)
+  generating              Boolean         @default(true)
+  generation_started_at   DateTime?       @db.Timestamp(6)
+  generation_finished_at  DateTime?       @db.Timestamp(6)
+  flagged                 Boolean
+  model                   String          @db.VarChar(100)
+  prompt_version          Int             @default(1)
+  fail_count              Int             @default(0)
+  description             String
+  image_id                String?         @db.VarChar(100)
+  title                   String          @db.VarChar(500)
+  user_input              String
+  view_count              Int             @default(0)
+  image_prompt            String?         @db.VarChar(1000)
+  user_email              String?         @db.VarChar(350)
+  votes                   Int             @default(0)
+  hot_score               Float           @default(100)
+  generation_time_ms      Int?
+  flarum_id               Int?
+  markdown                String?
+  converted               Boolean         @default(false)
+  lemmy_id                Int?
+  last_lemmy_post_attempt DateTime?
+  longview_count          Int             @default(0)
+  umami_view_count        Int             @default(0)
+  json_content            String?
+  language_id             String?         @db.Char(36)
+  content_image           content_image[]
+  content_vote            content_vote[]
+
+  @@index([created_at, generating], map: "idx_content_created_at_generating")
+  @@index([hot_score], map: "idx_content_hot_score")
+  @@index([view_count], map: "idx_content_view_count")
+  @@index([votes, view_count], map: "idx_content_votes_view_count")
+}
+
+model content_image {
+  id          String   @id @db.VarChar(100)
+  content_id  String   @db.VarChar(36)
+  prompt_hash String?  @db.VarChar(100)
+  prompt      String
+  alt_text    String   @db.VarChar(1000)
+  created_at  DateTime @db.Timestamp(6)
+  flagged     Boolean  @default(false)
+  regenerate  Boolean  @default(false)
+  fail_count  Int      @default(0)
+  generator   String?  @db.VarChar(100)
+  model       String?  @db.VarChar(100)
+  seed        String?  @db.VarChar(20)
+  parameters  String?
+  view_count  Int      @default(0)
+  content     content  @relation(fields: [content_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([content_id, prompt_hash])
+  @@index([content_id, prompt_hash])
+  @@index([created_at])
+  @@index([view_count])
+}
+
 model content_proposal {
   id          String    @id @db.Char(36)
   ip_address  String    @db.VarChar(100)
-  created_at  DateTime  @default(now()) @db.DateTime(0)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
   flagged     Boolean   @default(false)
   model       String    @db.VarChar(100)
-  user_input  String    @db.MediumText
+  user_input  String
   title       String    @db.VarChar(500)
-  description String    @db.MediumText
-  approved_at DateTime? @db.DateTime(0)
+  description String
+  approved_at DateTime? @db.Timestamp(6)
   approved_by String?   @db.VarChar(100)
-}
-
-model content {
-  id                                              String          @id @db.Char(36)
-  slug                                            String          @unique @db.VarChar(500)
-  content                                         String?         @db.MediumText
-  created_at                                      DateTime        @default(now()) @db.DateTime(0)
-  generating                                      Boolean         @default(true)
-  generation_started_at                           DateTime?       @db.DateTime(0)
-  generation_finished_at                          DateTime?       @db.DateTime(0)
-  flagged                                         Boolean
-  model                                           String          @db.VarChar(100)
-  prompt_version                                  Int             @default(1)
-  fail_count                                      Int             @default(0)
-  description                                     String          @db.MediumText
-  image_id                                        String?         @db.VarChar(100)
-  title                                           String          @db.VarChar(500)
-  user_input                                      String          @db.MediumText
-  view_count                                      Int             @default(0)
-  image_prompt                                    String?         @db.VarChar(1000)
-  user_email                                      String?         @db.VarChar(350)
-  votes                                           Int             @default(0)
-  hot_score                                       Float           @default(100)
-  generation_time_ms                              Int?
-  flarum_id                                       Int?
-  markdown                                        String?         @db.MediumText
-  converted                                       Boolean         @default(false)
-  lemmy_id                                        Int?
-  last_lemmy_post_attempt                         DateTime?
-  longview_count                                  Int             @default(0)
-  umami_view_count                                Int             @default(0)
-  json_content                                    String?         @db.MediumText
-  language_id                                     String?         @db.Char(36)
-  content_image_content_image_idTocontent_image   content_image?  @relation("content_image_idTocontent_image", fields: [image_id], references: [id])
-  language                                        language?       @relation(fields: [language_id], references: [id])
-  content_image_content_image_content_idTocontent content_image[] @relation("content_image_content_idTocontent")
-  votesRelation                                   content_vote[]
-
-  @@index([votes, view_count], map: "idx_content_votes_view_count")
-  @@index([created_at, generating], map: "idx_content_created_at_generating")
-  @@index([view_count], map: "idx_content_view_count")
-  @@index([hot_score], map: "idx_content_hot_score")
-  @@index([image_id], map: "content_image_id_fkey")
-  @@index([language_id], map: "content_language_id_fkey")
-  @@fulltext([slug, title, description, content, user_input])
-  @@fulltext([slug, title, description, content])
-}
-
-model generation_schedule {
-  id       String   @id @db.VarChar(100)
-  next_run DateTime @db.DateTime(0)
 }
 
 model content_vote {
   content_id String   @db.VarChar(36)
-  created_at DateTime @default(now()) @db.DateTime(0)
+  created_at DateTime @default(now()) @db.Timestamp(6)
   user_email String   @db.VarChar(350)
   downvote   Boolean  @default(false)
-  content    content  @relation(fields: [content_id], references: [id], onDelete: Cascade)
+  content    content  @relation(fields: [content_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([content_id, user_email])
 }
 
-model search_history {
-  id           String   @id @db.VarChar(36)
-  term         String   @db.VarChar(1000)
-  created_at   DateTime @default(now()) @db.DateTime(0)
-  result_count Int
+model examples {
+  id          String  @db.Char(36)
+  user_input  String
+  title       String  @db.VarChar(500)
+  description String
+  content     String?
+  new_id      Int     @id @default(autoincrement())
 
-  @@index([result_count, created_at], map: "idx_search_result_count_created_at")
+  @@index([id], map: "idx_uuid")
+}
+
+model generation_schedule {
+  id       String   @id @db.VarChar(100)
+  next_run DateTime @db.Timestamp(6)
+}
+
+model gpt_log {
+  id         String   @id @db.VarChar(100)
+  message    String
+  flagged    Boolean  @default(false)
+  response   String?
+  error      String?
+  tokens     Int
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([created_at])
 }
 
 model history_generation_fail {
   id         String   @id @db.VarChar(100)
   slug       String   @db.VarChar(500)
-  created_at DateTime @db.DateTime(0)
+  created_at DateTime @db.Timestamp(6)
   reason     String?  @db.VarChar(1000)
-  exception  String?  @db.MediumText
-  content    String?  @db.MediumText
-
-  @@index([created_at])
-}
-
-model gpt_log {
-  id         String   @id @db.VarChar(100)
-  message    String   @db.MediumText
-  flagged    Boolean  @default(false)
-  response   String?  @db.MediumText
-  error      String?  @db.MediumText
-  tokens     Int
-  created_at DateTime @default(now()) @db.DateTime(0)
+  exception  String?
+  content    String?
 
   @@index([created_at])
 }
 
 model horde_log {
   id         String   @id @db.VarChar(100)
-  message    String   @db.MediumText
+  message    String
   flagged    Boolean  @default(false)
-  response   String?  @db.MediumText
-  error      String?  @db.MediumText
+  response   String?
+  error      String?
   kudos      Int
-  created_at DateTime @default(now()) @db.DateTime(0)
+  created_at DateTime @default(now()) @db.Timestamp(6)
 
   @@index([created_at])
 }
 
-model content_image {
-  id                                        String      @id @db.VarChar(100)
-  content_id                                String      @db.VarChar(36)
-  prompt_hash                               String?     @db.VarChar(100)
-  prompt                                    String      @db.Text
-  alt_text                                  String      @db.VarChar(1000)
-  created_at                                DateTime    @db.Timestamp(0)
-  flagged                                   Boolean     @default(false)
-  regenerate                                Boolean     @default(false)
-  fail_count                                Int         @default(0)
-  generator                                 String?     @db.VarChar(100)
-  model                                     String?     @db.VarChar(100)
-  seed                                      String?     @db.VarChar(20)
-  parameters                                String?     @db.Text
-  view_count                                Int         @default(0)
-  content_content_image_idTocontent_image   content[]   @relation("content_image_idTocontent_image")
-  content_content_image_content_idTocontent content     @relation("content_image_content_idTocontent", fields: [content_id], references: [id], onDelete: Cascade)
-
-  @@unique([content_id, prompt_hash])
-  @@index([content_id, prompt_hash])
-  @@index([created_at])
-  @@index([view_count])
-  @@fulltext([prompt, model])
+model image_file {
+  id        String @id @db.VarChar(100)
+  file_path String
 }
 
 model language {
   id          String        @id @db.Char(36)
   name        String        @unique @db.VarChar(500)
-  content     content[]
   translation translation[]
+}
+
+model search_history {
+  id           String   @id @db.VarChar(36)
+  term         String   @db.VarChar(1000)
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  result_count Int
+
+  @@index([result_count, created_at], map: "idx_search_result_count_created_at")
 }
 
 model translation {
   id           String   @id @db.VarChar(36)
   english_hash String   @db.VarChar(100)
   lang_id      String   @db.VarChar(100)
-  translation  String   @db.MediumText
-  language     language @relation(fields: [lang_id], references: [id])
-
-  @@index([lang_id], map: "translation_lang_id_fkey")
-}
-
-model examples {
-  id          String  @db.Char(36)
-  user_input  String  @db.MediumText
-  title       String  @db.VarChar(500)
-  description String  @db.MediumText
-  content     String? @db.MediumText
-  new_id      Int     @id @default(autoincrement())
-
-  @@index([id], map: "idx_uuid")
+  translation  String
+  language     language @relation(fields: [lang_id], references: [id], onUpdate: NoAction)
 }

@@ -18,14 +18,14 @@ pub async fn get_examples(db: &DatabaseConnection) -> Result<Vec<(String, String
         let max_id = Examples::find()
             .select_only()
             .column_as(examples::Column::NewId.max(), "max_new_id")
-            .into_tuple::<Option<i64>>()
+            .into_tuple::<Option<i32>>()
             .one(db)
             .await?
             .flatten();
 
         if let Some(max_id) = max_id {
             // Step 2: Generate random new_id values
-            let random_ids: Vec<i64> = (0..3).map(|_| rand::rng().random_range(1..=max_id)).collect();
+            let random_ids: Vec<i32> = (0..3).map(|_| rand::rng().random_range(1..=max_id)).collect();
             // Step 3: Fetch rows based on random new_id values
             let examples = Examples::find()
                 .filter(examples::Column::NewId.is_in(random_ids.clone()))
