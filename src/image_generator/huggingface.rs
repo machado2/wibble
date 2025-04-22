@@ -99,7 +99,7 @@ impl ImageGenerator for HuggingFaceImageGenerator {
 
             Ok(CreatedImage {
                 data: resp_bytes.to_vec(),
-                parameters: "Hugging Face - Stable Diffusion XL".to_string(), // Update parameters
+                parameters: params.to_string(),
             })
         })
     }
