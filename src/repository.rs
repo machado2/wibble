@@ -3,7 +3,7 @@ use sea_orm::prelude::*;
 use sea_orm::{ActiveValue, QuerySelect, TransactionTrait};
 use serde_json::Value;
 use slugify::slugify;
-use std::fs;
+use std::{env, fs};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -108,9 +108,12 @@ async fn save_image(
         .await
         .map_err(|e| Error::Database(format!("Error inserting content_image: {}", e)))?;
     
-    let image_path = PathBuf::from("static/images").join(format!("{}.jpg", id));
-    fs::create_dir_all(image_path.parent().unwrap())
+    let images_dir = env::var("IMAGES_DIR").expect("IMAGES_DIR is not set");
+    let image_path = PathBuf::from(images_dir).join(format!("{}.jpg", id));
+    if let Some(parent) = image_path.parent() {
+        fs::create_dir_all(parent)
         .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
+    }
     fs::write(&image_path, img)
         .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
     
