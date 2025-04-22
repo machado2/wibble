@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
-
-<div class="error-page">
-    <p class="error-message">{{error_message}}</p>
-    <img src="{{image_url}}" alt="Server Error" class="error-image">
+<div class="card">
+  <div class="card-body text-center">
+    <p class="card-text text-danger">{{error_message}}</p>
+    <img src="{{image_url}}" alt="Server Error" class="img-fluid mb-3" style="max-height: 50vh;">
+  </div>
 </div>
-
 {% endblock content %}

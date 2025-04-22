@@ -4,144 +4,85 @@
 }
 
 body {
-    background-color: #99a8bd;
+    background-color: #f8f9fa;
+    color: #2d3436;
 }
 
-header {
-    background-color: rgb(24, 144, 255);
-    padding: 1vh 2vh;
-    margin: 0;
-    font-size: medium;
-    display: flex;
-    align-items: center;
+/* Custom styles for Bootstrap */
+.navbar {
+    background-color: #fff;
 }
 
-header a {
-    color: rgb(227, 225, 251);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
+.navbar-brand {
+    font-size: 1.5rem;
+    padding: 0.5rem 0;
 }
 
-header svg {
-    margin-right: 1vh;
+.hover-shadow {
+    transition: box-shadow 0.2s, transform 0.2s;
 }
 
-header > a:first-child {
-    flex: 7;
+.hover-shadow:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
 }
 
-.content {
-    margin: 1vh auto;
-    padding: 10px;
-    max-width: 800px;
+.card-title {
+    font-size: 1.25rem;
+    line-height: 1.4;
 }
 
-h1 {
-    color: #333;
+.card-title a {
+    color: #2d3436;
 }
 
-li {
-    clear: both;
-    margin-bottom: 1em;
-    margin-top: 1em;
-    list-style: none;
+.card-title a:hover {
+    color: #0a58ca;
 }
 
-li img {
-    position: relative;
-    width: 20%;
-    min-width: 100px;
-    aspect-ratio: 1/1;
-    margin-right: 10px;
-    object-fit: cover;
-    border-radius: 5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    float: left;
+.btn-outline-primary {
+    border-width: 2px;
 }
 
-article img {
-    max-width: 80%;
-    margin: 0 auto;
+.article-content {
+    font-size: 1.1rem;
+    line-height: 1.8;
+}
+
+.article-content p {
+    margin-bottom: 1.5rem;
+}
+
+.article-content img {
+    max-width: 100%;
+    height: auto;
+    margin: 2rem auto;
+    border-radius: 0.5rem;
     display: block;
 }
 
-article h2, article h1, article h3, article img {
-    margin-bottom: 10px;
-}
-
-
-
-h2 > a {
-    text-decoration: none;
-}
-
 time {
-    color: rgb(88, 88, 88);
-    font-size: x-large;
+    font-size: 0.9rem;
 }
 
-p {
-    color: rgb(88, 88, 88);
-    font-size: x-large;
-    margin-bottom: 10px;
+pre {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    margin: 1.5rem 0;
+    font-size: 0.9rem;
 }
 
-section {
-    overflow: hidden;
-    background-color: rgb(227, 225, 251);
-    border-radius: 5px;
-    padding: 20px;
-}
-
-footer {
-    padding: 1em;
-    text-align: center;
-    background-color: rgb(24, 144, 255);
-    color: white;
-    width: 100%;
-    clear: both;
-}
-
-footer a {
-    color: white;
-    text-decoration: none;
-}
-
-button {
-    background-color: #1677ff;
-    color: white;
-    padding: 2vh;
-    border: none;
-    border-radius: 2vmin;
-    font-size: 3vh;
-}
-
-article {
-    overflow: hidden;
-    background-color: rgb(227, 225, 251);
-    border-radius: 5px;
-    padding: 20px;
-}
-
-textarea {
-    margin: 5vmin 0;
-    width: 100%;
-    height: 20vh;
-    outline: none;
-    border-color: lightgray;
-    font-size: 4vmin;
+textarea.form-control {
+    min-height: 200px;
 }
 
 .error-image {
     max-height: 50vh;
-    aspect-ratio: 1 / 1;
     width: auto;
-    flex: 0 1;
     margin: auto;
 }
+
 .error-message {
     font-size: 24px;
     color: #333;
@@ -154,4 +95,30 @@ textarea {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+}
+
+/* Custom styles for Bootstrap */
+.navbar-brand {
+    font-weight: bold;
+}
+
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.card-title a {
+    color: #0d6efd;
+}
+
+.card-title a:hover {
+    color: #0a58ca;
+}
+
+.btn-primary {
+    padding: 0.5rem 1.5rem;
 }

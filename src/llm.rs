@@ -10,7 +10,6 @@ use crate::error::Error;
 use crate::llm::function_definition::FunctionDefinition;
 
 pub mod article_generator;
-mod article_text_writer;
 mod function_definition;
 pub mod translate;
 

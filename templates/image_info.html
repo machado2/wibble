@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="imageinfo">
-    <h1>{{title}}</h1>
-    <time>{{created_at}}</time>
-    <figure>
-        <img src="/image/{{image_id}}" alt="{{title}}">
-        <pre>{{parameters}}</pre>
+<div class="card">
+  <div class="card-body">
+    <h1 class="card-title">{{title}}</h1>
+    <p class="text-muted"><time>{{created_at}}</time></p>
+    <figure class="text-center">
+      <img src="/image/{{image_id}}" alt="{{title}}" class="img-fluid mb-3">
+      <pre class="bg-light p-3 rounded">{{parameters}}</pre>
     </figure>
-    <p>Used in <a href="/content/{{slug}}">"{{content_title}}"</a></p>
+    <p class="card-text">Used in <a href="/content/{{slug}}" class="text-decoration-none">"{{content_title}}"</a></p>
+  </div>
 </div>
 {% endblock content %}

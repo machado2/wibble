@@ -1,23 +1,24 @@
 {% extends "base.html" %}
 
 {% block content %}
-
-
-<h1>
-    Select an Article to Generate
-</h1>
-
-{% for proposal in proposals %}
-<div class="proposal">
-    <a href="/generate/{{ proposal.id }}">
-        <h2>
-            {{ proposal.title }}
-        </h2>
-        <p>
-            {{ proposal.description }}
-        </p>
-    </a>
+<div class="card mb-4">
+  <div class="card-body">
+    <h1 class="card-title">Select an Article to Generate</h1>
+  </div>
 </div>
-{% endfor %}
 
+<div class="row">
+  {% for proposal in proposals %}
+  <div class="col-md-6 mb-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <a href="/generate/{{ proposal.id }}" class="text-decoration-none">
+          <h2 class="card-title h5">{{ proposal.title }}</h2>
+          <p class="card-text">{{ proposal.description }}</p>
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
 {% endblock content %}

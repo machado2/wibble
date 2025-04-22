@@ -1,21 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-
-<h1>
-    Enter your prompt
-</h1>
-
-<p>
-    Type anything here for guiding the AI and it will try to guess what
-    you mean. You can try a title, part of a title, keywords,
-    instructions, or anything else you can think of.
-</p>
-<form action="/create" method="post">
-    <textarea name="prompt" placeholder="Enter your prompt / hint / instructions here..." rows="10" autoFocus></textarea>
-    <button type="submit">
-        Submit
-    </button>
-</form>
-
+<div class="card">
+  <div class="card-body">
+    <h1 class="card-title">Enter your prompt</h1>
+    <p class="card-text">
+      Type anything here for guiding the AI and it will try to guess what
+      you mean. You can try a title, part of a title, keywords,
+      instructions, or anything else you can think of.
+    </p>
+    <form action="/create" method="post">
+      <div class="mb-3">
+        <textarea class="form-control" name="prompt" placeholder="Enter your prompt / hint / instructions here..." rows="10" autoFocus></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Submit</button>
+    </form>
+  </div>
+</div>
 {% endblock content %}

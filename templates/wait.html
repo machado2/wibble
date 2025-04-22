@@ -7,10 +7,13 @@
 {% block title %}Generating article...{% endblock title %}
 
 {% block content %}
-
-<article>
-    <h1>Generating article...</h1>
-</article>
-
+<div class="card">
+  <div class="card-body text-center">
+    <h1 class="card-title">Generating article...</h1>
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+</div>
 {% endblock content %}
 

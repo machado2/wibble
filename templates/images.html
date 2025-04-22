@@ -1,15 +1,17 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="row g-4">
+  {% for i in items %}
+  <div class="col-md-4 col-lg-3">
+    <a href="/image_info/{{ i }}" class="text-decoration-none">
+      <img src="/image/{{ i }}" class="img-fluid rounded" alt="">
+    </a>
+  </div>
+  {% endfor %}
+</div>
 
-{% for i in items %}
-<a href="/image_info/{{ i }}">
-    <img src="/image/{{ i }}" alt="">
-</a>
-{% endfor %}
-
-<footer>
-    <a href="?afterId={{ last_id }}">Next Page</a>
-</footer>
-
+<div class="text-center mt-4">
+  <a href="?afterId={{ last_id }}" class="btn btn-primary">Next Page</a>
+</div>
 {% endblock content %}

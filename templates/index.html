@@ -1,24 +1,33 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="row g-4">
+  {% for i in items %}
+  <div class="col-md-6">
+    <div class="card h-100 border-0 bg-white hover-shadow">
+      <div class="row g-0">
+        <div class="col-md-5">
+          <img src="/image/{{ i.image_id }}" 
+               class="img-fluid rounded-start h-100 w-100" 
+               alt=""
+               style="object-fit: cover;">
+        </div>
+        <div class="col-md-7">
+          <div class="card-body d-flex flex-column h-100">
+            <h5 class="card-title mb-2">
+              <a href="/content/{{ i.slug }}" class="text-decoration-none stretched-link">{{ i.title }}</a>
+            </h5>
+            <p class="text-muted small mb-2">{{ i.created_at }}</p>
+            <p class="card-text flex-grow-1">{{ i.description }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
 
-<ul>
-    {% for i in items %}
-    <li>
-        <section>
-            <img src="/image/{{ i.image_id }}" alt="">
-            <h2>
-                <a href="/content/{{ i.slug }}">{{ i.title }}</a>
-            </h2>
-            <time>{{ i.created_at }}</time>
-            <p>{{ i.description }}</p>
-        </section>
-    </li>
-    {% endfor %}
-</ul>
-
-<footer>
-    <a href="?afterId={{ after_id }}">Next Page</a>
-</footer>
-
+<div class="text-center mt-5">
+  <a href="?afterId={{ after_id }}" class="btn btn-outline-primary">Load More Articles</a>
+</div>
 {% endblock content %}
