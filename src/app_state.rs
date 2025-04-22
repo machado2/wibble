@@ -7,6 +7,7 @@ use tera::Tera;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
 use crate::image_generator::fallback::FallbackImageGenerator;
+use crate::image_generator::replicate::ReplicateImageGenerator;
 use crate::image_generator::stability::StabilityImageGenerator;
 use crate::image_generator::ImageGenerator;
 use crate::image_generator::retrying::RetryingImageGenerator;
@@ -28,18 +29,25 @@ impl AppState {
         let task_list = TaskList::default();
         let tera = Tera::new("templates/**/*").expect("Failed to load templates");
         let llm = Llm::init();
+        println!("Image mode: {}", image_mode);
         let image_generator: Arc<dyn ImageGenerator> = if image_mode == "sd3" {
+            println!("Using SD3");
             Arc::new(FallbackImageGenerator::new(
                 StabilityImageGenerator::new(),
                 AiHordeImageGenerator::new(),
             ))
         } else if image_mode == "horde" {
+            println!("Using Horde");
             Arc::new(RetryingImageGenerator::new(
                 AiHordeImageGenerator::new()
             ))
+        } else if image_mode == "huggingface" {
+            println!("Using Hugging Face");
+            Arc::new(HuggingFaceImageGenerator::new())
         } else {
+            println!("Using Replicate");
             Arc::new(RetryingImageGenerator::new(
-                HuggingFaceImageGenerator::new()
+                ReplicateImageGenerator::new()
             ))
         };
         Self {

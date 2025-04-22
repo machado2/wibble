@@ -142,7 +142,7 @@ impl Llm {
         if let Some(content) = response_message["content"].as_str() {
             Ok(content.to_string())
         } else {
-            Err(Error::Llm("Chat response missing content".into()))
+            Err(Error::Llm(format!("Chat response missing content: {}", resp)))
         }
     }
 }
