@@ -25,7 +25,7 @@ impl<G> ImageGenerator for RetryingImageGenerator<G>
 where
     G: ImageGenerator,
 {
-    fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>> {
+    fn create_image(&self, prompt: String) -> BoxFuture<'_, Result<CreatedImage, Error>> {
         Box::pin(async move {
             let l = || async {
                 let r: Result<CreatedImage, backoff::Error<Error>> = self

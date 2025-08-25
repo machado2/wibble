@@ -30,7 +30,7 @@ impl HuggingFaceImageGenerator {
 }
 
 impl ImageGenerator for HuggingFaceImageGenerator {
-    fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>> {
+    fn create_image(&self, prompt: String) -> BoxFuture<'_, Result<CreatedImage, Error>> {
         Box::pin(async move {
             let api_url = &self.api_url; // Use configured or default API URL
             let params = json!({

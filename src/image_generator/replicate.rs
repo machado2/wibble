@@ -28,7 +28,7 @@ impl ReplicateImageGenerator {
 }
 
 impl ImageGenerator for ReplicateImageGenerator {
-    fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>> {
+    fn create_image(&self, prompt: String) -> BoxFuture<'_, Result<CreatedImage, Error>> {
         Box::pin(async move {
             let api_url = &self.api_url;
             let params = json!({

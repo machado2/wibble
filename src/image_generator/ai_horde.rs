@@ -327,7 +327,7 @@ impl AiHordeImageGenerator {
 }
 
 impl ImageGenerator for AiHordeImageGenerator {
-    fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>> {
+    fn create_image(&self, prompt: String) -> BoxFuture<'_, Result<CreatedImage, Error>> {
         Box::pin(async move {
             self.create_image(prompt).await.map_err(|he| match he {
                 HordeError::ImageCensored => {

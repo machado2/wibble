@@ -20,7 +20,7 @@ pub struct CreatedImage {
 }
 
 pub trait ImageGenerator: Debug + Send + Sync {
-    fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>>;
+    fn create_image(&self, prompt: String) -> BoxFuture<'_, Result<CreatedImage, Error>>;
 }
 
 #[derive(Clone)]

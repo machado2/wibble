@@ -32,7 +32,7 @@ where
     G1: ImageGenerator,
     G2: ImageGenerator,
 {
-    fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>> {
+    fn create_image(&self, prompt: String) -> BoxFuture<'_, Result<CreatedImage, Error>> {
         Box::pin(async move {
             let r = self.generator1.create_image(prompt.clone()).await;
             match r {

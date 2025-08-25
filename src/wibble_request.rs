@@ -47,7 +47,7 @@ impl<'a> Template<'a> {
 }
 
 impl WibbleRequest {
-    pub async fn template(&self, name: &str) -> Template {
+    pub async fn template(&self, name: &str) -> Template<'_> {
         let mut context = tera::Context::new();
         let style = format!("/{}.css", self.style);
         let busted_style = self

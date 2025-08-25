@@ -30,7 +30,7 @@ impl StabilityImageGenerator {
 }
 
 impl ImageGenerator for StabilityImageGenerator {
-    fn create_image(&self, prompt: String) -> BoxFuture<Result<CreatedImage, Error>> {
+    fn create_image(&self, prompt: String) -> BoxFuture<'_, Result<CreatedImage, Error>> {
         Box::pin(async move {
             // "content-type: must be multipart/form-data
             let resp = self
