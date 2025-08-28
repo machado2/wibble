@@ -2,8 +2,7 @@ use std::env;
 
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{Client, Config};
-use aws_sdk_s3::config::{Region, Credentials};
-
+use aws_sdk_s3::config::{Region, Credentials, BehaviorVersion};
 use crate::error::Error;
 
 async fn get_client() -> Result<Client, Error> {
@@ -18,6 +17,8 @@ async fn get_client() -> Result<Client, Error> {
     let region = Region::new(region);
 
     let mut config_builder = Config::builder()
+        .behavior_version(BehaviorVersion::latest())
+
         .region(region)
         .credentials_provider(credentials);
     if let Some(ep) = endpoint {
