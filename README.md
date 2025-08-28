@@ -18,3 +18,10 @@ environment variables and set `STORAGE_TYPE=s3`:
 
 When `STORAGE_TYPE` is unset or set to `local`, the application continues to
 write and read images from the local `IMAGES_DIR`.
+
+To migrate existing images from the local directory to the configured S3
+bucket, run the helper binary:
+
+```bash
+cargo run --bin upload_images
+```
