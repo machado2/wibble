@@ -37,6 +37,7 @@ mod repository;
 mod tasklist;
 mod wibble_request;
 mod get_images;
+mod s3;
 
 // #[debug_handler(state = AppState)]
 async fn get_index(
