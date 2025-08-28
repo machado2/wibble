@@ -11,6 +11,7 @@ use crate::{
 
 pub trait GetContent {
     async fn get_content(&self, slug: &str) -> Result<Html<String>, Error>;
+    async fn get_content_paged(&self, slug: &str, after_id: Option<String>) -> Result<Html<String>, Error>;
 }
 
 fn preprocess_markdown_node(node: &mut Node) {
@@ -193,6 +194,20 @@ fn markdown_to_html(markdown_str: &str) -> String {
 }
 
 impl GetContent for WibbleRequest {
+
+    async fn get_content_paged(&self, slug: &str, after_id: Option<String>) -> Result<Html<String>, Error> {
+        let state = &self.state;
+        let db = &state.db;
+        let c = Content::find()
+            .filter(content::Column::Slug.contains(slug))
+            .filter(content::Column::Id.gt(after_id.unwrap_or_default()))
+            .one(db)
+            .await
+            .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
+            .ok_or(Error::NotFound)?;
+        Ok(Html("".to_string()))
+    }
+
     async fn get_content(&self, slug: &str) -> Result<Html<String>, Error> {
         let state = &self.state;
         let db = &state.db;
