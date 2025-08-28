@@ -14,6 +14,7 @@ pub enum Error {
     RateLimited,
     Image(image::ImageError),
     Template(tera::Error),
+    Storage(String),
 }
 
 impl fmt::Display for Error {
@@ -27,6 +28,7 @@ impl fmt::Display for Error {
             Error::RateLimited => write!(f, "Rate limited"),
             Error::Image(err) => write!(f, "Image error: {}", err),
             Error::Template(err) => write!(f, "Template error: {}", err),
+            Error::Storage(msg) => write!(f, "Storage error: {}", msg),
         }
     }
 }
