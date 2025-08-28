@@ -11,6 +11,7 @@ use crate::entities::prelude::*;
 use crate::entities::{content, content_image, examples};
 use crate::error::Error;
 use crate::image_generator::ImageGenerated;
+use crate::s3;
 
 pub async fn get_examples(db: &DatabaseConnection) -> Result<Vec<(String, String)>, Error> {
     let k = || async {
@@ -107,16 +108,20 @@ async fn save_image(
         .exec(db)
         .await
         .map_err(|e| Error::Database(format!("Error inserting content_image: {}", e)))?;
-    
-    let images_dir = env::var("IMAGES_DIR").expect("IMAGES_DIR is not set");
-    let image_path = PathBuf::from(images_dir).join(format!("{}.jpg", id));
-    if let Some(parent) = image_path.parent() {
-        fs::create_dir_all(parent)
-        .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
+    let storage_type = env::var("STORAGE_TYPE").unwrap_or_else(|_| "local".to_string());
+    if storage_type.eq_ignore_ascii_case("s3") {
+        s3::upload_image(&id, img).await?;
+    } else {
+        let images_dir = env::var("IMAGES_DIR").expect("IMAGES_DIR is not set");
+        let image_path = PathBuf::from(images_dir).join(format!("{}.jpg", id));
+        if let Some(parent) = image_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
+        }
+        fs::write(&image_path, img)
+            .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
     }
-    fs::write(&image_path, img)
-        .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
-    
+
     Ok(())
 }
 
