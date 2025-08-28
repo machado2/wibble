@@ -25,3 +25,6 @@ bucket, run the helper binary:
 ```bash
 cargo run --bin upload_images
 ```
+
+Uploaded files are moved to `UPLOADED_DIR` (defaults to `IMAGES_DIR/uploaded`)
+so rerunning the command continues from the remaining images.
