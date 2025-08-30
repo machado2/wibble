@@ -3,8 +3,8 @@ use sea_orm::prelude::*;
 use sea_orm::{ActiveValue, QuerySelect, TransactionTrait};
 use serde_json::Value;
 use slugify::slugify;
-use std::{env, fs};
 use std::path::PathBuf;
+use std::{env, fs};
 use uuid::Uuid;
 
 use crate::entities::prelude::*;
@@ -26,7 +26,9 @@ pub async fn get_examples(db: &DatabaseConnection) -> Result<Vec<(String, String
 
         if let Some(max_id) = max_id {
             // Step 2: Generate random new_id values
-            let random_ids: Vec<i32> = (0..3).map(|_| rand::rng().random_range(1..=max_id)).collect();
+            let random_ids: Vec<i32> = (0..3)
+                .map(|_| rand::rng().random_range(1..=max_id))
+                .collect();
             // Step 3: Fetch rows based on random new_id values
             let examples = Examples::find()
                 .filter(examples::Column::NewId.is_in(random_ids.clone()))
@@ -115,11 +117,9 @@ async fn save_image(
         let images_dir = env::var("IMAGES_DIR").expect("IMAGES_DIR is not set");
         let image_path = PathBuf::from(images_dir).join(format!("{}.jpg", id));
         if let Some(parent) = image_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
+            fs::create_dir_all(parent).map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
         }
-        fs::write(&image_path, img)
-            .map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
+        fs::write(&image_path, img).map_err(|e| Error::Image(image::ImageError::IoError(e)))?;
     }
 
     Ok(())
@@ -176,6 +176,8 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
         last_lemmy_post_attempt: None,
         longview_count: 0,
         umami_view_count: 0,
+        impression_count: 0,
+        click_count: 0,
     };
 
     let mut c = content::ActiveModel::from(c);

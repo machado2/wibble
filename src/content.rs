@@ -1,6 +1,7 @@
 use axum::response::Html;
-use markdown::{to_mdast, to_html, ParseOptions};
 use markdown::mdast::Node;
+use markdown::{to_html, to_mdast, ParseOptions};
+use sea_orm::sea_query::Expr;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
 use crate::wibble_request::WibbleRequest;
@@ -10,8 +11,12 @@ use crate::{
 };
 
 pub trait GetContent {
-    async fn get_content(&self, slug: &str) -> Result<Html<String>, Error>;
-    async fn get_content_paged(&self, slug: &str, after_id: Option<String>) -> Result<Html<String>, Error>;
+    async fn get_content(&self, slug: &str, source: Option<&str>) -> Result<Html<String>, Error>;
+    async fn get_content_paged(
+        &self,
+        slug: &str,
+        after_id: Option<String>,
+    ) -> Result<Html<String>, Error>;
 }
 
 fn preprocess_markdown_node(node: &mut Node) {
@@ -194,8 +199,11 @@ fn markdown_to_html(markdown_str: &str) -> String {
 }
 
 impl GetContent for WibbleRequest {
-
-    async fn get_content_paged(&self, slug: &str, after_id: Option<String>) -> Result<Html<String>, Error> {
+    async fn get_content_paged(
+        &self,
+        slug: &str,
+        after_id: Option<String>,
+    ) -> Result<Html<String>, Error> {
         let state = &self.state;
         let db = &state.db;
         let c = Content::find()
@@ -208,7 +216,7 @@ impl GetContent for WibbleRequest {
         Ok(Html("".to_string()))
     }
 
-    async fn get_content(&self, slug: &str) -> Result<Html<String>, Error> {
+    async fn get_content(&self, slug: &str, source: Option<&str>) -> Result<Html<String>, Error> {
         let state = &self.state;
         let db = &state.db;
         let c = Content::find()
@@ -217,6 +225,17 @@ impl GetContent for WibbleRequest {
             .await
             .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
             .ok_or(Error::NotFound)?;
+        if source == Some("top") {
+            Content::update_many()
+                .filter(content::Column::Id.eq(c.id.clone()))
+                .col_expr(
+                    content::Column::ClickCount,
+                    Expr::col(content::Column::ClickCount).add(1),
+                )
+                .exec(db)
+                .await
+                .map_err(|e| Error::Database(format!("Error updating click count: {}", e)))?;
+        }
         self.template("content")
             .await
             .insert("id", &c.id)

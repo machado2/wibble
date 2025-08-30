@@ -37,6 +37,8 @@ model content {
   last_lemmy_post_attempt DateTime?
   longview_count          Int             @default(0)
   umami_view_count        Int             @default(0)
+  impression_count        Int             @default(0)
+  click_count             Int             @default(0)
   json_content            String?
   language_id             String?         @db.Char(36)
   content_image           content_image[]

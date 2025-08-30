@@ -2,7 +2,8 @@
 #![allow(clippy::blocks_in_conditions)]
 
 use axum::response::Html;
-use chrono::TimeDelta;
+use chrono::{TimeDelta, Utc};
+use sea_orm::sea_query::Expr;
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
@@ -33,6 +34,8 @@ pub struct Headline {
     pub description: String,
     pub image_id: Option<String>,
     pub title: String,
+    pub impression_count: i32,
+    pub click_count: i32,
 }
 
 async fn get_next_page(
@@ -138,7 +141,33 @@ pub trait NewsList {
 impl NewsList for WibbleRequest {
     async fn news_list(&self, params: ContentListParams) -> Result<Html<String>, Error> {
         let db = &self.state.db;
-        let items = get_next_page(db, params).await?;
+        let mut items = get_next_page(db, params).await?;
+        items.sort_by(|a, b| {
+            fn score(h: &Headline) -> f64 {
+                let age_hours = (Utc::now().naive_utc() - h.created_at).num_hours().max(1) as f64;
+                let click_rate = if h.impression_count > 0 {
+                    h.click_count as f64 / h.impression_count as f64
+                } else {
+                    0.0
+                };
+                click_rate * 0.7 + (1.0 / age_hours) * 0.3
+            }
+            score(b)
+                .partial_cmp(&score(a))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let top_ids: Vec<String> = items.iter().take(3).map(|h| h.id.clone()).collect();
+        if !top_ids.is_empty() {
+            Content::update_many()
+                .filter(content::Column::Id.is_in(top_ids))
+                .col_expr(
+                    content::Column::ImpressionCount,
+                    Expr::col(content::Column::ImpressionCount).add(1),
+                )
+                .exec(db)
+                .await
+                .map_err(|e| Error::Database(format!("Error updating impressions: {}", e)))?;
+        }
         let items: Vec<_> = items.into_iter().map(format_headline).collect();
         let after_id = items.last().map(|h| h.id.clone());
         self.template("index")
