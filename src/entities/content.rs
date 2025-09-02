@@ -40,6 +40,8 @@ pub struct Model {
     pub last_lemmy_post_attempt: Option<DateTime>,
     pub longview_count: i32,
     pub umami_view_count: i32,
+    pub impression_count: i32,
+    pub click_count: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

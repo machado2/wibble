@@ -2,7 +2,7 @@ use std::env;
 use std::net::Ipv4Addr;
 
 use axum::body::{Body, Bytes};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -20,6 +20,7 @@ use crate::error::Error;
 use crate::image_info::get_image_info_handler;
 use crate::newslist::{ContentListParams, NewsList};
 use crate::wibble_request::WibbleRequest;
+use serde::Deserialize;
 
 mod newslist;
 
@@ -29,15 +30,15 @@ mod create;
 
 mod entities;
 mod error;
+mod get_images;
 mod image;
 mod image_generator;
 mod image_info;
 mod llm;
 mod repository;
+mod s3;
 mod tasklist;
 mod wibble_request;
-mod get_images;
-mod s3;
 
 // #[debug_handler(state = AppState)]
 async fn get_index(
@@ -47,8 +48,17 @@ async fn get_index(
     wr.news_list(data).await
 }
 
-async fn get_content(wr: WibbleRequest, Path(slug): Path<String>) -> Result<Html<String>, Error> {
-    wr.get_content(&slug).await
+#[derive(Deserialize)]
+struct ContentQuery {
+    source: Option<String>,
+}
+
+async fn get_content(
+    wr: WibbleRequest,
+    Path(slug): Path<String>,
+    Query(query): Query<ContentQuery>,
+) -> Result<Html<String>, Error> {
+    wr.get_content(&slug, query.source.as_deref()).await
 }
 
 async fn get_image(
