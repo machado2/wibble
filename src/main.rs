@@ -2,7 +2,7 @@ use std::env;
 use std::net::Ipv4Addr;
 
 use axum::body::{Body, Bytes};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -10,6 +10,7 @@ use axum::routing::{get, post};
 use axum::{middleware, serve, Form, Router};
 use dotenvy::dotenv;
 use rand::Rng;
+use serde::Deserialize;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 
@@ -30,8 +31,17 @@ async fn get_index(
     wr.news_list(data).await
 }
 
-async fn get_content(wr: WibbleRequest, Path(slug): Path<String>) -> Result<Html<String>, Error> {
-    wr.get_content(&slug).await
+#[derive(Deserialize)]
+struct ContentQuery {
+    source: Option<String>,
+}
+
+async fn get_content(
+    wr: WibbleRequest,
+    Path(slug): Path<String>,
+    Query(query): Query<ContentQuery>,
+) -> Result<Html<String>, Error> {
+    wr.get_content(&slug, query.source.as_deref()).await
 }
 
 async fn get_image(
