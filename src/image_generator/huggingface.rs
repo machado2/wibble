@@ -87,7 +87,7 @@ impl ImageGenerator for HuggingFaceImageGenerator {
                 )));
             }
 
-            let content_type = resp.headers().get("content-type").and_then(|value| value.to_str().ok()).and_then(|s| Some(s.to_string()));
+            let content_type = resp.headers().get("content-type").and_then(|value| value.to_str().ok()).map(|s| s.to_string());
             if let Some(content_type) = content_type {
                 if !content_type.starts_with("image/") {
                     let body = resp.text().await.map_err(|e| {

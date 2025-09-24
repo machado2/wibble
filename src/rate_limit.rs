@@ -21,6 +21,8 @@ use std::{
 };
 use tokio::sync::RwLock;
 
+type IpRateLimiter = Arc<RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>>;
+
 // Define rate limiting quotas
 // Global: 100 articles per hour
 const GLOBAL_QUOTA: Quota = Quota::per_hour(NonZeroU32::new(100).unwrap());
@@ -28,10 +30,10 @@ const GLOBAL_QUOTA: Quota = Quota::per_hour(NonZeroU32::new(100).unwrap());
 const PER_IP_QUOTA: Quota = Quota::per_hour(NonZeroU32::new(5).unwrap());
 
 // Shared state for rate limiters
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RateLimitState {
     pub global_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
-    pub per_ip_limiter: Arc<RwLock<HashMap<IpAddr, Arc<RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>>>>>,
+    pub per_ip_limiter: Arc<RwLock<HashMap<IpAddr, IpRateLimiter>>>,
     // Monitoring counters
     pub global_rate_limit_hits: Arc<AtomicU64>,
     pub per_ip_rate_limit_hits: Arc<AtomicU64>,
@@ -39,6 +41,12 @@ pub struct RateLimitState {
     pub total_requests: Arc<AtomicU64>,
     // Concurrent job limits per IP (max 2 active jobs per IP)
     pub active_jobs_per_ip: Arc<RwLock<HashMap<IpAddr, u32>>>,
+}
+
+impl Default for RateLimitState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RateLimitState {
@@ -53,7 +61,7 @@ impl RateLimitState {
         }
     }
 
-    pub async fn get_or_create_ip_limiter(&self, ip: IpAddr) -> Arc<RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>> {
+    pub async fn get_or_create_ip_limiter(&self, ip: IpAddr) -> IpRateLimiter {
         let mut map = self.per_ip_limiter.write().await;
         map.entry(ip).or_insert_with(|| {
             Arc::new(RateLimiter::new(PER_IP_QUOTA, DefaultKeyedStateStore::default(), &DefaultClock::default()))
@@ -131,20 +139,19 @@ pub async fn rate_limit_middleware(
     let ip = extract_real_ip(headers);
 
     // Check global rate limit only for article creation (POST /create)
-    if request.method() == axum::http::Method::POST && request.uri().path() == "/create" {
-        if let Err(_) = state.global_limiter.check_n(NonZeroU32::new(1).unwrap()) {
-            // Increment global rate limit hits
-            state.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
-            // Log global rate limit hit
-            tracing::warn!("Global rate limit exceeded for article creation");
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
+    if request.method() == axum::http::Method::POST && request.uri().path() == "/create"
+        && state.global_limiter.check_n(NonZeroU32::new(1).unwrap()).is_err() {
+        // Increment global rate limit hits
+        state.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
+        // Log global rate limit hit
+        tracing::warn!("Global rate limit exceeded for article creation");
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // Extract IP for per-IP limiting
     if let Some(ip) = ip {
         let ip_limiter = state.get_or_create_ip_limiter(ip).await;
-        if let Err(_) = ip_limiter.check_key_n(&ip, NonZeroU32::new(1).unwrap()) {
+        if ip_limiter.check_key_n(&ip, NonZeroU32::new(1).unwrap()).is_err() {
             // Increment per-IP rate limit hits
             state.per_ip_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
             // Log per-IP rate limit hit
@@ -154,11 +161,9 @@ pub async fn rate_limit_middleware(
 
         // Check concurrent jobs for creation endpoints (assume /create)
         // In a real app, check the path
-        if request.uri().path().starts_with("/create") {
-            if !state.can_start_job(Some(ip)).await {
-                tracing::warn!("Concurrent job limit exceeded for IP: {}", ip);
-                return Err(StatusCode::TOO_MANY_REQUESTS);
-            }
+        if request.uri().path().starts_with("/create") && !state.can_start_job(Some(ip)).await {
+            tracing::warn!("Concurrent job limit exceeded for IP: {}", ip);
+            return Err(StatusCode::TOO_MANY_REQUESTS);
         }
     } else {
         // If no IP available, perhaps allow or log

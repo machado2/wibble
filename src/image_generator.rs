@@ -1,7 +1,7 @@
 use futures::future::BoxFuture;
 use std::fmt::Debug;
 
-use crate::AppState;
+use crate::app_state::AppState;
 use tokio::task::JoinHandle;
 use tracing::{event, Level};
 

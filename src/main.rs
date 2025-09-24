@@ -13,32 +13,14 @@ use rand::Rng;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 
-use crate::app_state::AppState;
-use crate::content::GetContent;
-use crate::create::{start_create_article, wait, PostCreateData, WaitResponse};
-use crate::error::Error;
-use crate::image_info::get_image_info_handler;
-use crate::newslist::{ContentListParams, NewsList};
-use crate::rate_limit::rate_limit_middleware;
-use crate::wibble_request::WibbleRequest;
-
-mod newslist;
-
-mod app_state;
-mod content;
-mod create;
-
-mod entities;
-mod error;
-mod image;
-mod image_generator;
-mod image_info;
-mod llm;
-mod repository;
-mod tasklist;
-mod wibble_request;
-mod get_images;
-mod s3;
+use wibble::app_state::AppState;
+use wibble::content::GetContent;
+use wibble::create::{start_create_article, wait, PostCreateData, WaitResponse};
+use wibble::error::Error;
+use wibble::image_info::get_image_info_handler;
+use wibble::newslist::{ContentListParams, NewsList};
+use wibble::rate_limit::rate_limit_middleware;
+use wibble::wibble_request::WibbleRequest;
 
 // #[debug_handler(state = AppState)]
 async fn get_index(
@@ -57,7 +39,7 @@ async fn get_image(
     Path(id): Path<String>,
 ) -> Result<Response, StatusCode> {
     let db = &state.db;
-    let img = image::get_image(db, &id)
+    let img = wibble::image::get_image(db, &id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
     Response::builder()
@@ -91,7 +73,7 @@ async fn create_en(
 }
 
 async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
-    create::get_create(wr).await
+    wibble::create::get_create(wr).await
 }
 
 async fn handle_error(
@@ -147,7 +129,7 @@ async fn main() {
         .route("/content/{slug}", get(get_content))
         .route("/wait/{id}", get(get_wait))
         .route("/create", post(create_en).get(get_create))
-        .route("/images", get(get_images::get_images))
+        .route("/images", get(wibble::get_images::get_images))
         .fallback_service(serve_dir)
         .layer(middleware::from_fn_with_state(state.rate_limit_state.clone(), rate_limit_middleware))
         .layer(middleware::from_fn_with_state(state.clone(), handle_error))

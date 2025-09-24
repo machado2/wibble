@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use sea_orm::prelude::*;
 use sea_orm::{Database, EntityTrait, QueryOrder, ColumnTrait, Condition};
@@ -91,7 +91,7 @@ async fn main() {
         // Em lotes para bases grandes
         const CHUNK: usize = 1000;
         for chunk in content_ids.chunks(CHUNK) {
-            let cond = Condition::any().add(content_vote::Column::ContentId.is_in(chunk.iter().cloned().collect::<Vec<_>>()));
+            let cond = Condition::any().add(content_vote::Column::ContentId.is_in(chunk.to_vec()));
             let rows = match ContentVote::find().filter(cond).all(&db).await {
                 Ok(v) => v,
                 Err(e) => {
@@ -145,7 +145,7 @@ async fn main() {
         // Vamos apagar todas as imagens associadas ao conteúdo (mesmo que existam fisicamente)
         // pois o artigo será removido
         if let Ok(cnt) = ContentImage::find().filter(content_image::Column::ContentId.eq(c.id.clone())).count(&db).await {
-            planned_images_to_delete += cnt as u64;
+            planned_images_to_delete += cnt;
         }
         planned_votes_to_delete += *votes_per_content.get(&c.id).unwrap_or(&0);
     }
@@ -206,9 +206,9 @@ async fn main() {
 
         match res {
             Ok((c_del, imgs_del, votes_del)) => {
-                counters.contents_deleted += c_del as u64;
-                counters.content_images_deleted += imgs_del as u64;
-                counters.content_votes_deleted += votes_del as u64;
+                counters.contents_deleted += c_del;
+                counters.content_images_deleted += imgs_del;
+                counters.content_votes_deleted += votes_del;
             }
             Err(e) => {
                 error!("Erro ao deletar conteúdo id={}: {}", c.id, e);
@@ -223,7 +223,7 @@ async fn main() {
     println!("- content_vote removidos (por cascade): {}", counters.content_votes_deleted);
 }
 
-fn file_exists(base: &PathBuf, id: &str) -> bool {
+fn file_exists(base: &Path, id: &str) -> bool {
     let p = base.join(format!("{}.jpg", id));
     fs::metadata(&p).is_ok()
 }

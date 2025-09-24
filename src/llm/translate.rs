@@ -4,6 +4,7 @@ use crate::error::Error;
 use crate::llm::function_definition::FunctionDefinition;
 use crate::llm::{function_definition, Llm, Message};
 
+#[allow(async_fn_in_trait)]
 pub trait Translate {
     async fn translate(&self, text: &str, target_language: &str) -> Result<String, Error>;
 }

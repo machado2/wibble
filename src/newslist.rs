@@ -131,6 +131,7 @@ fn format_headline(h: Headline) -> FormattedHeadline {
     }
 }
 
+#[allow(async_fn_in_trait)]
 pub trait NewsList {
     async fn news_list(&self, params: ContentListParams) -> Result<Html<String>, Error>;
 }

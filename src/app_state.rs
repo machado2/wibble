@@ -57,7 +57,7 @@ impl AppState {
             task_list,
             tera,
             llm,
-            image_generator: image_generator,
+            image_generator,
             bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
             rate_limit_state,
         }

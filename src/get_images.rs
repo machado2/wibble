@@ -26,7 +26,7 @@ pub async fn get_images(
     }
     let images = images.all(db).await?;
     let ids: Vec<String> = images.into_iter().map(|i| i.id).collect();
-    let last_id = ids.last().map(|x| x.clone()).unwrap_or_default();
+    let last_id = ids.last().cloned().unwrap_or_default();
     let html = wr
         .template("images")
         .await

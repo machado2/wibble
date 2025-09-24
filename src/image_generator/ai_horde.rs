@@ -91,7 +91,15 @@ impl AiHordeImageGenerator {
             headers,
         }
     }
+}
 
+impl Default for AiHordeImageGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AiHordeImageGenerator {
     fn check_status_code(status: StatusCode) -> Result<(), HordeError> {
         if status.is_success() {
             return Ok(());

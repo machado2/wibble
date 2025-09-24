@@ -2,10 +2,7 @@ use std::{env, fs, path::Path};
 
 use dotenvy::dotenv;
 
-#[path = "../error.rs"]
-mod error;
-#[path = "../s3.rs"]
-mod s3;
+use wibble::s3;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

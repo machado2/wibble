@@ -81,21 +81,21 @@ impl FunctionDefinition {
     }
 }
 
-impl Into<ChatCompletionTool> for FunctionDefinition {
-    fn into(self) -> ChatCompletionTool {
-        self.to_chat_completion_tool()
+impl From<FunctionDefinition> for ChatCompletionTool {
+    fn from(val: FunctionDefinition) -> Self {
+        val.to_chat_completion_tool()
     }
 }
 
-impl Into<FunctionObject> for FunctionDefinition {
-    fn into(self) -> FunctionObject {
-        self.to_function_object()
+impl From<FunctionDefinition> for FunctionObject {
+    fn from(val: FunctionDefinition) -> Self {
+        val.to_function_object()
     }
 }
 
-impl Into<ChatCompletionToolChoiceOption> for FunctionDefinition {
-    fn into(self) -> ChatCompletionToolChoiceOption {
-        self.to_tool_choice()
+impl From<FunctionDefinition> for ChatCompletionToolChoiceOption {
+    fn from(val: FunctionDefinition) -> Self {
+        val.to_tool_choice()
     }
 }
 

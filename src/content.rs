@@ -9,6 +9,7 @@ use crate::{
     error::Error,
 };
 
+#[allow(async_fn_in_trait)]
 pub trait GetContent {
     async fn get_content(&self, slug: &str) -> Result<Html<String>, Error>;
     async fn get_content_paged(&self, slug: &str, after_id: Option<String>) -> Result<Html<String>, Error>;
@@ -16,7 +17,7 @@ pub trait GetContent {
 
 fn preprocess_markdown_node(node: &mut Node) {
     if let Node::Image(i) = node {
-        let id = i.url.split('/').last().unwrap_or_default();
+        let id = i.url.split('/').next_back().unwrap_or_default();
         let link_url = format!("/image_info/{}", id);
         let link_node = Node::Link(markdown::mdast::Link {
             url: link_url,
@@ -198,7 +199,7 @@ impl GetContent for WibbleRequest {
     async fn get_content_paged(&self, slug: &str, after_id: Option<String>) -> Result<Html<String>, Error> {
         let state = &self.state;
         let db = &state.db;
-        let c = Content::find()
+        let _c = Content::find()
             .filter(content::Column::Slug.contains(slug))
             .filter(content::Column::Id.gt(after_id.unwrap_or_default()))
             .one(db)
