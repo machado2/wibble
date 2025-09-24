@@ -13,6 +13,7 @@ use crate::image_generator::ImageGenerator;
 use crate::image_generator::retrying::RetryingImageGenerator;
 use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::llm::Llm;
+use crate::rate_limit::RateLimitState;
 use crate::tasklist::TaskList;
 
 async fn connect_database() -> DatabaseConnection {
@@ -29,6 +30,7 @@ impl AppState {
         let task_list = TaskList::default();
         let tera = Tera::new("templates/**/*").expect("Failed to load templates");
         let llm = Llm::init();
+        let rate_limit_state = RateLimitState::new();
         println!("Image mode: {}", image_mode);
         let image_generator: Arc<dyn ImageGenerator> = if image_mode == "sd3" {
             println!("Using SD3");
@@ -57,6 +59,7 @@ impl AppState {
             llm,
             image_generator: image_generator,
             bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
+            rate_limit_state,
         }
     }
 }
@@ -69,4 +72,5 @@ pub struct AppState {
     pub llm: Llm,
     pub image_generator: Arc<dyn ImageGenerator>,
     pub bust_dir: BustDir,
+    pub rate_limit_state: RateLimitState,
 }

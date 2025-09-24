@@ -19,6 +19,7 @@ use crate::create::{start_create_article, wait, PostCreateData, WaitResponse};
 use crate::error::Error;
 use crate::image_info::get_image_info_handler;
 use crate::newslist::{ContentListParams, NewsList};
+use crate::rate_limit::rate_limit_middleware;
 use crate::wibble_request::WibbleRequest;
 
 mod newslist;
@@ -148,6 +149,7 @@ async fn main() {
         .route("/create", post(create_en).get(get_create))
         .route("/images", get(get_images::get_images))
         .fallback_service(serve_dir)
+        .layer(middleware::from_fn_with_state(state.rate_limit_state.clone(), rate_limit_middleware))
         .layer(middleware::from_fn_with_state(state.clone(), handle_error))
         .with_state(state);
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))
