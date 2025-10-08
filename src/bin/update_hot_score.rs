@@ -1,5 +1,5 @@
-use dotenv::dotenv;
-use sea_orm::{Database, DbErr, Statement, DbConn, DbBackend};
+use dotenvy::dotenv;
+use sea_orm::{ConnectionTrait, Database, DbErr, Statement, DbConn, DbBackend};
 use std::env;
 use tracing::{info, error};
 

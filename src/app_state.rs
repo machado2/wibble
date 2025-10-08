@@ -2,7 +2,7 @@ use std::env;
 use std::sync::Arc;
 
 use bustdir::BustDir;
-use sea_orm::{Database, DatabaseConnection, Statement, DbBackend};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement, DbBackend};
 use tera::Tera;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
