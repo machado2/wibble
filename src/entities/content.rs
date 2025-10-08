@@ -25,7 +25,7 @@ pub struct Model {
     pub title: String,
     #[sea_orm(column_type = "Text")]
     pub user_input: String,
-    pub view_count: i32,
+    // view_count removed (redundant with click_count)
     pub image_prompt: Option<String>,
     pub user_email: Option<String>,
     pub votes: i32,
@@ -36,10 +36,9 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub markdown: Option<String>,
     pub converted: bool,
-    pub lemmy_id: Option<i32>,
-    pub last_lemmy_post_attempt: Option<DateTime>,
+    // lemmy-related fields removed
     pub longview_count: i32,
-    pub umami_view_count: i32,
+    // umami_view_count removed
     pub impression_count: i32,
     pub click_count: i32,
 }

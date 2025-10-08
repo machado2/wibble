@@ -163,7 +163,7 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
         image_id: None,
         title: article.title,
         user_input: article.instructions,
-        view_count: 0,
+        // view_count removed
         image_prompt: None,
         user_email: None,
         votes: 0,
@@ -172,10 +172,9 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
         flarum_id: None,
         markdown: Some(article.markdown.clone()),
         converted: false,
-        lemmy_id: None,
-        last_lemmy_post_attempt: None,
+        // lemmy-related fields removed
         longview_count: 0,
-        umami_view_count: 0,
+        // umami_view_count removed
         impression_count: 0,
         click_count: 0,
     };

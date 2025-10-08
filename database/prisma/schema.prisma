@@ -24,7 +24,7 @@ model content {
   image_id                String?         @db.VarChar(100)
   title                   String          @db.VarChar(500)
   user_input              String
-  view_count              Int             @default(0)
+  // view_count removed (redundant with click_count)
   image_prompt            String?         @db.VarChar(1000)
   user_email              String?         @db.VarChar(350)
   votes                   Int             @default(0)
@@ -33,21 +33,18 @@ model content {
   flarum_id               Int?
   markdown                String?
   converted               Boolean         @default(false)
-  lemmy_id                Int?
-  last_lemmy_post_attempt DateTime?
+  // lemmy-related fields removed
   longview_count          Int             @default(0)
-  umami_view_count        Int             @default(0)
+  // umami_view_count removed
   impression_count        Int             @default(0)
   click_count             Int             @default(0)
   json_content            String?
   language_id             String?         @db.Char(36)
   content_image           content_image[]
   content_vote            content_vote[]
-
+ 
   @@index([created_at, generating], map: "idx_content_created_at_generating")
   @@index([hot_score], map: "idx_content_hot_score")
-  @@index([view_count], map: "idx_content_view_count")
-  @@index([votes, view_count], map: "idx_content_votes_view_count")
 }
 
 model content_image {

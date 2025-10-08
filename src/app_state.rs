@@ -2,7 +2,7 @@ use std::env;
 use std::sync::Arc;
 
 use bustdir::BustDir;
-use sea_orm::{Database, DatabaseConnection};
+use sea_orm::{Database, DatabaseConnection, Statement, DbBackend};
 use tera::Tera;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
@@ -52,7 +52,7 @@ impl AppState {
                 ReplicateImageGenerator::new()
             ))
         };
-        Self {
+        let state = Self {
             db,
             task_list,
             tera,
@@ -60,7 +60,45 @@ impl AppState {
             image_generator,
             bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
             rate_limit_state,
+        };
+
+        // Spawn a background task to periodically recompute `hot_score` in the DB.
+        // Frequency can be configured with HOT_SCORE_UPDATE_SECONDS (default 300s).
+        {
+            let db_clone = state.db.clone();
+            let secs = std::env::var("HOT_SCORE_UPDATE_SECONDS")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(300u64);
+
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(secs));
+                loop {
+                    interval.tick().await;
+                    // Mirror the previous formula: click_rate * 0.7 + (1 / age_hours) * 0.3
+                    let sql = r#"
+                    UPDATE content
+                    SET hot_score = (
+                        (CASE WHEN impression_count > 0
+                            THEN (click_count::double precision / impression_count::double precision)
+                            ELSE 0.0
+                        END) * 0.7
+                    )
+                    + (
+                        (1.0 / GREATEST(EXTRACT(EPOCH FROM (now() - created_at)) / 3600.0, 1.0))
+                        * 0.3
+                    )
+                    WHERE generating = false AND flagged = false;
+                    "#;
+                    let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
+                    if let Err(e) = db_clone.execute(stmt).await {
+                        eprintln!("Error updating hot_score: {}", e);
+                    }
+                }
+            });
         }
+
+        state
     }
 }
 

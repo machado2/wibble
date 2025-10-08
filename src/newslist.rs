@@ -70,8 +70,10 @@ async fn get_next_page(
             contents = contents
                 .filter(content::Column::CreatedAt.gt(chrono::Utc::now().naive_utc() - days));
         }
+        // Use DB-side columns for ordering. "most_viewed" now maps to click_count
+        // because view_count was removed as it is redundant with click_count.
         let sort_column = match par.sort {
-            Some(s) if s == "most_viewed" => content::Column::ViewCount,
+            Some(s) if s == "most_viewed" => content::Column::ClickCount,
             Some(s) if s == "hot" => content::Column::HotScore,
             _ => content::Column::CreatedAt,
         };
@@ -142,21 +144,8 @@ pub trait NewsList {
 impl NewsList for WibbleRequest {
     async fn news_list(&self, params: ContentListParams) -> Result<Html<String>, Error> {
         let db = &self.state.db;
+        // Ordering is performed in SQL (hot_score / click_count). Do not re-sort in Rust.
         let mut items = get_next_page(db, params).await?;
-        items.sort_by(|a, b| {
-            fn score(h: &Headline) -> f64 {
-                let age_hours = (Utc::now().naive_utc() - h.created_at).num_hours().max(1) as f64;
-                let click_rate = if h.impression_count > 0 {
-                    h.click_count as f64 / h.impression_count as f64
-                } else {
-                    0.0
-                };
-                click_rate * 0.7 + (1.0 / age_hours) * 0.3
-            }
-            score(b)
-                .partial_cmp(&score(a))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
         let top_ids: Vec<String> = items.iter().take(3).map(|h| h.id.clone()).collect();
         if !top_ids.is_empty() {
             Content::update_many()
