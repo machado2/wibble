@@ -4,3 +4,5 @@
 .vscode/
 .idea/
 /compose.yaml
+**/target/
+**/node_modules/
