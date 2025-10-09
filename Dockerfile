@@ -45,6 +45,8 @@ WORKDIR /app
 RUN mkdir -p target/release
 COPY --from=builder /app/target/release/wibble target/release/wibble
 COPY database database
+# Ensure static assets are included in the runtime image
+COPY static static
 COPY docker-entrypoint.sh .
 
 RUN chmod +x ./docker-entrypoint.sh ./target/release/wibble
