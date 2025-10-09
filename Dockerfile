@@ -32,7 +32,7 @@ RUN cargo build --release --bin wibble
 
 # Runtime image: small, contains only what's needed to run the binary and prisma CLI
 FROM debian:trixie-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates nodejs npm && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates nodejs npm curl wget && rm -rf /var/lib/apt/lists/*
 
 # Install Prisma CLI required by the entrypoint to apply migrations
 RUN npm install -g prisma
