@@ -47,9 +47,14 @@ COPY --from=builder /app/target/release/wibble target/release/wibble
 COPY database database
 # Ensure static assets are included in the runtime image
 COPY static static
+# Ensure templates are included in the runtime image
+COPY templates templates
 COPY docker-entrypoint.sh .
 
 RUN chmod +x ./docker-entrypoint.sh ./target/release/wibble
+# Ensure the runtime user can read templates, static assets and database files
+# (run as root here; will switch to appuser below)
+RUN chown -R appuser:appuser /app/templates /app/static /app/database || true && chmod -R a+r /app/templates /app/static /app/database || true
 USER appuser
 ENV PATH="/usr/local/bin:$PATH"
 
