@@ -52,14 +52,42 @@ impl AppState {
                 ReplicateImageGenerator::new()
             ))
         };
-        let state = Self {
-            db,
-            task_list,
-            tera,
-            llm,
-            image_generator,
-            bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
-            rate_limit_state,
+        // Add diagnostics to help identify missing/incorrect `static` directory in production.
+        // This prints current working directory, metadata for "static" and up to 5 entries if it exists.
+        let state = {
+            match std::env::current_dir() {
+                Ok(cwd) => println!("CWD = {:?}", cwd),
+                Err(e) => println!("Failed to get CWD: {}", e),
+            }
+            match std::fs::metadata("static") {
+                Ok(m) => {
+                    println!("static exists: is_dir={}", m.is_dir());
+                    if m.is_dir() {
+                        match std::fs::read_dir("static") {
+                            Ok(entries) => {
+                                for (i, entry) in entries.take(5).enumerate() {
+                                    match entry {
+                                        Ok(e) => println!("static entry {}: {:?}", i, e.path()),
+                                        Err(e) => println!("static read_dir entry error: {}", e),
+                                    }
+                                }
+                            }
+                            Err(e) => println!("Failed to read static dir: {}", e),
+                        }
+                    }
+                }
+                Err(e) => println!("static metadata error: {}", e),
+            }
+
+            Self {
+                db,
+                task_list,
+                tera,
+                llm,
+                image_generator,
+                bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
+                rate_limit_state,
+            }
         };
 
         // Spawn a background task to periodically recompute `hot_score` in the DB.
