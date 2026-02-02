@@ -2,6 +2,7 @@
 name = "wibble"
 version = "0.1.0"
 edition = "2021"
+default-run = "wibble"
 
 [dependencies]
 sea-orm = { version = "*", features = ["sqlx-postgres", "runtime-tokio", "macros"] }
