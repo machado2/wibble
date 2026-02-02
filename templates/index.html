@@ -1,31 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row g-4">
+<div class="feed-grid">
   {% for i in items %}
-  <div class="col-md-6">
-    <div class="card h-100 border-0 bg-white hover-shadow">
-      <div class="row g-0">
-        <div class="col-md-5">
-          <img src="/image/{{ i.image_id }}"
-               class="img-fluid rounded-start h-100 w-100 card-image"
-               alt="">
-        </div>
-        <div class="col-md-7">
-          <div class="card-body d-flex flex-column h-100">
-            <h5 class="card-title mb-2">
-              {% if loop.index0 < 3 %}
-              <a href="/content/{{ i.slug }}?source=top" class="text-decoration-none stretched-link">{{ i.title }}</a>
-              {% else %}
-              <a href="/content/{{ i.slug }}" class="text-decoration-none stretched-link">{{ i.title }}</a>
-              {% endif %}
-            </h5>
-            <p class="text-muted small mb-2">{{ i.created_at }}</p>
-            <p class="card-text flex-grow-1">{{ i.description }}</p>
-          </div>
-        </div>
+  <div class="card border-0 bg-white hover-shadow">
+    <a href="/content/{{ i.slug }}{% if loop.index0 < 3 %}?source=top{% endif %}" class="text-decoration-none feed-card stretched-link">
+      <img src="/image/{{ i.image_id }}"
+           class="feed-card-image"
+           alt="">
+      <div class="card-body d-flex flex-column">
+        <h5 class="card-title mb-2">{{ i.title }}</h5>
+        <p class="text-muted small mb-2">{{ i.created_at }}</p>
+        <p class="card-text flex-grow-1">{{ i.description }}</p>
       </div>
-    </div>
+    </a>
   </div>
   {% endfor %}
 </div>

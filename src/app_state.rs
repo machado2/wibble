@@ -1,5 +1,6 @@
 use std::env;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use bustdir::BustDir;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement, DbBackend};
@@ -29,6 +30,13 @@ impl AppState {
         let db = connect_database().await;
         let task_list = TaskList::default();
         let tera = Tera::new("templates/**/*").expect("Failed to load templates");
+        let template_auto_reload = env::var("TEMPLATE_AUTO_RELOAD")
+            .ok()
+            .map(|val| {
+                let val = val.trim().to_lowercase();
+                matches!(val.as_str(), "1" | "true" | "yes" | "y" | "on")
+            })
+            .unwrap_or(cfg!(debug_assertions));
         let llm = Llm::init();
         let rate_limit_state = RateLimitState::new();
         println!("Image mode: {}", image_mode);
@@ -82,11 +90,12 @@ impl AppState {
             Self {
                 db,
                 task_list,
-                tera,
+                tera: Arc::new(RwLock::new(tera)),
                 llm,
                 image_generator,
                 bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
                 rate_limit_state,
+                template_auto_reload,
             }
         };
 
@@ -134,9 +143,10 @@ impl AppState {
 pub struct AppState {
     pub db: DatabaseConnection,
     pub task_list: TaskList,
-    pub tera: Tera,
+    pub tera: Arc<RwLock<Tera>>,
     pub llm: Llm,
     pub image_generator: Arc<dyn ImageGenerator>,
     pub bust_dir: BustDir,
     pub rate_limit_state: RateLimitState,
+    pub template_auto_reload: bool,
 }

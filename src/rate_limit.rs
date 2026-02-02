@@ -10,6 +10,7 @@ use governor::{
     Quota, RateLimiter,
 };
 use std::{
+    env,
     num::NonZeroU32,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -20,14 +21,11 @@ use std::{
 
 
 
-// Define rate limiting quotas at construction time
-// Global: 100 articles per hour (rolling window) with burst capacity 100
-// Note: We build this quota in RateLimitState::new() to allow burst configuration.
-
 // Shared state for rate limiters
 #[derive(Clone, Debug)]
 pub struct RateLimitState {
-    pub global_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    pub hourly_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    pub daily_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     pub global_rate_limit_hits: Arc<AtomicU64>,
     pub total_requests: Arc<AtomicU64>,
 }
@@ -40,17 +38,28 @@ impl Default for RateLimitState {
 
 impl RateLimitState {
     pub fn new() -> Self {
-        // Configure quotas with appropriate burst sizes to implement a rolling window
-        let global_quota = Quota::per_hour(NonZeroU32::new(100).unwrap())
-            .allow_burst(NonZeroU32::new(100).unwrap());
+        let max_per_hour: u32 = env::var("MAX_ARTICLES_PER_HOUR")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(20);
+        let max_per_day: u32 = env::var("MAX_ARTICLES_PER_DAY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(20);
+
+        let hourly_quota = Quota::per_hour(NonZeroU32::new(max_per_hour).expect("MAX_ARTICLES_PER_HOUR must be > 0"))
+            .allow_burst(NonZeroU32::new(max_per_hour).unwrap());
+        let daily_quota = Quota::with_period(std::time::Duration::from_secs(86400 / max_per_day as u64))
+            .expect("MAX_ARTICLES_PER_DAY must be > 0")
+            .allow_burst(NonZeroU32::new(max_per_day).unwrap());
+
         Self {
-            global_limiter: Arc::new(RateLimiter::new(global_quota, InMemoryState::default(), &DefaultClock::default())),
+            hourly_limiter: Arc::new(RateLimiter::new(hourly_quota, InMemoryState::default(), &DefaultClock::default())),
+            daily_limiter: Arc::new(RateLimiter::new(daily_quota, InMemoryState::default(), &DefaultClock::default())),
             global_rate_limit_hits: Arc::new(AtomicU64::new(0)),
             total_requests: Arc::new(AtomicU64::new(0)),
         }
     }
-
-
 }
 
 
@@ -64,11 +73,16 @@ pub async fn rate_limit_middleware(
     // Increment total requests (for monitoring only)
     state.total_requests.fetch_add(1, Ordering::Relaxed);
 
-    // Enforce only the global limit on POST /create
+    // Enforce hourly and daily limits on POST /create
     if request.method() == axum::http::Method::POST && request.uri().path() == "/create" {
-        if state.global_limiter.check().is_err() {
+        if state.hourly_limiter.check().is_err() {
             state.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
-            tracing::warn!("Global rate limit exceeded for article creation");
+            tracing::warn!("Hourly rate limit exceeded for article creation");
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+        if state.daily_limiter.check().is_err() {
+            state.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!("Daily rate limit exceeded for article creation");
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
     }
@@ -80,13 +94,28 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_global_burst_allows_100_immediate() {
+    async fn test_hourly_burst_allows_default_and_blocks_next() {
         let state = RateLimitState::new();
-        for i in 0..100u32 {
-            assert!(state.global_limiter.check().is_ok(), "failed at {}", i);
+        let max: u32 = env::var("MAX_ARTICLES_PER_HOUR")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(20);
+        for i in 0..max {
+            assert!(state.hourly_limiter.check().is_ok(), "failed at {}", i);
         }
-        assert!(state.global_limiter.check().is_err(), "101st should fail");
+        assert!(state.hourly_limiter.check().is_err(), "should fail after max");
     }
 
-
+    #[tokio::test]
+    async fn test_daily_burst_allows_default_and_blocks_next() {
+        let state = RateLimitState::new();
+        let max: u32 = env::var("MAX_ARTICLES_PER_DAY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(20);
+        for i in 0..max {
+            assert!(state.daily_limiter.check().is_ok(), "failed at {}", i);
+        }
+        assert!(state.daily_limiter.check().is_err(), "should fail after max");
+    }
 }

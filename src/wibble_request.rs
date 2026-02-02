@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error as StdError;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 use axum::extract::{FromRef, FromRequestParts, Query};
 use axum::response::Html;
@@ -20,19 +22,33 @@ where
     pub style: String,
 }
 
-pub struct Template<'a> {
-    tera: &'a Tera,
+pub struct Template {
+    tera: Arc<RwLock<Tera>>,
     name: String,
     context: Context,
+    auto_reload: bool,
 }
 
-impl<'a> Template<'a> {
+impl Template {
     pub fn insert<T: Serialize + ?Sized, S: Into<String>>(&mut self, key: S, val: &T) -> &mut Self {
         self.context.insert(key, val);
         self
     }
     pub fn render(&self) -> Result<Html<String>, Error> {
-        let s = self.tera.render(&self.name, &self.context);
+        if self.auto_reload {
+            if let Ok(mut tera) = self.tera.write() {
+                if let Err(e) = tera.full_reload() {
+                    log::warn!("Template reload failed: {}", e);
+                }
+            }
+        }
+        let s = match self.tera.read() {
+            Ok(tera) => tera.render(&self.name, &self.context),
+            Err(e) => {
+                log::error!("Template lock poisoned: {}", e);
+                return Err(Error::Template(tera::Error::msg("Template lock poisoned")));
+            }
+        };
         match s {
             Ok(s) => Ok(Html(s)),
             Err(e) => {
@@ -47,7 +63,7 @@ impl<'a> Template<'a> {
 }
 
 impl WibbleRequest {
-    pub async fn template(&self, name: &str) -> Template<'_> {
+    pub async fn template(&self, name: &str) -> Template {
         let mut context = tera::Context::new();
         let style = format!("/{}.css", self.style);
         let busted_style = self
@@ -64,7 +80,8 @@ impl WibbleRequest {
         Template {
             name: format!("{}.html", name),
             context,
-            tera: &self.state.tera,
+            tera: Arc::clone(&self.state.tera),
+            auto_reload: self.state.template_auto_reload,
         }
     }
 }

@@ -7,16 +7,14 @@
   </div>
 </div>
 
-<div class="row">
+<div class="feed-grid">
   {% for proposal in proposals %}
-  <div class="col-md-6 mb-4">
-    <div class="card h-100">
-      <div class="card-body">
-        <a href="/generate/{{ proposal.id }}" class="text-decoration-none">
-          <h2 class="card-title h5">{{ proposal.title }}</h2>
-          <p class="card-text">{{ proposal.description }}</p>
-        </a>
-      </div>
+  <div class="card">
+    <div class="card-body">
+      <a href="/generate/{{ proposal.id }}" class="text-decoration-none">
+        <h2 class="card-title h5">{{ proposal.title }}</h2>
+        <p class="card-text">{{ proposal.description }}</p>
+      </a>
     </div>
   </div>
   {% endfor %}

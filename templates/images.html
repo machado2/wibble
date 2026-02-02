@@ -1,13 +1,11 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row g-4">
+<div class="image-grid">
   {% for i in items %}
-  <div class="col-md-4 col-lg-3">
-    <a href="/image_info/{{ i }}" class="text-decoration-none">
-      <img src="/image/{{ i }}" class="img-fluid rounded" alt="">
-    </a>
-  </div>
+  <a href="/image_info/{{ i }}" class="text-decoration-none">
+    <img src="/image/{{ i }}" class="img-fluid rounded" alt="">
+  </a>
   {% endfor %}
 </div>
 
