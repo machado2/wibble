@@ -38,16 +38,14 @@ impl ImageGenerator for HuggingFaceImageGenerator {
             });
             let mut retries = 0;
             let max_retries = 3;
-            let resp = loop {
+                let resp = loop {
                 let attempt = retries + 1;
                 match self
                     .reqwest
                     .post(api_url)
                     .header("Authorization", format!("Bearer {}", &self.api_key))
                     .header("Content-Type", "application/json")
-                    .header("Accept", "image/*")
-                    .header("X-Use-Queue", "true")
-                    .body(params.to_string())
+                    .header("Accept", "image/jpeg")
                     .send()
                     .await
                 {
