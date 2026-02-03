@@ -1,66 +1,82 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  {%- if title -%}
-    {%- set_global pagetitle = title ~ " - The Wibble" -%}
-    {%- else -%}
-        {%- set_global pagetitle = "The Wibble" -%}
-  {%- endif -%}
-  {%- if not description -%}
-    {%- set_global description = "Get the latest news with a touch of wobble from The Wibble, your source for the unpredictable and unsteady world of current events" -%}
-  {%- endif -%}
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>{{ pagetitle }}</title>
-  <meta name="description" content="{{ description }}">
-  <meta property="og:type" content="website">
-  {%- if slug -%}
-  <meta property="og:url" content="https://wibble.fbmac.net/content/{{slug}}">
-  {%- endif -%}
-  <meta property="og:title" content="{{ pagetitle }}">
-  <meta property="og:description" content="{{ description }}">
-  {%- if image_id -%}
-  <meta property="og:image" content="https://wibble.fbmac.net/image/{{ image_id }}">
-  {%- endif -%}
-  <link rel="stylesheet" href="{{style | safe}}">
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5MGQGLSYCV"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
+    {%- if title -%} {%- set_global pagetitle = title ~ " - The Wibble" -%} {%-
+    else -%} {%- set_global pagetitle = "The Wibble" -%} {%- endif -%} {%- if
+    not description -%} {%- set_global description = "Get the latest news with a
+    touch of wobble from The Wibble, your source for the unpredictable and
+    unsteady world of current events" -%} {%- endif -%}
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, user-scalable=yes"
+        />
+        <title>{{ pagetitle }}</title>
+        <meta name="description" content="{{ description }}" />
+        <meta property="og:type" content="website" />
+        {%- if slug -%}
+        <meta
+            property="og:url"
+            content="https://wibble.fbmac.net/content/{{slug}}"
+        />
+        {%- endif -%}
+        <meta property="og:title" content="{{ pagetitle }}" />
+        <meta property="og:description" content="{{ description }}" />
+        {%- if image_id -%}
+        <meta
+            property="og:image"
+            content="https://wibble.fbmac.net/image/{{ image_id }}"
+        />
+        {%- endif -%}
+        <link rel="stylesheet" href="{{style | safe}}" />
+        <!-- Google tag (gtag.js) -->
+        <script
+            async
+            src="https://www.googletagmanager.com/gtag/js?id=G-5MGQGLSYCV"
+        ></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag() {
+                dataLayer.push(arguments);
+            }
+            gtag("js", new Date());
 
-    gtag('config', 'G-5MGQGLSYCV');
-  </script>
-  {%- block headers -%}{%- endblock headers -%}
-</head>
+            gtag("config", "G-5MGQGLSYCV");
+        </script>
+        {%- block headers -%}{%- endblock headers -%}
+    </head>
 
-<body>
-  <nav class="site-nav">
-    <div class="container nav-inner">
-      <a class="brand" href="/">
-        <span class="brand-accent">The</span>
-        <span class="brand-strong">Wibble</span>
-      </a>
-      <div class="nav-actions">
-        <a class="btn btn-outline-primary" href="https://discord.gg/YUVXqH87" rel="noopener" target="_blank">
-          Join Discord
-        </a>
-        <a class="btn btn-primary" href="/create">
-          {{ text_create_new_article }}
-        </a>
-      </div>
-    </div>
-  </nav>
+    <body>
+        <nav class="site-nav">
+            <div class="container nav-inner">
+                <a class="brand" href="/">
+                    <span class="brand-accent">The</span>
+                    <span class="brand-strong">Wibble</span>
+                </a>
+                <div class="nav-actions">
+                    <a
+                        class="btn btn-outline-primary"
+                        href="https://discord.gg/KuDBKeCx"
+                        rel="noopener"
+                        target="_blank"
+                    >
+                        Join Discord
+                    </a>
+                    <a class="btn btn-primary" href="/create">
+                        {{ text_create_new_article }}
+                    </a>
+                </div>
+            </div>
+        </nav>
 
-  <main class="container my-4">
-    {% block content %}{% endblock content %}
-  </main>
+        <main class="container my-4">
+            {% block content %}{% endblock content %}
+        </main>
 
-  <footer class="site-footer">
-    <div class="container">
-      <p class="mb-0">© The Wibble</p>
-    </div>
-  </footer>
-</body>
+        <footer class="site-footer">
+            <div class="container">
+                <p class="mb-0">© The Wibble</p>
+            </div>
+        </footer>
+    </body>
 </html>
