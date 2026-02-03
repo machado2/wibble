@@ -3,16 +3,16 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use bustdir::BustDir;
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Statement, DbBackend};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tera::Tera;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
 use crate::image_generator::fallback::FallbackImageGenerator;
+use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::image_generator::replicate::ReplicateImageGenerator;
+use crate::image_generator::retrying::RetryingImageGenerator;
 use crate::image_generator::stability::StabilityImageGenerator;
 use crate::image_generator::ImageGenerator;
-use crate::image_generator::retrying::RetryingImageGenerator;
-use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::llm::Llm;
 use crate::rate_limit::RateLimitState;
 use crate::tasklist::TaskList;
@@ -42,23 +42,16 @@ impl AppState {
         println!("Image mode: {}", image_mode);
         let image_generator: Arc<dyn ImageGenerator> = if image_mode == "sd3" {
             println!("Using SD3");
-            Arc::new(FallbackImageGenerator::new(
-                StabilityImageGenerator::new(),
-                AiHordeImageGenerator::new(),
-            ))
+            Arc::new(StabilityImageGenerator::new())
         } else if image_mode == "horde" {
             println!("Using Horde");
-            Arc::new(RetryingImageGenerator::new(
-                AiHordeImageGenerator::new()
-            ))
+            Arc::new(AiHordeImageGenerator::new())
         } else if image_mode == "huggingface" {
             println!("Using Hugging Face");
             Arc::new(HuggingFaceImageGenerator::new())
         } else {
             println!("Using Replicate");
-            Arc::new(RetryingImageGenerator::new(
-                ReplicateImageGenerator::new()
-            ))
+            Arc::new(ReplicateImageGenerator::new())
         };
         // Add diagnostics to help identify missing/incorrect `static` directory in production.
         // This prints current working directory, metadata for "static" and up to 5 entries if it exists.
