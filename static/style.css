@@ -15,7 +15,6 @@
     --radius-sm: 8px;
     --gutter: clamp(1rem, 1.6vw, 2rem);
     --page-gutter: clamp(1.25rem, 2.6vw, 3rem);
-    --container: clamp(18rem, 94vw, 1200px);
     --content-max: 48rem;
 }
 
@@ -82,7 +81,6 @@ p {
 }
 
 .container {
-    max-width: var(--container);
     margin: 0 auto;
     padding: 0 var(--page-gutter);
 }
@@ -95,6 +93,7 @@ p {
     z-index: 10;
     backdrop-filter: blur(8px);
     box-shadow: 0 2px 16px rgba(23, 23, 23, 0.04);
+    padding: 0 var(--page-gutter);
 }
 
 .nav-inner {
@@ -181,7 +180,7 @@ main.container {
 
 .feed-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(30rem, 100%), 1fr));
     gap: var(--gutter);
 }
 
