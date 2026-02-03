@@ -63,7 +63,7 @@ impl TaskList {
         let tasks = self.tasks.read().await;
         tasks
             .get(id)
-            .ok_or(Error::NotFound)
+            .ok_or(Error::NotFound(Some(format!("Task id {} not found", id))))
             .map(|task| task.result.clone())
     }
 

@@ -213,7 +213,7 @@ impl GetContent for WibbleRequest {
             .one(db)
             .await
             .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
-            .ok_or(Error::NotFound)?;
+            .ok_or(Error::NotFound(Some(format!("Content with slug {} not found", slug))))?;
         Ok(Html("".to_string()))
     }
 
@@ -225,7 +225,7 @@ impl GetContent for WibbleRequest {
             .one(db)
             .await
             .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
-            .ok_or(Error::NotFound)?;
+            .ok_or(Error::NotFound(Some(format!("Content with slug {} not found", slug))))?;
         if source == Some("top") {
             Content::update_many()
                 .filter(content::Column::Id.eq(c.id.clone()))
@@ -247,7 +247,7 @@ impl GetContent for WibbleRequest {
             .insert("title", &c.title)
             .insert(
                 "body",
-                &markdown_to_html(&c.markdown.ok_or(Error::NotFound)?),
+                &markdown_to_html(&c.markdown.ok_or(Error::NotFound(Some(format!("Markdown for content {} not found", c.id))))?),
             )
             .render()
     }

@@ -1,12 +1,12 @@
 use axum::response::{IntoResponse, Response};
 use sea_orm::DbErr;
 use static_assertions::assert_impl_all;
-use tracing::{event, Level};
 use std::fmt;
+use tracing::{event, Level};
 
 #[derive(Debug)]
 pub enum Error {
-    NotFound,
+    NotFound(Option<String>),
     Database(String),
     Llm(String),
     ImageGeneration(String),
@@ -20,7 +20,10 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::NotFound => write!(f, "Not found"),
+            Error::NotFound(msg) => match msg {
+                Some(m) => write!(f, "Not found: {}", m),
+                None => write!(f, "Not found"),
+            },
             Error::Database(msg) => write!(f, "Database error: {}", msg),
             Error::Llm(msg) => write!(f, "LLM error: {}", msg),
             Error::ImageGeneration(msg) => write!(f, "Image generation error: {}", msg),
@@ -49,7 +52,7 @@ impl IntoResponse for Error {
     fn into_response(self) -> Response {
         event!(Level::ERROR, "{}", self);
         let status = match self {
-            Error::NotFound => http::StatusCode::NOT_FOUND,
+            Error::NotFound(_) => http::StatusCode::NOT_FOUND,
             Error::RateLimited => axum::http::StatusCode::TOO_MANY_REQUESTS,
             _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         };
