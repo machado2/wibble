@@ -15,7 +15,7 @@
     --radius-sm: 8px;
     --gutter: clamp(1rem, 1.6vw, 2rem);
     --page-gutter: clamp(1.25rem, 2.6vw, 3rem);
-    --content-max: 48rem;
+    --content-max: 75ch;
 }
 
 *,
@@ -218,6 +218,7 @@ main.container {
 
 .article-card {
     margin: 0 auto;
+    max-width: var(--content-max);
 }
 
 .article-content {
