@@ -183,6 +183,12 @@ pub async fn create_article_attempt(
     let paragraphs = article.paragraphs;
     let images = generate_images(state, article.images).await?;
 
+    if images.is_empty() {
+        return Err(Error::ImageGeneration(
+            "All image generations failed".into(),
+        ));
+    }
+
     let mut remaining_images = images.iter();
 
     let mut markdown = Vec::<String>::new();

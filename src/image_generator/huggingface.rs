@@ -46,6 +46,7 @@ impl ImageGenerator for HuggingFaceImageGenerator {
                     .header("Authorization", format!("Bearer {}", &self.api_key))
                     .header("Content-Type", "application/json")
                     .header("Accept", "image/jpeg")
+                    .json(&params)
                     .send()
                     .await
                 {
