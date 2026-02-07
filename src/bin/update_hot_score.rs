@@ -1,7 +1,7 @@
 use dotenvy::dotenv;
-use sea_orm::{ConnectionTrait, Database, DbErr, Statement, DbConn, DbBackend};
+use sea_orm::{ConnectionTrait, Database, DbBackend, DbConn, DbErr, Statement};
 use std::env;
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {

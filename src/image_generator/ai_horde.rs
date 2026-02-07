@@ -5,12 +5,12 @@ use std::future::Future;
 use std::io::Cursor;
 use std::time::Duration;
 
-use backoff::ExponentialBackoff;
 use backoff::future::retry;
+use backoff::ExponentialBackoff;
 use futures::future::BoxFuture;
 use http::StatusCode;
 use image::ImageFormat;
-use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
 use tracing::{error, event, Level};
 
@@ -22,7 +22,7 @@ struct GenerateImageResponse {
     id: String,
     url: Option<String>,
     model: String,
-    parameters: String
+    parameters: String,
 }
 
 #[derive(Debug, Clone)]
@@ -212,13 +212,13 @@ impl AiHordeImageGenerator {
                 "AI horde response without id".into(),
             ))?
             .to_string();
-        
+
         let parameters_str = serde_json::to_string(&body).unwrap();
         let generated_image_response = GenerateImageResponse {
             id,
             url: None,
             model: model.unwrap_or(String::from("unspecified")).to_string(),
-            parameters: parameters_str
+            parameters: parameters_str,
         };
         Ok(generated_image_response)
     }
@@ -245,7 +245,10 @@ impl AiHordeImageGenerator {
         }
     }
 
-    async fn generate_with_backoff(&self, prompt: String) -> Result<GenerateImageResponse, HordeError> {
+    async fn generate_with_backoff(
+        &self,
+        prompt: String,
+    ) -> Result<GenerateImageResponse, HordeError> {
         retry(
             ExponentialBackoff {
                 max_elapsed_time: Some(TIMEOUT),
@@ -289,7 +292,7 @@ impl AiHordeImageGenerator {
                     id: id.clone(),
                     url: Some(s),
                     model: gen_response.model.clone(),
-                    parameters: gen_response.parameters.clone()
+                    parameters: gen_response.parameters.clone(),
                 })
             },
         )

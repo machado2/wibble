@@ -5,12 +5,12 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use sea_orm::prelude::*;
-use sea_orm::{Database, EntityTrait, QueryOrder, ColumnTrait, Condition};
+use sea_orm::{ColumnTrait, Condition, Database, EntityTrait, QueryOrder};
 use tracing::{error, info, warn};
 
+use sea_orm::TransactionTrait;
 use wibble::entities::prelude::*;
 use wibble::entities::{content, content_image, content_vote};
-use sea_orm::TransactionTrait;
 
 #[derive(Debug, Default)]
 struct Counters {
@@ -27,9 +27,14 @@ async fn main() {
     // Parse flags (simple parser, no extra deps)
     let mut dry_run = false;
     for arg in env::args().skip(1) {
-        if arg == "--dry-run" || arg == "-n" { dry_run = true; }
-        else if arg == "-h" || arg == "--help" { print_help(); return; }
-        else { warn!("unknown_arg = {}", arg); }
+        if arg == "--dry-run" || arg == "-n" {
+            dry_run = true;
+        } else if arg == "-h" || arg == "--help" {
+            print_help();
+            return;
+        } else {
+            warn!("unknown_arg = {}", arg);
+        }
     }
 
     // Validate IMAGES_DIR
@@ -42,7 +47,10 @@ async fn main() {
     };
     let images_dir_path = PathBuf::from(&images_dir);
     if let Err(e) = fs::metadata(&images_dir_path) {
-        error!("IMAGES_DIR inválida ou inacessível: {} - erro: {}", images_dir, e);
+        error!(
+            "IMAGES_DIR inválida ou inacessível: {} - erro: {}",
+            images_dir, e
+        );
         std::process::exit(2);
     }
 
@@ -85,7 +93,10 @@ async fn main() {
     };
 
     // Pré-contagem de votos por conteúdo (para estatísticas)
-    let content_ids: Vec<String> = contents_with_images.iter().map(|(c, _)| c.id.clone()).collect();
+    let content_ids: Vec<String> = contents_with_images
+        .iter()
+        .map(|(c, _)| c.id.clone())
+        .collect();
     let mut votes_per_content: HashMap<String, u64> = HashMap::new();
     if !content_ids.is_empty() {
         // Em lotes para bases grandes
@@ -135,7 +146,10 @@ async fn main() {
 
     println!("Artigos órfãos encontrados ({}):", orphans.len());
     for (c, missing) in &orphans {
-        println!("- id={} slug={} imagens_ausentes={:?}", c.id, c.slug, missing);
+        println!(
+            "- id={} slug={} imagens_ausentes={:?}",
+            c.id, c.slug, missing
+        );
     }
 
     // Estatísticas planejadas
@@ -144,7 +158,11 @@ async fn main() {
     for (c, _missing) in &orphans {
         // Vamos apagar todas as imagens associadas ao conteúdo (mesmo que existam fisicamente)
         // pois o artigo será removido
-        if let Ok(cnt) = ContentImage::find().filter(content_image::Column::ContentId.eq(c.id.clone())).count(&db).await {
+        if let Ok(cnt) = ContentImage::find()
+            .filter(content_image::Column::ContentId.eq(c.id.clone()))
+            .count(&db)
+            .await
+        {
             planned_images_to_delete += cnt;
         }
         planned_votes_to_delete += *votes_per_content.get(&c.id).unwrap_or(&0);
@@ -153,7 +171,10 @@ async fn main() {
     println!("Resumo do que será afetado:");
     println!("- content a remover: {}", orphans.len());
     println!("- content_image a remover: {}", planned_images_to_delete);
-    println!("- content_vote a remover (por cascade): {}", planned_votes_to_delete);
+    println!(
+        "- content_vote a remover (por cascade): {}",
+        planned_votes_to_delete
+    );
 
     if dry_run {
         println!("--dry-run ativo: nenhuma alteração foi realizada.");
@@ -195,11 +216,13 @@ async fn main() {
                         .await? as u64;
 
                     // Deleta o conteúdo (cascade apaga votes)
-                    let del_content = Content::delete_by_id(content_id.clone())
-                        .exec(tx)
-                        .await?;
+                    let del_content = Content::delete_by_id(content_id.clone()).exec(tx).await?;
 
-                    Ok::<(u64, u64, u64), DbErr>((del_content.rows_affected, del_imgs.rows_affected, votes_cnt))
+                    Ok::<(u64, u64, u64), DbErr>((
+                        del_content.rows_affected,
+                        del_imgs.rows_affected,
+                        votes_cnt,
+                    ))
                 })
             })
             .await;
@@ -219,8 +242,14 @@ async fn main() {
     println!("Operações concluídas.");
     println!("Resumo final:");
     println!("- content removidos: {}", counters.contents_deleted);
-    println!("- content_image removidos: {}", counters.content_images_deleted);
-    println!("- content_vote removidos (por cascade): {}", counters.content_votes_deleted);
+    println!(
+        "- content_image removidos: {}",
+        counters.content_images_deleted
+    );
+    println!(
+        "- content_vote removidos (por cascade): {}",
+        counters.content_votes_deleted
+    );
 }
 
 fn file_exists(base: &Path, id: &str) -> bool {

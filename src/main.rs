@@ -13,6 +13,7 @@ use rand::Rng;
 use serde::Deserialize;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
+use tower_http::trace::TraceLayer;
 
 use wibble::app_state::AppState;
 use wibble::content::GetContent;
@@ -74,12 +75,10 @@ async fn create_en(
     State(state): State<AppState>,
     Form(data): Form<PostCreateData>,
 ) -> impl IntoResponse {
-    let id = tokio::task::spawn(start_create_article(state, data.prompt))
-        .await
-        .unwrap();
-
-    // let id = start_create_article(state, data.prompt).await;
-    Redirect::to(&format!("/wait/{}", id)).into_response()
+    match start_create_article(state, data.prompt).await {
+        Ok(id) => Redirect::to(&format!("/wait/{}", id)).into_response(),
+        Err(e) => e.into_response(),
+    }
 }
 
 async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
@@ -141,7 +140,11 @@ async fn main() {
         .route("/create", post(create_en).get(get_create))
         .route("/images", get(wibble::get_images::get_images))
         .fallback_service(serve_dir)
-        .layer(middleware::from_fn_with_state(state.rate_limit_state.clone(), rate_limit_middleware))
+        .layer(TraceLayer::new_for_http())
+        .layer(middleware::from_fn_with_state(
+            state.rate_limit_state.clone(),
+            rate_limit_middleware,
+        ))
         .layer(middleware::from_fn_with_state(state.clone(), handle_error))
         .with_state(state);
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, port))

@@ -21,7 +21,10 @@ pub async fn get_image_info_handler(
     let (slug, article_title) = if let Some(article) = article {
         (article.slug, article.title)
     } else {
-        return Err(Error::NotFound(Some(format!("Article for image {} not found", id))));
+        return Err(Error::NotFound(Some(format!(
+            "Article for image {} not found",
+            id
+        ))));
     };
 
     let mut template = wr.template("image_info").await;

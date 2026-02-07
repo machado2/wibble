@@ -73,10 +73,7 @@ impl WibbleRequest {
             .map(|h| format!("{}?{}", style, h))
             .unwrap_or(style);
         context.insert("style", &busted_style);
-        context.insert(
-            "text_create_new_article",
-            "Create new article"
-        );
+        context.insert("text_create_new_article", "Create new article");
         Template {
             name: format!("{}.html", name),
             context,

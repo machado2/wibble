@@ -1,8 +1,8 @@
 use std::env;
 
+use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{Client, Config};
-use aws_sdk_s3::config::{Region, Credentials, BehaviorVersion};
 
 use crate::error::Error;
 

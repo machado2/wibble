@@ -1,16 +1,16 @@
 use std::env;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;
 
 use bustdir::BustDir;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tera::Tera;
+use tokio::sync::Semaphore;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
-use crate::image_generator::fallback::FallbackImageGenerator;
 use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::image_generator::replicate::ReplicateImageGenerator;
-use crate::image_generator::retrying::RetryingImageGenerator;
 use crate::image_generator::stability::StabilityImageGenerator;
 use crate::image_generator::ImageGenerator;
 use crate::llm::Llm;
@@ -39,7 +39,16 @@ impl AppState {
             .unwrap_or(cfg!(debug_assertions));
         let llm = Llm::init();
         let rate_limit_state = RateLimitState::new();
+        let max_concurrent_article_generations = env::var("MAX_CONCURRENT_ARTICLE_GENERATIONS")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(1);
         println!("Image mode: {}", image_mode);
+        println!(
+            "MAX_CONCURRENT_ARTICLE_GENERATIONS={}",
+            max_concurrent_article_generations
+        );
         let image_generator: Arc<dyn ImageGenerator> = if image_mode == "sd3" {
             println!("Using SD3");
             Arc::new(StabilityImageGenerator::new())
@@ -89,6 +98,10 @@ impl AppState {
                 bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
                 rate_limit_state,
                 template_auto_reload,
+                article_generation_semaphore: Arc::new(Semaphore::new(
+                    max_concurrent_article_generations,
+                )),
+                active_article_generations: Arc::new(AtomicUsize::new(0)),
             }
         };
 
@@ -142,4 +155,6 @@ pub struct AppState {
     pub bust_dir: BustDir,
     pub rate_limit_state: RateLimitState,
     pub template_auto_reload: bool,
+    pub article_generation_semaphore: Arc<Semaphore>,
+    pub active_article_generations: Arc<AtomicUsize>,
 }

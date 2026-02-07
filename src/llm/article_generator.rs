@@ -1,4 +1,5 @@
 use regex::Regex;
+use tracing::{event, Level};
 use uuid::Uuid;
 
 use crate::app_state::AppState;
@@ -10,6 +11,14 @@ use crate::repository::{get_examples, save_article, Article};
 static SYSTEM_MESSAGE_ARTICLE: &str = include_str!("../../prompts/system_article.txt");
 static SYSTEM_WITH_PLACEHOLDERS: &str = include_str!("../../prompts/system_with_placeholders.txt");
 static SYSTEM_MESSAGE_ILLUSTRATOR: &str = include_str!("../../prompts/illustrator.txt");
+
+fn max_images_per_article() -> usize {
+    std::env::var("MAX_IMAGES_PER_ARTICLE")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(4)
+}
 
 fn format_messages(
     system_message: &str,
@@ -53,7 +62,8 @@ async fn create_image_prompts(
 ) -> Result<Vec<ImageToCreate>, Error> {
     let messages = format_messages(SYSTEM_MESSAGE_ILLUSTRATOR, None, article);
     let images = llm.request_chat(messages, model).await?;
-    let images = images
+    let max_images = max_images_per_article();
+    let mut images: Vec<ImageToCreate> = images
         .lines()
         .filter_map(|line| {
             let mut parts = line.splitn(2, ';');
@@ -69,6 +79,15 @@ async fn create_image_prompts(
             })
         })
         .collect();
+    if images.len() > max_images {
+        event!(
+            Level::WARN,
+            max_images,
+            original_images = images.len(),
+            "Truncating generated image prompts to MAX_IMAGES_PER_ARTICLE"
+        );
+        images.truncate(max_images);
+    }
     Ok(images)
 }
 
@@ -133,10 +152,19 @@ pub async fn create_article_using_placeholders(
 
     let mut markdown = article.to_string();
     let mut images = Vec::new();
+    let max_images = max_images_per_article();
     for cap in Regex::new(r#"<GeneratedImage prompt="([^"]+)" alt="([^"]+)" />"#)
         .map_err(|e| Error::Llm(format!("Error creating regex: {}", e)))?
         .captures_iter(&article)
     {
+        if images.len() >= max_images {
+            event!(
+                Level::WARN,
+                max_images,
+                "Truncating placeholder image tags to MAX_IMAGES_PER_ARTICLE"
+            );
+            break;
+        }
         let prompt = cap[1].to_string();
         let alt = cap[2].to_string();
         let id = Uuid::new_v4().to_string();

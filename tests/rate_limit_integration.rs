@@ -16,13 +16,21 @@ async fn hourly_limit_allows_max_and_blocks_next() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(20);
+    let burst: u32 = env::var("MAX_ARTICLES_BURST_PER_HOUR")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .map(|v: u32| v.clamp(1, max))
+        .unwrap_or(1);
 
     let state = RateLimitState::new();
     let app = Router::new()
         .route("/create", post(|| async { "ok" }))
-        .layer(middleware::from_fn_with_state(state.clone(), rate_limit_middleware));
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit_middleware,
+        ));
 
-    for i in 0..max {
+    for i in 0..burst {
         let response = app
             .clone()
             .oneshot(
@@ -51,4 +59,3 @@ async fn hourly_limit_allows_max_and_blocks_next() {
         .expect("request failed");
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
-

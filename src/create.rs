@@ -1,6 +1,7 @@
 #![allow(clippy::blocks_in_conditions)]
 
 use std::env;
+use std::sync::atomic::Ordering;
 
 use axum::response::Html;
 use sea_orm::QueryFilter;
@@ -28,8 +29,11 @@ pub struct PostCreateData {
 
 async fn create_article(state: &AppState, id: String, instructions: String) -> Result<(), Error> {
     debug!("Generating article for instructions: {}", instructions);
-    let models = &state.llm.models;
-    let mut attempts = 0;
+    let model = state
+        .llm
+        .models
+        .first()
+        .ok_or_else(|| Error::Llm("No language model configured".to_string()))?;
 
     let use_examples_env = env::var("USE_EXAMPLES").unwrap_or("false".to_string());
     debug!("USE_EXAMPLES: {}", use_examples_env);
@@ -38,40 +42,12 @@ async fn create_article(state: &AppState, id: String, instructions: String) -> R
     let can_use_examples = env::var("USE_EXAMPLES") == Ok("true".to_string());
 
     debug!("can_use_examples: {}", can_use_examples);
-
-    loop {
-        let model = &models[attempts % models.len()];
-        attempts += 1;
-        let use_examples = can_use_examples || attempts > 1;
-        debug!("attempt {} use_examples {}", attempts, use_examples);
-        let res = if use_placeholders {
-            create_article_using_placeholders(
-                state,
-                id.clone(),
-                instructions.clone(),
-                model,
-                use_examples,
-            )
-            .await
-        } else {
-            create_article_attempt(state, id.clone(), instructions.clone(), model).await
-        };
-        match res {
-            Ok(article) => {
-                return Ok(article);
-            }
-            Err(e) => {
-                event!(Level::DEBUG, "Attempt {} failed, error: {}", attempts, e,);
-                if attempts >= 3 {
-                    event!(
-                        Level::ERROR,
-                        "Failed to generate article after 3 attempts: {}",
-                        e
-                    );
-                    return Err(e);
-                }
-            }
-        }
+    let use_examples = can_use_examples;
+    debug!("single attempt use_examples {}", use_examples);
+    if use_placeholders {
+        create_article_using_placeholders(state, id, instructions, model, use_examples).await
+    } else {
+        create_article_attempt(state, id, instructions, model).await
     }
 }
 
@@ -109,16 +85,46 @@ pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
     }
 }
 
-pub async fn start_create_article(state: AppState, prompt: String) -> String {
+pub async fn start_create_article(state: AppState, prompt: String) -> Result<String, Error> {
+    let permit = state
+        .article_generation_semaphore
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| {
+            event!(
+                Level::WARN,
+                "Rejected article creation due to concurrency limit (MAX_CONCURRENT_ARTICLE_GENERATIONS reached)",
+            );
+            Error::RateLimited
+        })?;
     let id = Uuid::new_v4().to_string();
     event!(Level::DEBUG, "Created id {}", &id);
     let return_id = id.clone();
+    let active_counter = state.active_article_generations.clone();
     state
         .task_list
         .clone()
         .spawn_task(id.clone(), async move {
-            create_article(&state, id.clone(), prompt).await
+            let _permit = permit;
+            let in_flight = active_counter.fetch_add(1, Ordering::SeqCst) + 1;
+            event!(
+                Level::INFO,
+                article_id = %id,
+                in_flight,
+                "Started article generation task"
+            );
+            let result = create_article(&state, id.clone(), prompt).await;
+            let in_flight_after = active_counter
+                .fetch_sub(1, Ordering::SeqCst)
+                .saturating_sub(1);
+            event!(
+                Level::INFO,
+                article_id = %id,
+                in_flight = in_flight_after,
+                "Finished article generation task"
+            );
+            result
         })
         .await;
-    return_id
+    Ok(return_id)
 }

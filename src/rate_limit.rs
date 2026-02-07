@@ -1,9 +1,4 @@
-use axum::{
-    extract::Request,
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::StatusCode, middleware::Next, response::Response};
 use governor::{
     clock::DefaultClock,
     state::{InMemoryState, NotKeyed},
@@ -17,9 +12,6 @@ use std::{
         Arc,
     },
 };
-
-
-
 
 // Shared state for rate limiters
 #[derive(Clone, Debug)]
@@ -46,23 +38,42 @@ impl RateLimitState {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(20);
+        let hourly_burst: u32 = env::var("MAX_ARTICLES_BURST_PER_HOUR")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(|v: u32| v.clamp(1, max_per_hour))
+            .unwrap_or(1);
+        let daily_burst: u32 = env::var("MAX_ARTICLES_BURST_PER_DAY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(|v: u32| v.clamp(1, max_per_day))
+            .unwrap_or(1);
 
-        let hourly_quota = Quota::per_hour(NonZeroU32::new(max_per_hour).expect("MAX_ARTICLES_PER_HOUR must be > 0"))
-            .allow_burst(NonZeroU32::new(max_per_hour).unwrap());
-        let daily_quota = Quota::with_period(std::time::Duration::from_secs(86400 / max_per_day as u64))
-            .expect("MAX_ARTICLES_PER_DAY must be > 0")
-            .allow_burst(NonZeroU32::new(max_per_day).unwrap());
+        let hourly_quota = Quota::per_hour(
+            NonZeroU32::new(max_per_hour).expect("MAX_ARTICLES_PER_HOUR must be > 0"),
+        )
+        .allow_burst(NonZeroU32::new(hourly_burst).unwrap());
+        let daily_quota =
+            Quota::with_period(std::time::Duration::from_secs(86400 / max_per_day as u64))
+                .expect("MAX_ARTICLES_PER_DAY must be > 0")
+                .allow_burst(NonZeroU32::new(daily_burst).unwrap());
 
         Self {
-            hourly_limiter: Arc::new(RateLimiter::new(hourly_quota, InMemoryState::default(), &DefaultClock::default())),
-            daily_limiter: Arc::new(RateLimiter::new(daily_quota, InMemoryState::default(), &DefaultClock::default())),
+            hourly_limiter: Arc::new(RateLimiter::new(
+                hourly_quota,
+                InMemoryState::default(),
+                &DefaultClock::default(),
+            )),
+            daily_limiter: Arc::new(RateLimiter::new(
+                daily_quota,
+                InMemoryState::default(),
+                &DefaultClock::default(),
+            )),
             global_rate_limit_hits: Arc::new(AtomicU64::new(0)),
             total_requests: Arc::new(AtomicU64::new(0)),
         }
     }
 }
-
-
 
 // Middleware function for rate limiting
 pub async fn rate_limit_middleware(
@@ -100,10 +111,18 @@ mod tests {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(20);
-        for i in 0..max {
+        let burst: u32 = env::var("MAX_ARTICLES_BURST_PER_HOUR")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(|v: u32| v.clamp(1, max))
+            .unwrap_or(1);
+        for i in 0..burst {
             assert!(state.hourly_limiter.check().is_ok(), "failed at {}", i);
         }
-        assert!(state.hourly_limiter.check().is_err(), "should fail after max");
+        assert!(
+            state.hourly_limiter.check().is_err(),
+            "should fail after max"
+        );
     }
 
     #[tokio::test]
@@ -113,9 +132,17 @@ mod tests {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(20);
-        for i in 0..max {
+        let burst: u32 = env::var("MAX_ARTICLES_BURST_PER_DAY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(|v: u32| v.clamp(1, max))
+            .unwrap_or(1);
+        for i in 0..burst {
             assert!(state.daily_limiter.check().is_ok(), "failed at {}", i);
         }
-        assert!(state.daily_limiter.check().is_err(), "should fail after max");
+        assert!(
+            state.daily_limiter.check().is_err(),
+            "should fail after max"
+        );
     }
 }
