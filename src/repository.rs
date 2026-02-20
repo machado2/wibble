@@ -137,9 +137,17 @@ pub struct Article {
 }
 
 pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(), Error> {
-    let slug = get_slug_for(db, &article.title)
+    let existing = Content::find_by_id(article.id.clone())
+        .one(db)
         .await
-        .unwrap_or(article.id.to_string());
+        .map_err(|e| Error::Database(format!("Error checking existing article: {}", e)))?;
+    let slug = if let Some(existing) = &existing {
+        existing.slug.clone()
+    } else {
+        get_slug_for(db, &article.title)
+            .await
+            .unwrap_or(article.id.to_string())
+    };
     let now = chrono::Utc::now().naive_local();
     let first_image_id = article
         .images
@@ -182,10 +190,22 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
     let mut c = content::ActiveModel::from(c);
     db.transaction(|tx| {
         Box::pin(async move {
-            Content::insert(c.clone())
-                .exec(tx)
+            if Content::find_by_id(article.id.clone())
+                .one(tx)
                 .await
-                .map_err(|e| Error::Database(format!("Error inserting content: {}", e)))?;
+                .map_err(|e| Error::Database(format!("Error finding content: {}", e)))?
+                .is_some()
+            {
+                Content::update(c.clone())
+                    .exec(tx)
+                    .await
+                    .map_err(|e| Error::Database(format!("Error updating content: {}", e)))?;
+            } else {
+                Content::insert(c.clone())
+                    .exec(tx)
+                    .await
+                    .map_err(|e| Error::Database(format!("Error inserting content: {}", e)))?;
+            }
             for img in article.images {
                 save_image(
                     article.id.clone(),

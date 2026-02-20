@@ -18,3 +18,9 @@ build-release:
 tar: dist
     @tar -czf wibble-dist.tar.gz -C dist .
     @echo "Distribution tarball created: wibble-dist.tar.gz"
+
+deploy: tar
+    @scp wibble-dist.tar.gz debian@fbmac.net:/home/debian/wibble/wibble-dist.tar.gz
+    @ssh debian@fbmac.net 'cd /home/debian/wibble && tar -xzf wibble-dist.tar.gz'
+    @ssh debian@fbmac.net 'sudo systemctl restart wibble'
+    @echo "Deploy complete."

@@ -3,7 +3,9 @@ use markdown::mdast::Node;
 use markdown::{to_html, to_mdast, ParseOptions};
 use sea_orm::sea_query::Expr;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use tracing::{event, warn, Level};
 
+use crate::create::start_recover_article_for_slug;
 use crate::wibble_request::WibbleRequest;
 use crate::{
     entities::{content, prelude::*},
@@ -223,15 +225,67 @@ impl GetContent for WibbleRequest {
     async fn get_content(&self, slug: &str, source: Option<&str>) -> Result<Html<String>, Error> {
         let state = &self.state;
         let db = &state.db;
-        let c = Content::find()
-            .filter(content::Column::Slug.contains(slug))
+        let mut c = Content::find()
+            .filter(content::Column::Slug.eq(slug))
             .one(db)
             .await
-            .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
-            .ok_or(Error::NotFound(Some(format!(
-                "Content with slug {} not found",
-                slug
-            ))))?;
+            .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?;
+
+        if c.is_none() {
+            if let Err(e) = start_recover_article_for_slug(state.clone(), slug.to_string()).await {
+                warn!(slug = %slug, error = %e, "Failed to start dead-link recovery");
+            }
+            c = Content::find()
+                .filter(content::Column::Slug.eq(slug))
+                .one(db)
+                .await
+                .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?;
+        }
+
+        let mut c = c.ok_or(Error::NotFound(Some(format!(
+            "Content with slug {} not found",
+            slug
+        ))))?;
+
+        if c.generating {
+            if state.is_generation_active(&c.id).await {
+                event!(
+                    Level::INFO,
+                    slug = %slug,
+                    article_id = %c.id,
+                    "Serving wait page for in-memory active generation"
+                );
+                return self.template("wait").await.render();
+            }
+
+            warn!(
+                slug = %slug,
+                article_id = %c.id,
+                "Found stale generating row with no in-memory active task; removing and retrying recovery"
+            );
+            Content::delete_by_id(c.id.clone())
+                .exec(db)
+                .await
+                .map_err(|e| Error::Database(format!("Failed to delete stale content row: {}", e)))?;
+
+            if let Err(e) = start_recover_article_for_slug(state.clone(), slug.to_string()).await {
+                warn!(slug = %slug, error = %e, "Failed to restart dead-link recovery");
+            }
+            c = Content::find()
+                .filter(content::Column::Slug.eq(slug))
+                .one(db)
+                .await
+                .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
+                .ok_or(Error::NotFound(Some(format!(
+                    "Content with slug {} not found",
+                    slug
+                ))))?;
+
+            if c.generating {
+                return self.template("wait").await.render();
+            }
+        }
+
         if source == Some("top") {
             Content::update_many()
                 .filter(content::Column::Id.eq(c.id.clone()))

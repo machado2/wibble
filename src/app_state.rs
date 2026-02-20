@@ -1,12 +1,15 @@
 use std::env;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::time::{Duration, Instant};
 
 use bustdir::BustDir;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tera::Tera;
 use tokio::sync::Semaphore;
+use tokio::sync::Mutex;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
 use crate::image_generator::huggingface::HuggingFaceImageGenerator;
@@ -25,6 +28,32 @@ async fn connect_database() -> DatabaseConnection {
 }
 
 impl AppState {
+    pub async fn mark_generation_started(&self, article_id: &str) {
+        self.active_generation_ids
+            .lock()
+            .await
+            .insert(article_id.to_string());
+    }
+
+    pub async fn mark_generation_finished(&self, article_id: &str) {
+        self.active_generation_ids.lock().await.remove(article_id);
+    }
+
+    pub async fn is_generation_active(&self, article_id: &str) -> bool {
+        self.active_generation_ids.lock().await.contains(article_id)
+    }
+
+    pub async fn try_take_dead_link_recovery_slot(&self) -> bool {
+        let mut timestamps = self.dead_link_recovery_timestamps.lock().await;
+        let now = Instant::now();
+        timestamps.retain(|t| now.duration_since(*t) < Duration::from_secs(60 * 60 * 24));
+        if timestamps.len() >= self.dead_link_recovery_max_per_day {
+            return false;
+        }
+        timestamps.push(now);
+        true
+    }
+
     pub async fn init() -> Self {
         let image_mode = env::var("IMAGE_MODE").unwrap_or(String::from(""));
         let db = connect_database().await;
@@ -44,10 +73,19 @@ impl AppState {
             .and_then(|s| s.parse::<usize>().ok())
             .filter(|v| *v > 0)
             .unwrap_or(1);
+        let dead_link_recovery_max_per_day = env::var("DEAD_LINK_RECOVERY_MAX_PER_DAY")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(5);
         println!("Image mode: {}", image_mode);
         println!(
             "MAX_CONCURRENT_ARTICLE_GENERATIONS={}",
             max_concurrent_article_generations
+        );
+        println!(
+            "DEAD_LINK_RECOVERY_MAX_PER_DAY={}",
+            dead_link_recovery_max_per_day
         );
         let image_generator: Arc<dyn ImageGenerator> = if image_mode == "sd3" {
             println!("Using SD3");
@@ -102,6 +140,9 @@ impl AppState {
                     max_concurrent_article_generations,
                 )),
                 active_article_generations: Arc::new(AtomicUsize::new(0)),
+                active_generation_ids: Arc::new(Mutex::new(HashSet::new())),
+                dead_link_recovery_max_per_day,
+                dead_link_recovery_timestamps: Arc::new(Mutex::new(Vec::new())),
             }
         };
 
@@ -157,4 +198,7 @@ pub struct AppState {
     pub template_auto_reload: bool,
     pub article_generation_semaphore: Arc<Semaphore>,
     pub active_article_generations: Arc<AtomicUsize>,
+    pub active_generation_ids: Arc<Mutex<HashSet<String>>>,
+    pub dead_link_recovery_max_per_day: usize,
+    pub dead_link_recovery_timestamps: Arc<Mutex<Vec<Instant>>>,
 }
