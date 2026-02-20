@@ -101,11 +101,11 @@ pub async fn start_create_article(state: AppState, prompt: String) -> Result<Str
     event!(Level::DEBUG, "Created id {}", &id);
     let return_id = id.clone();
     let active_counter = state.active_article_generations.clone();
+    state.mark_generation_started(&id).await;
     state
         .task_list
         .clone()
         .spawn_task(id.clone(), async move {
-            state.mark_generation_started(&id).await;
             let _permit = permit;
             let in_flight = active_counter.fetch_add(1, Ordering::SeqCst) + 1;
             event!(
@@ -134,13 +134,15 @@ pub async fn start_create_article(state: AppState, prompt: String) -> Result<Str
 fn recover_prompt_from_slug(slug: &str) -> String {
     let topic = slug
         .replace('-', " ")
+        .replace('_', " ")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
-    format!(
-        "Write a satirical news article to restore a dead link. Target topic: {}.",
+    if topic.is_empty() {
+        slug.to_string()
+    } else {
         topic
-    )
+    }
 }
 
 pub async fn start_recover_article_for_slug(
@@ -227,11 +229,11 @@ pub async fn start_recover_article_for_slug(
     }
 
     let active_counter = state.active_article_generations.clone();
+    state.mark_generation_started(&id).await;
     state
         .task_list
         .clone()
         .spawn_task(id.clone(), async move {
-            state.mark_generation_started(&id).await;
             let _permit = permit;
             let in_flight = active_counter.fetch_add(1, Ordering::SeqCst) + 1;
             event!(

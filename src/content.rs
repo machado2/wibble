@@ -6,9 +6,10 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use tracing::{event, warn, Level};
 
 use crate::create::start_recover_article_for_slug;
+use crate::tasklist::TaskResult;
 use crate::wibble_request::WibbleRequest;
 use crate::{
-    entities::{content, prelude::*},
+    entities::{content, content_image, prelude::*},
     error::Error,
 };
 
@@ -248,38 +249,68 @@ impl GetContent for WibbleRequest {
         ))))?;
 
         if c.generating {
-            if state.is_generation_active(&c.id).await {
+            let task_processing = matches!(
+                state.task_list.get(&c.id).await,
+                Ok(TaskResult::Processing)
+            );
+            if state.is_generation_active(&c.id).await || task_processing {
                 event!(
                     Level::INFO,
                     slug = %slug,
                     article_id = %c.id,
-                    "Serving wait page for in-memory active generation"
+                    "Serving wait page for active generation"
                 );
                 return self.template("wait").await.render();
             }
 
-            warn!(
-                slug = %slug,
-                article_id = %c.id,
-                "Found stale generating row with no in-memory active task; removing and retrying recovery"
-            );
-            Content::delete_by_id(c.id.clone())
-                .exec(db)
-                .await
-                .map_err(|e| Error::Database(format!("Failed to delete stale content row: {}", e)))?;
+            if c.markdown.is_some() {
+                warn!(
+                    slug = %slug,
+                    article_id = %c.id,
+                    "Found stale generating row with markdown; flipping generating=false"
+                );
+                Content::update_many()
+                    .filter(content::Column::Id.eq(c.id.clone()))
+                    .col_expr(content::Column::Generating, Expr::value(false))
+                    .exec(db)
+                    .await
+                    .map_err(|e| {
+                        Error::Database(format!("Failed to clear stale generating flag: {}", e))
+                    })?;
+                c.generating = false;
+            } else {
+                warn!(
+                    slug = %slug,
+                    article_id = %c.id,
+                    "Found stale generating row with no in-memory active task; removing and retrying recovery"
+                );
+                ContentImage::delete_many()
+                    .filter(content_image::Column::ContentId.eq(c.id.clone()))
+                    .exec(db)
+                    .await
+                    .map_err(|e| {
+                        Error::Database(format!("Failed to delete stale content images: {}", e))
+                    })?;
+                Content::delete_by_id(c.id.clone())
+                    .exec(db)
+                    .await
+                    .map_err(|e| {
+                        Error::Database(format!("Failed to delete stale content row: {}", e))
+                    })?;
 
-            if let Err(e) = start_recover_article_for_slug(state.clone(), slug.to_string()).await {
-                warn!(slug = %slug, error = %e, "Failed to restart dead-link recovery");
+                if let Err(e) = start_recover_article_for_slug(state.clone(), slug.to_string()).await {
+                    warn!(slug = %slug, error = %e, "Failed to restart dead-link recovery");
+                }
+                c = Content::find()
+                    .filter(content::Column::Slug.eq(slug))
+                    .one(db)
+                    .await
+                    .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
+                    .ok_or(Error::NotFound(Some(format!(
+                        "Content with slug {} not found",
+                        slug
+                    ))))?;
             }
-            c = Content::find()
-                .filter(content::Column::Slug.eq(slug))
-                .one(db)
-                .await
-                .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
-                .ok_or(Error::NotFound(Some(format!(
-                    "Content with slug {} not found",
-                    slug
-                ))))?;
 
             if c.generating {
                 return self.template("wait").await.render();

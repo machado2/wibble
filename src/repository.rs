@@ -1,6 +1,6 @@
 use rand::prelude::*;
 use sea_orm::prelude::*;
-use sea_orm::{ActiveValue, QuerySelect, TransactionTrait};
+use sea_orm::{ActiveModelTrait, ActiveValue, QuerySelect, TransactionTrait};
 use serde_json::Value;
 use slugify::slugify;
 use std::path::PathBuf;
@@ -188,6 +188,11 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
     };
 
     let mut c = content::ActiveModel::from(c);
+    // When updating an existing placeholder row (dead-link recovery), convert
+    // unchanged fields into explicit SETs so markdown/content/generating are persisted.
+    if existing.is_some() {
+        c = c.reset_all();
+    }
     db.transaction(|tx| {
         Box::pin(async move {
             if Content::find_by_id(article.id.clone())
