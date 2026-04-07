@@ -1,19 +1,46 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card">
-  <div class="card-body">
-    <h1 class="card-title">{{title}}</h1>
-    <p class="text-muted"><time>{{created_at}}</time></p>
-    <p class="text-muted text-uppercase small mb-3">Status: {{status}}</p>
-    <figure class="text-center">
-      <img src="/image/{{image_id}}" alt="{{title}}" class="img-fluid mb-3">
-      <pre class="bg-light p-3 rounded">{{parameters}}</pre>
-    </figure>
-    {% if last_error %}
-    <div class="alert alert-warning" role="alert">{{last_error}}</div>
-    {% endif %}
-    <p class="card-text">Used in <a href="/content/{{slug}}" class="text-decoration-none">"{{content_title}}"</a></p>
+<section class="image-info-layout">
+  <div class="image-stage card">
+    <img src="/image/{{image_id}}" alt="{{title}}" class="image-stage-media">
   </div>
-</div>
+
+  <article class="image-info-panel card">
+    <div class="card-body image-info-body">
+      <p class="image-info-kicker">Image prompt</p>
+      <h1 class="image-info-title">{{title}}</h1>
+      <p class="image-info-prompt">{{prompt}}</p>
+
+      <div class="image-info-meta" aria-label="Image metadata">
+        <div class="image-meta-chip">
+          <span class="image-meta-label">Status</span>
+          <strong>{{status}}</strong>
+        </div>
+        <div class="image-meta-chip">
+          <span class="image-meta-label">Created</span>
+          <strong><time>{{created_at}}</time></strong>
+        </div>
+        {% if model %}
+        <div class="image-meta-chip">
+          <span class="image-meta-label">Model</span>
+          <strong>{{model}}</strong>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if last_error %}
+      <div class="image-info-alert" role="alert">
+        <span class="image-info-alert-label">Last error</span>
+        <p class="mb-0">{{last_error}}</p>
+      </div>
+      {% endif %}
+
+      <div class="image-info-footer">
+        <p class="image-info-article-label">Used in</p>
+        <a href="/content/{{slug}}" class="image-info-article-link">"{{content_title}}"</a>
+      </div>
+    </div>
+  </article>
+</section>
 {% endblock content %}
