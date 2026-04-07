@@ -2,35 +2,49 @@ use std::env;
 
 use axum::{
     body::Body,
+    extract::State,
     http::{Request, StatusCode},
-    middleware,
     routing::post,
     Router,
 };
 use tower::ServiceExt; // for `oneshot`
-use wibble::rate_limit::{rate_limit_middleware, RateLimitState};
+use wibble::rate_limit::{ArticleRateLimit, RateLimitState};
+
+async fn limited_create(State(state): State<RateLimitState>) -> StatusCode {
+    match state.check_article_generation_limit() {
+        Ok(()) => StatusCode::OK,
+        Err(ArticleRateLimit::Hourly | ArticleRateLimit::Daily) => StatusCode::TOO_MANY_REQUESTS,
+    }
+}
 
 #[tokio::test]
-async fn hourly_limit_allows_max_and_blocks_next() {
-    let max: u32 = env::var("MAX_ARTICLES_PER_HOUR")
+async fn article_generation_limit_allows_configured_burst_and_blocks_next() {
+    let hourly_max: u32 = env::var("MAX_ARTICLES_PER_HOUR")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(20);
-    let burst: u32 = env::var("MAX_ARTICLES_BURST_PER_HOUR")
+    let hourly_burst: u32 = env::var("MAX_ARTICLES_BURST_PER_HOUR")
         .ok()
         .and_then(|s| s.parse().ok())
-        .map(|v: u32| v.clamp(1, max))
-        .unwrap_or(1);
+        .map(|v: u32| v.clamp(1, hourly_max))
+        .unwrap_or(hourly_max);
+    let daily_max: u32 = env::var("MAX_ARTICLES_PER_DAY")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(20);
+    let daily_burst: u32 = env::var("MAX_ARTICLES_BURST_PER_DAY")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .map(|v: u32| v.clamp(1, daily_max))
+        .unwrap_or(daily_max);
+    let allowed = hourly_burst.min(daily_burst);
 
     let state = RateLimitState::new();
     let app = Router::new()
-        .route("/create", post(|| async { "ok" }))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            rate_limit_middleware,
-        ));
+        .route("/create", post(limited_create))
+        .with_state(state.clone());
 
-    for i in 0..burst {
+    for i in 0..allowed {
         let response = app
             .clone()
             .oneshot(
@@ -45,7 +59,6 @@ async fn hourly_limit_allows_max_and_blocks_next() {
         assert_eq!(response.status(), StatusCode::OK, "failed at {}", i);
     }
 
-    // Next should be rate limited
     let response = app
         .clone()
         .oneshot(

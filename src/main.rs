@@ -49,13 +49,13 @@ async fn get_image(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Response, StatusCode> {
-    let db = &state.db;
-    let img = wibble::image::get_image(db, &id)
+    let img = wibble::image::get_image(&state, &id)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
     Response::builder()
-        .header("Content-Type", "image/jpeg")
-        .body(Body::from(Bytes::from(img)))
+        .header("Content-Type", img.content_type)
+        .header("Cache-Control", img.cache_control)
+        .body(Body::from(Bytes::from(img.bytes)))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
@@ -97,6 +97,12 @@ async fn handle_error(
             let image_url = format!("/error{}.jpg", rand::rng().random_range(1..=8));
             wr.template("error")
                 .await
+                .insert("title", "Server error")
+                .insert(
+                    "description",
+                    "An unexpected server error occurred while loading this page.",
+                )
+                .insert("robots", "noindex,nofollow")
                 .insert("image_url", &image_url)
                 .insert(
                     "error_message",
@@ -109,6 +115,9 @@ async fn handle_error(
             let image_url = format!("/notfound{}.jpg", rand::rng().random_range(1..=4));
             wr.template("error")
                 .await
+                .insert("title", "Page not found")
+                .insert("description", "The requested page could not be found.")
+                .insert("robots", "noindex,nofollow")
                 .insert("image_url", &image_url)
                 .insert(
                     "error_message",
@@ -133,6 +142,8 @@ async fn main() {
     let state = AppState::init().await;
     let app = Router::new()
         .route("/", get(get_index))
+        .route("/sitemap.xml", get(wibble::sitemap::get_sitemap))
+        .route("/robots.txt", get(wibble::sitemap::get_robots_txt))
         .route("/image/{id}", get(get_image))
         .route("/image_info/{id}", get(get_image_info_handler))
         .route("/content/{slug}", get(get_content))

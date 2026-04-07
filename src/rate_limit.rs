@@ -22,6 +22,12 @@ pub struct RateLimitState {
     pub total_requests: Arc<AtomicU64>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArticleRateLimit {
+    Hourly,
+    Daily,
+}
+
 impl Default for RateLimitState {
     fn default() -> Self {
         Self::new()
@@ -29,25 +35,26 @@ impl Default for RateLimitState {
 }
 
 impl RateLimitState {
+    fn read_limit(var_name: &str, default: u32) -> u32 {
+        env::var(var_name)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(default)
+    }
+
+    fn read_burst(var_name: &str, max: u32) -> u32 {
+        env::var(var_name)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(|v: u32| v.clamp(1, max))
+            .unwrap_or(max)
+    }
+
     pub fn new() -> Self {
-        let max_per_hour: u32 = env::var("MAX_ARTICLES_PER_HOUR")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(20);
-        let max_per_day: u32 = env::var("MAX_ARTICLES_PER_DAY")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(20);
-        let hourly_burst: u32 = env::var("MAX_ARTICLES_BURST_PER_HOUR")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(|v: u32| v.clamp(1, max_per_hour))
-            .unwrap_or(1);
-        let daily_burst: u32 = env::var("MAX_ARTICLES_BURST_PER_DAY")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(|v: u32| v.clamp(1, max_per_day))
-            .unwrap_or(1);
+        let max_per_hour = Self::read_limit("MAX_ARTICLES_PER_HOUR", 20);
+        let max_per_day = Self::read_limit("MAX_ARTICLES_PER_DAY", 20);
+        let hourly_burst = Self::read_burst("MAX_ARTICLES_BURST_PER_HOUR", max_per_hour);
+        let daily_burst = Self::read_burst("MAX_ARTICLES_BURST_PER_DAY", max_per_day);
 
         let hourly_quota = Quota::per_hour(
             NonZeroU32::new(max_per_hour).expect("MAX_ARTICLES_PER_HOUR must be > 0"),
@@ -73,9 +80,24 @@ impl RateLimitState {
             total_requests: Arc::new(AtomicU64::new(0)),
         }
     }
+
+    pub fn check_article_generation_limit(&self) -> Result<(), ArticleRateLimit> {
+        if self.hourly_limiter.check().is_err() {
+            self.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!("Hourly rate limit exceeded for article creation");
+            return Err(ArticleRateLimit::Hourly);
+        }
+        if self.daily_limiter.check().is_err() {
+            self.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
+            tracing::warn!("Daily rate limit exceeded for article creation");
+            return Err(ArticleRateLimit::Daily);
+        }
+
+        Ok(())
+    }
 }
 
-// Middleware function for rate limiting
+// Middleware function for request monitoring
 pub async fn rate_limit_middleware(
     state: axum::extract::State<RateLimitState>,
     request: Request,
@@ -83,20 +105,6 @@ pub async fn rate_limit_middleware(
 ) -> Result<Response, StatusCode> {
     // Increment total requests (for monitoring only)
     state.total_requests.fetch_add(1, Ordering::Relaxed);
-
-    // Enforce hourly and daily limits on POST /create
-    if request.method() == axum::http::Method::POST && request.uri().path() == "/create" {
-        if state.hourly_limiter.check().is_err() {
-            state.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
-            tracing::warn!("Hourly rate limit exceeded for article creation");
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
-        if state.daily_limiter.check().is_err() {
-            state.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
-            tracing::warn!("Daily rate limit exceeded for article creation");
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
-    }
 
     Ok(next.run(request).await)
 }
@@ -107,15 +115,8 @@ mod tests {
     #[tokio::test]
     async fn test_hourly_burst_allows_default_and_blocks_next() {
         let state = RateLimitState::new();
-        let max: u32 = env::var("MAX_ARTICLES_PER_HOUR")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(20);
-        let burst: u32 = env::var("MAX_ARTICLES_BURST_PER_HOUR")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(|v: u32| v.clamp(1, max))
-            .unwrap_or(1);
+        let max = RateLimitState::read_limit("MAX_ARTICLES_PER_HOUR", 20);
+        let burst = RateLimitState::read_burst("MAX_ARTICLES_BURST_PER_HOUR", max);
         for i in 0..burst {
             assert!(state.hourly_limiter.check().is_ok(), "failed at {}", i);
         }
@@ -128,15 +129,8 @@ mod tests {
     #[tokio::test]
     async fn test_daily_burst_allows_default_and_blocks_next() {
         let state = RateLimitState::new();
-        let max: u32 = env::var("MAX_ARTICLES_PER_DAY")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(20);
-        let burst: u32 = env::var("MAX_ARTICLES_BURST_PER_DAY")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(|v: u32| v.clamp(1, max))
-            .unwrap_or(1);
+        let max = RateLimitState::read_limit("MAX_ARTICLES_PER_DAY", 20);
+        let burst = RateLimitState::read_burst("MAX_ARTICLES_BURST_PER_DAY", max);
         for i in 0..burst {
             assert!(state.daily_limiter.check().is_ok(), "failed at {}", i);
         }

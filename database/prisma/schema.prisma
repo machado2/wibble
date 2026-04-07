@@ -48,25 +48,32 @@ model content {
 }
 
 model content_image {
-  id          String   @id @db.VarChar(100)
-  content_id  String   @db.VarChar(36)
-  prompt_hash String?  @db.VarChar(100)
-  prompt      String
-  alt_text    String   @db.VarChar(1000)
-  created_at  DateTime @db.Timestamp(6)
-  flagged     Boolean  @default(false)
-  regenerate  Boolean  @default(false)
-  fail_count  Int      @default(0)
-  generator   String?  @db.VarChar(100)
-  model       String?  @db.VarChar(100)
-  seed        String?  @db.VarChar(20)
-  parameters  String?
-  view_count  Int      @default(0)
-  content     content  @relation(fields: [content_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                    String    @id @db.VarChar(100)
+  content_id            String    @db.VarChar(36)
+  prompt_hash           String?   @db.VarChar(100)
+  prompt                String
+  alt_text              String    @db.VarChar(1000)
+  created_at            DateTime  @db.Timestamp(6)
+  flagged               Boolean   @default(false)
+  regenerate            Boolean   @default(false)
+  fail_count            Int       @default(0)
+  generator             String?   @db.VarChar(100)
+  model                 String?   @db.VarChar(100)
+  seed                  String?   @db.VarChar(20)
+  parameters            String?
+  view_count            Int       @default(0)
+  status                String    @default("completed") @db.VarChar(32)
+  last_error            String?
+  generation_started_at DateTime? @db.Timestamp(6)
+  generation_finished_at DateTime? @db.Timestamp(6)
+  provider_job_id       String?   @db.VarChar(100)
+  provider_job_url      String?   @db.VarChar(1000)
+  content               content   @relation(fields: [content_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([content_id, prompt_hash])
   @@index([content_id, prompt_hash])
   @@index([created_at])
+  @@index([status, created_at])
   @@index([view_count])
 }
 

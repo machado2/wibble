@@ -249,10 +249,8 @@ impl GetContent for WibbleRequest {
         ))))?;
 
         if c.generating {
-            let task_processing = matches!(
-                state.task_list.get(&c.id).await,
-                Ok(TaskResult::Processing)
-            );
+            let task_processing =
+                matches!(state.task_list.get(&c.id).await, Ok(TaskResult::Processing));
             if state.is_generation_active(&c.id).await || task_processing {
                 event!(
                     Level::INFO,
@@ -260,7 +258,17 @@ impl GetContent for WibbleRequest {
                     article_id = %c.id,
                     "Serving wait page for active generation"
                 );
-                return self.template("wait").await.render();
+                return self
+                    .template("wait")
+                    .await
+                    .insert("id", &c.id)
+                    .insert("title", "Generating article")
+                    .insert(
+                        "description",
+                        "The article is still being generated and this page auto-refreshes.",
+                    )
+                    .insert("robots", "noindex,nofollow")
+                    .render();
             }
 
             if c.markdown.is_some() {
@@ -298,14 +306,18 @@ impl GetContent for WibbleRequest {
                         Error::Database(format!("Failed to delete stale content row: {}", e))
                     })?;
 
-                if let Err(e) = start_recover_article_for_slug(state.clone(), slug.to_string()).await {
+                if let Err(e) =
+                    start_recover_article_for_slug(state.clone(), slug.to_string()).await
+                {
                     warn!(slug = %slug, error = %e, "Failed to restart dead-link recovery");
                 }
                 c = Content::find()
                     .filter(content::Column::Slug.eq(slug))
                     .one(db)
                     .await
-                    .map_err(|e| Error::Database(format!("Dataabase error reading content: {}", e)))?
+                    .map_err(|e| {
+                        Error::Database(format!("Dataabase error reading content: {}", e))
+                    })?
                     .ok_or(Error::NotFound(Some(format!(
                         "Content with slug {} not found",
                         slug
@@ -313,7 +325,17 @@ impl GetContent for WibbleRequest {
             }
 
             if c.generating {
-                return self.template("wait").await.render();
+                return self
+                    .template("wait")
+                    .await
+                    .insert("id", &c.id)
+                    .insert("title", "Generating article")
+                    .insert(
+                        "description",
+                        "The article is still being generated and this page auto-refreshes.",
+                    )
+                    .insert("robots", "noindex,nofollow")
+                    .render();
             }
         }
 

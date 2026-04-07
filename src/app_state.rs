@@ -1,5 +1,5 @@
-use std::env;
 use std::collections::HashSet;
+use std::env;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -8,14 +8,15 @@ use std::time::{Duration, Instant};
 use bustdir::BustDir;
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
 use tera::Tera;
-use tokio::sync::Semaphore;
 use tokio::sync::Mutex;
+use tokio::sync::Semaphore;
 
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
 use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::image_generator::replicate::ReplicateImageGenerator;
 use crate::image_generator::stability::StabilityImageGenerator;
 use crate::image_generator::ImageGenerator;
+use crate::image_jobs;
 use crate::llm::Llm;
 use crate::rate_limit::RateLimitState;
 use crate::tasklist::TaskList;
@@ -25,6 +26,35 @@ async fn connect_database() -> DatabaseConnection {
     Database::connect(connection)
         .await
         .expect("Failed to connect to database")
+}
+
+async fn ensure_async_image_job_columns(db: &DatabaseConnection) {
+    let statements = [
+        r#"ALTER TABLE "public"."content_image"
+           ADD COLUMN IF NOT EXISTS "status" VARCHAR(32) NOT NULL DEFAULT 'completed'"#,
+        r#"ALTER TABLE "public"."content_image"
+           ADD COLUMN IF NOT EXISTS "last_error" TEXT"#,
+        r#"ALTER TABLE "public"."content_image"
+           ADD COLUMN IF NOT EXISTS "generation_started_at" TIMESTAMP(6)"#,
+        r#"ALTER TABLE "public"."content_image"
+           ADD COLUMN IF NOT EXISTS "generation_finished_at" TIMESTAMP(6)"#,
+        r#"ALTER TABLE "public"."content_image"
+           ADD COLUMN IF NOT EXISTS "provider_job_id" VARCHAR(100)"#,
+        r#"ALTER TABLE "public"."content_image"
+           ADD COLUMN IF NOT EXISTS "provider_job_url" VARCHAR(1000)"#,
+        r#"UPDATE "public"."content_image"
+           SET "status" = 'completed'
+           WHERE "status" IS NULL"#,
+        r#"CREATE INDEX IF NOT EXISTS "content_image_status_created_at_idx"
+           ON "public"."content_image"("status", "created_at")"#,
+    ];
+
+    for sql in statements {
+        let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
+        if let Err(err) = db.execute(stmt).await {
+            eprintln!("Error ensuring async image job columns: {}", err);
+        }
+    }
 }
 
 impl AppState {
@@ -43,6 +73,27 @@ impl AppState {
         self.active_generation_ids.lock().await.contains(article_id)
     }
 
+    pub async fn try_mark_image_generation_started(&self, image_id: &str) -> bool {
+        self.active_image_generation_ids
+            .lock()
+            .await
+            .insert(image_id.to_string())
+    }
+
+    pub async fn mark_image_generation_finished(&self, image_id: &str) {
+        self.active_image_generation_ids
+            .lock()
+            .await
+            .remove(image_id);
+    }
+
+    pub async fn is_image_generation_active(&self, image_id: &str) -> bool {
+        self.active_image_generation_ids
+            .lock()
+            .await
+            .contains(image_id)
+    }
+
     pub async fn try_take_dead_link_recovery_slot(&self) -> bool {
         let mut timestamps = self.dead_link_recovery_timestamps.lock().await;
         let now = Instant::now();
@@ -57,6 +108,7 @@ impl AppState {
     pub async fn init() -> Self {
         let image_mode = env::var("IMAGE_MODE").unwrap_or(String::from(""));
         let db = connect_database().await;
+        ensure_async_image_job_columns(&db).await;
         let task_list = TaskList::default();
         let tera = Tera::new("templates/**/*").expect("Failed to load templates");
         let template_auto_reload = env::var("TEMPLATE_AUTO_RELOAD")
@@ -87,18 +139,39 @@ impl AppState {
             "DEAD_LINK_RECOVERY_MAX_PER_DAY={}",
             dead_link_recovery_max_per_day
         );
-        let image_generator: Arc<dyn ImageGenerator> = if image_mode == "sd3" {
+        let (image_generator_name, image_generator, replicate_image_generator): (
+            String,
+            Arc<dyn ImageGenerator>,
+            Option<Arc<ReplicateImageGenerator>>,
+        ) = if image_mode == "sd3" {
             println!("Using SD3");
-            Arc::new(StabilityImageGenerator::new())
+            (
+                "sd3".to_string(),
+                Arc::new(StabilityImageGenerator::new()),
+                None,
+            )
         } else if image_mode == "horde" {
             println!("Using Horde");
-            Arc::new(AiHordeImageGenerator::new())
+            (
+                "horde".to_string(),
+                Arc::new(AiHordeImageGenerator::new()),
+                None,
+            )
         } else if image_mode == "huggingface" {
             println!("Using Hugging Face");
-            Arc::new(HuggingFaceImageGenerator::new())
+            (
+                "huggingface".to_string(),
+                Arc::new(HuggingFaceImageGenerator::new()),
+                None,
+            )
         } else {
             println!("Using Replicate");
-            Arc::new(ReplicateImageGenerator::new())
+            let replicate = Arc::new(ReplicateImageGenerator::new());
+            (
+                "replicate".to_string(),
+                replicate.clone() as Arc<dyn ImageGenerator>,
+                Some(replicate),
+            )
         };
         // Add diagnostics to help identify missing/incorrect `static` directory in production.
         // This prints current working directory, metadata for "static" and up to 5 entries if it exists.
@@ -133,6 +206,8 @@ impl AppState {
                 tera: Arc::new(RwLock::new(tera)),
                 llm,
                 image_generator,
+                image_generator_name,
+                replicate_image_generator,
                 bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
                 rate_limit_state,
                 template_auto_reload,
@@ -141,6 +216,7 @@ impl AppState {
                 )),
                 active_article_generations: Arc::new(AtomicUsize::new(0)),
                 active_generation_ids: Arc::new(Mutex::new(HashSet::new())),
+                active_image_generation_ids: Arc::new(Mutex::new(HashSet::new())),
                 dead_link_recovery_max_per_day,
                 dead_link_recovery_timestamps: Arc::new(Mutex::new(Vec::new())),
             }
@@ -182,6 +258,8 @@ impl AppState {
             });
         }
 
+        image_jobs::spawn_resume_loop(state.clone());
+
         state
     }
 }
@@ -193,12 +271,15 @@ pub struct AppState {
     pub tera: Arc<RwLock<Tera>>,
     pub llm: Llm,
     pub image_generator: Arc<dyn ImageGenerator>,
+    pub image_generator_name: String,
+    pub replicate_image_generator: Option<Arc<ReplicateImageGenerator>>,
     pub bust_dir: BustDir,
     pub rate_limit_state: RateLimitState,
     pub template_auto_reload: bool,
     pub article_generation_semaphore: Arc<Semaphore>,
     pub active_article_generations: Arc<AtomicUsize>,
     pub active_generation_ids: Arc<Mutex<HashSet<String>>>,
+    pub active_image_generation_ids: Arc<Mutex<HashSet<String>>>,
     pub dead_link_recovery_max_per_day: usize,
     pub dead_link_recovery_timestamps: Arc<Mutex<Vec<Instant>>>,
 }

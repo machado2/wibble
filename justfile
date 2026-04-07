@@ -4,6 +4,7 @@ default:
 dist: clean build-release
     @mkdir -p dist
     @cp target/release/wibble dist/
+    @cp -r database dist/
     @cp -r static dist/
     @cp -r templates dist/
     @echo "Distribution created in dist/"

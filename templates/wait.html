@@ -4,16 +4,14 @@
 <meta http-equiv="refresh" content="5">
 {% endblock headers %}
 
-{% block title %}Generating article...{% endblock title %}
-
 {% block content %}
 <div class="card">
   <div class="card-body text-center">
     <h1 class="card-title">Generating article...</h1>
+    <p class="text-muted">This page refreshes automatically until the article is ready.</p>
     <div class="spinner-border text-primary" role="status">
       <span class="visually-hidden">Loading...</span>
     </div>
   </div>
 </div>
 {% endblock content %}
-

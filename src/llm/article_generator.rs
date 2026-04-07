@@ -5,8 +5,11 @@ use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::error::Error;
 use crate::image_generator::{generate_images, ImageGenerated, ImageToCreate};
+use crate::image_jobs::enqueue_pending_images;
 use crate::llm::{Llm, Message};
-use crate::repository::{get_examples, save_article, Article};
+use crate::repository::{
+    get_examples, save_article, save_pending_article, Article, PendingArticle,
+};
 
 static SYSTEM_MESSAGE_ARTICLE: &str = include_str!("../../prompts/system_article.txt");
 static SYSTEM_WITH_PLACEHOLDERS: &str = include_str!("../../prompts/system_with_placeholders.txt");
@@ -177,12 +180,17 @@ pub async fn create_article_using_placeholders(
         });
     }
 
-    let images = generate_images(state, images).await?;
+    if images.is_empty() {
+        return Err(Error::ImageGeneration(
+            "No image placeholders found in generated article".into(),
+        ));
+    }
 
     let description = markdown.split("\n\n").next().unwrap_or("").to_string();
-    save_article(
+    let image_ids = images.iter().map(|img| img.id.clone()).collect();
+    save_pending_article(
         &state.db,
-        Article {
+        PendingArticle {
             id,
             title,
             markdown,
@@ -191,9 +199,11 @@ pub async fn create_article_using_placeholders(
             model: model.to_string(),
             description,
             images,
+            image_generator: state.image_generator_name.clone(),
         },
     )
     .await?;
+    enqueue_pending_images(state.clone(), image_ids).await;
 
     Ok(())
 }

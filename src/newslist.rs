@@ -2,7 +2,7 @@
 #![allow(clippy::blocks_in_conditions)]
 
 use axum::response::Html;
-use chrono::{TimeDelta, Utc};
+use chrono::TimeDelta;
 use sea_orm::sea_query::Expr;
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
@@ -144,8 +144,13 @@ pub trait NewsList {
 impl NewsList for WibbleRequest {
     async fn news_list(&self, params: ContentListParams) -> Result<Html<String>, Error> {
         let db = &self.state.db;
+        let search = params.search.clone();
+        let has_filters = params.afterId.is_some()
+            || params.search.is_some()
+            || params.t.is_some()
+            || params.sort.is_some();
         // Ordering is performed in SQL (hot_score / click_count). Do not re-sort in Rust.
-        let mut items = get_next_page(db, params).await?;
+        let items = get_next_page(db, params).await?;
         let top_ids: Vec<String> = items.iter().take(3).map(|h| h.id.clone()).collect();
         if !top_ids.is_empty() {
             Content::update_many()
@@ -160,10 +165,20 @@ impl NewsList for WibbleRequest {
         }
         let items: Vec<_> = items.into_iter().map(format_headline).collect();
         let after_id = items.last().map(|h| h.id.clone());
-        self.template("index")
-            .await
+        let mut template = self.template("index").await;
+        let title = match search {
+            Some(search) if !search.trim().is_empty() => format!("Search results for {}", search),
+            _ => "Latest Wibble News".to_string(),
+        };
+        let description = "Daily AI-generated satire, odd headlines, and absurd current events.";
+        template
             .insert("items", &items)
             .insert("after_id", &after_id)
-            .render()
+            .insert("title", &title)
+            .insert("description", description);
+        if has_filters {
+            template.insert("robots", "noindex,follow");
+        }
+        template.render()
     }
 }

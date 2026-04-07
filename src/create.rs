@@ -15,11 +15,20 @@ use crate::entities::content;
 use crate::entities::prelude::*;
 use crate::error::Error;
 use crate::llm::article_generator::{create_article_attempt, create_article_using_placeholders};
+use crate::rate_limit::ArticleRateLimit;
 use crate::tasklist::TaskResult;
 use crate::wibble_request::WibbleRequest;
 
 pub async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
-    wr.template("create").await.render()
+    wr.template("create")
+        .await
+        .insert("title", "Create a new article")
+        .insert(
+            "description",
+            "Submit a prompt and let The Wibble generate a new satirical article.",
+        )
+        .insert("robots", "noindex,nofollow")
+        .render()
 }
 
 #[derive(Deserialize, Debug)]
@@ -38,9 +47,16 @@ async fn create_article(state: &AppState, id: String, instructions: String) -> R
     let use_examples_env = env::var("USE_EXAMPLES").unwrap_or("false".to_string());
     debug!("USE_EXAMPLES: {}", use_examples_env);
 
-    let use_placeholders = env::var("USE_PLACEHOLDERS") == Ok("true".to_string());
+    let use_placeholders = env::var("USE_PLACEHOLDERS")
+        .ok()
+        .map(|value| {
+            let value = value.trim().to_ascii_lowercase();
+            !matches!(value.as_str(), "0" | "false" | "no" | "off")
+        })
+        .unwrap_or(true);
     let can_use_examples = env::var("USE_EXAMPLES") == Ok("true".to_string());
 
+    debug!("use_placeholders: {}", use_placeholders);
     debug!("can_use_examples: {}", can_use_examples);
     let use_examples = can_use_examples;
     debug!("single attempt use_examples {}", use_examples);
@@ -75,7 +91,17 @@ pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
         }
         Ok(TaskResult::Error) => WaitResponse::InternalError,
         Ok(TaskResult::Processing) => {
-            let r = wr.template("wait").await.insert("id", id).render();
+            let r = wr
+                .template("wait")
+                .await
+                .insert("id", id)
+                .insert("title", "Generating article")
+                .insert(
+                    "description",
+                    "The article is still being generated and this page auto-refreshes.",
+                )
+                .insert("robots", "noindex,nofollow")
+                .render();
             match r {
                 Ok(html) => WaitResponse::Html(html),
                 Err(_) => WaitResponse::InternalError,
@@ -97,6 +123,23 @@ pub async fn start_create_article(state: AppState, prompt: String) -> Result<Str
             );
             Error::RateLimited
         })?;
+
+    state
+        .rate_limit_state
+        .check_article_generation_limit()
+        .map_err(|limit| {
+            let limit_name = match limit {
+                ArticleRateLimit::Hourly => "hourly",
+                ArticleRateLimit::Daily => "daily",
+            };
+            event!(
+                Level::WARN,
+                limit = limit_name,
+                "Rejected article creation due to article generation rate limit",
+            );
+            Error::RateLimited
+        })?;
+
     let id = Uuid::new_v4().to_string();
     event!(Level::DEBUG, "Created id {}", &id);
     let return_id = id.clone();

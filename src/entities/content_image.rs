@@ -22,6 +22,13 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub parameters: Option<String>,
     pub view_count: i32,
+    pub status: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub last_error: Option<String>,
+    pub generation_started_at: Option<DateTime>,
+    pub generation_finished_at: Option<DateTime>,
+    pub provider_job_id: Option<String>,
+    pub provider_job_url: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

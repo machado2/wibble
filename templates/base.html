@@ -13,20 +13,14 @@
         />
         <title>{{ pagetitle }}</title>
         <meta name="description" content="{{ description }}" />
+        <meta name="robots" content="{{ robots | default(value='index,follow') }}" />
+        <link rel="canonical" href="{{ canonical_url }}" />
         <meta property="og:type" content="website" />
-        {%- if slug -%}
-        <meta
-            property="og:url"
-            content="https://wibble.fbmac.net/content/{{slug}}"
-        />
-        {%- endif -%}
+        <meta property="og:url" content="{{ canonical_url }}" />
         <meta property="og:title" content="{{ pagetitle }}" />
         <meta property="og:description" content="{{ description }}" />
         {%- if image_id -%}
-        <meta
-            property="og:image"
-            content="https://wibble.fbmac.net/image/{{ image_id }}"
-        />
+        <meta property="og:image" content="{{ site_url }}/image/{{ image_id }}" />
         {%- endif -%}
         <link rel="stylesheet" href="{{style | safe}}" />
         <!-- Google tag (gtag.js) -->

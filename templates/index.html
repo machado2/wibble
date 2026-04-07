@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 
 {% block content %}
+<header class="mb-4">
+  <h1 class="display-5 mb-2">Latest Wibble News</h1>
+  <p class="text-muted mb-0">Fresh AI-generated satire and bizarre headlines.</p>
+</header>
+
 <div class="feed-grid">
   {% for i in items %}
   <div class="card border-0 bg-white hover-shadow">

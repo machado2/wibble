@@ -51,6 +51,13 @@ pub async fn get_image_info_handler(
         .insert("slug", &slug)
         .insert("content_title", &article_title)
         .insert("prompt", &info.prompt)
+        .insert("status", &info.status)
+        .insert("last_error", &info.last_error)
         .insert("model", &info.model)
+        .insert(
+            "description",
+            "Generation details for an image used in a Wibble article.",
+        )
+        .insert("robots", "noindex,nofollow")
         .render()
 }

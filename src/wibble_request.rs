@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -20,6 +21,7 @@ where
 {
     pub state: AppState,
     pub style: String,
+    pub request_path: String,
 }
 
 pub struct Template {
@@ -63,6 +65,14 @@ impl Template {
 }
 
 impl WibbleRequest {
+    fn get_site_url() -> String {
+        env::var("SITE_URL")
+            .ok()
+            .map(|url| url.trim().trim_end_matches('/').to_string())
+            .filter(|url| !url.is_empty())
+            .unwrap_or_else(|| "https://wibble.news".to_string())
+    }
+
     pub async fn template(&self, name: &str) -> Template {
         let mut context = tera::Context::new();
         let style = format!("/{}.css", self.style);
@@ -72,7 +82,11 @@ impl WibbleRequest {
             .get(&style)
             .map(|h| format!("{}?{}", style, h))
             .unwrap_or(style);
+        let site_url = Self::get_site_url();
+        let canonical_url = format!("{}{}", site_url, self.request_path);
         context.insert("style", &busted_style);
+        context.insert("site_url", &site_url);
+        context.insert("canonical_url", &canonical_url);
         context.insert("text_create_new_article", "Create new article");
         Template {
             name: format!("{}.html", name),
@@ -96,7 +110,12 @@ where
         let style = query
             .and_then(|q| q.get("theme").cloned())
             .unwrap_or("style".to_string());
+        let request_path = parts.uri.path().to_string();
         let state = AppState::from_ref(state);
-        Ok(WibbleRequest { state, style })
+        Ok(WibbleRequest {
+            state,
+            style,
+            request_path,
+        })
     }
 }
