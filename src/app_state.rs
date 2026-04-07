@@ -128,7 +128,6 @@ impl AppState {
         let dead_link_recovery_max_per_day = env::var("DEAD_LINK_RECOVERY_MAX_PER_DAY")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
-            .filter(|v| *v > 0)
             .unwrap_or(5);
         println!("Image mode: {}", image_mode);
         println!(
