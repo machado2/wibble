@@ -138,6 +138,7 @@ pub async fn create_article_using_placeholders(
     instructions: String,
     model: &str,
     use_examples: bool,
+    author_email: Option<String>,
 ) -> Result<(), Error> {
     let llm = &state.llm;
 
@@ -200,6 +201,7 @@ pub async fn create_article_using_placeholders(
             description,
             images,
             image_generator: state.image_generator_name.clone(),
+            author_email,
         },
     )
     .await?;
@@ -213,6 +215,7 @@ pub async fn create_article_attempt(
     id: String,
     instructions: String,
     model: &str,
+    author_email: Option<String>,
 ) -> Result<(), Error> {
     let db = &state.db;
     let start_time = chrono::Utc::now().naive_local();
@@ -265,6 +268,7 @@ pub async fn create_article_attempt(
             model: model.to_string(),
             description,
             images,
+            author_email,
         },
     )
     .await?;

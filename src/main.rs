@@ -2,7 +2,8 @@ use std::env;
 use std::net::Ipv4Addr;
 
 use axum::body::{Body, Bytes};
-use axum::extract::{Path, Query, State};
+use axum::extract::{Multipart, Path, Query, State};
+use axum::http::header::SET_COOKIE;
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -10,18 +11,26 @@ use axum::routing::{get, post};
 use axum::{middleware, serve, Form, Router};
 use dotenvy::dotenv;
 use rand::Rng;
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect,
+};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
+use uuid::Uuid;
 
 use wibble::app_state::AppState;
+use wibble::auth::AuthUser;
 use wibble::content::GetContent;
 use wibble::create::{start_create_article, wait, PostCreateData, WaitResponse};
+use wibble::entities::{audit_log, content, content_image, prelude::*};
 use wibble::error::Error;
 use wibble::image_info::get_image_info_handler;
 use wibble::newslist::{ContentListParams, NewsList};
 use wibble::rate_limit::rate_limit_middleware;
+use wibble::repository::store_image_file;
 use wibble::wibble_request::WibbleRequest;
 
 // #[debug_handler(state = AppState)]
@@ -71,11 +80,9 @@ async fn get_wait(wr: WibbleRequest, Path(id): Path<String>) -> Response {
     }
 }
 
-async fn create_en(
-    State(state): State<AppState>,
-    Form(data): Form<PostCreateData>,
-) -> impl IntoResponse {
-    match start_create_article(state, data.prompt).await {
+async fn create_en(wr: WibbleRequest, Form(data): Form<PostCreateData>) -> impl IntoResponse {
+    let author_email = wr.auth_user.as_ref().map(|u| u.email.clone());
+    match start_create_article(wr.state, data.prompt, author_email).await {
         Ok(id) => Redirect::to(&format!("/wait/{}", id)).into_response(),
         Err(e) => e.into_response(),
     }
@@ -83,6 +90,390 @@ async fn create_en(
 
 async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
     wibble::create::get_create(wr).await
+}
+
+#[derive(Deserialize)]
+struct AuthCallbackParams {
+    token: Option<String>,
+    redirect: Option<String>,
+}
+
+async fn auth_callback(
+    State(state): State<AppState>,
+    Query(params): Query<AuthCallbackParams>,
+) -> Result<Response, Error> {
+    let token = params
+        .token
+        .ok_or_else(|| Error::Auth("Missing token".to_string()))?;
+    let _user = state.jwks_client.validate_token(&token).await?;
+    let cookie = format!(
+        "__auth={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
+        token,
+        30 * 24 * 60 * 60
+    );
+    let redirect_url = params.redirect.unwrap_or_else(|| "/".to_string());
+    Ok(([(SET_COOKIE, cookie)], Redirect::to(&redirect_url)).into_response())
+}
+
+async fn login() -> Redirect {
+    let auth_url =
+        env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "https://auth.fbmac.net".to_string());
+    let our_url = env::var("SITE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
+    Redirect::to(&format!(
+        "{}/login?redirect={}/auth/callback&mode=both",
+        auth_url, our_url
+    ))
+}
+
+async fn logout() -> Response {
+    let auth_url =
+        env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "https://auth.fbmac.net".to_string());
+    let our_url = env::var("SITE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
+    let cookie = "__auth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+    (
+        [(SET_COOKIE, cookie)],
+        Redirect::to(&format!("{}/logout?redirect={}", auth_url, our_url)),
+    )
+        .into_response()
+}
+
+fn can_edit_article(auth_user: &AuthUser, _article: &content::Model) -> bool {
+    auth_user.is_admin()
+}
+
+fn can_toggle_publish(auth_user: &AuthUser, article: &content::Model) -> bool {
+    if auth_user.is_admin() {
+        return true;
+    }
+    article.author_email.as_deref() == Some(&auth_user.email)
+}
+
+async fn log_audit(
+    db: &sea_orm::DatabaseConnection,
+    user: &AuthUser,
+    action: &str,
+    target_type: &str,
+    target_id: &str,
+    details: Option<String>,
+) -> Result<(), Error> {
+    let id = Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().naive_local();
+    let log = audit_log::Model {
+        id,
+        user_email: user.email.clone(),
+        user_name: Some(user.name.clone()),
+        action: action.to_string(),
+        target_type: target_type.to_string(),
+        target_id: target_id.to_string(),
+        details,
+        created_at: now,
+    };
+    AuditLog::insert(audit_log::ActiveModel::from(log))
+        .exec(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error inserting audit log: {}", e)))?;
+    Ok(())
+}
+
+async fn get_edit_article(
+    wr: WibbleRequest,
+    Path(slug): Path<String>,
+) -> Result<Html<String>, Error> {
+    let auth_user = wr
+        .auth_user
+        .as_ref()
+        .ok_or_else(|| Error::Auth("Login required".to_string()))?;
+    let db = &wr.state.db;
+    let article = Content::find()
+        .filter(content::Column::Slug.eq(&slug))
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
+        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+
+    if !can_edit_article(auth_user, &article) {
+        return Err(Error::Auth(
+            "Not authorized to edit this article".to_string(),
+        ));
+    }
+
+    let images = ContentImage::find()
+        .filter(content_image::Column::ContentId.eq(&article.id))
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error loading images: {}", e)))?;
+
+    let image_data: Vec<_> = images
+        .iter()
+        .map(|img| {
+            serde_json::json!({
+                "id": img.id,
+                "alt_text": img.alt_text,
+                "prompt": img.prompt,
+            })
+        })
+        .collect();
+
+    wr.template("edit")
+        .await
+        .insert("title", &format!("Edit: {}", article.title))
+        .insert("robots", "noindex,nofollow")
+        .insert("article_title", &article.title)
+        .insert("article_description", &article.description)
+        .insert(
+            "article_markdown",
+            article.markdown.as_deref().unwrap_or(""),
+        )
+        .insert("slug", &slug)
+        .insert("id", &article.id)
+        .insert("images", &image_data)
+        .render()
+}
+
+#[derive(Deserialize, Debug)]
+struct EditArticleData {
+    title: String,
+    description: String,
+    markdown: String,
+}
+
+async fn post_edit_article(
+    wr: WibbleRequest,
+    Path(slug): Path<String>,
+    Form(data): Form<EditArticleData>,
+) -> Result<Redirect, Error> {
+    let auth_user = wr
+        .auth_user
+        .as_ref()
+        .ok_or_else(|| Error::Auth("Login required".to_string()))?;
+    let db = &wr.state.db;
+    let article = Content::find()
+        .filter(content::Column::Slug.eq(&slug))
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
+        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+
+    if !can_edit_article(auth_user, &article) {
+        return Err(Error::Auth(
+            "Not authorized to edit this article".to_string(),
+        ));
+    }
+
+    let mut active: content::ActiveModel = article.into();
+    active.title = ActiveValue::set(data.title.clone());
+    active.description = ActiveValue::set(data.description);
+    active.markdown = ActiveValue::set(Some(data.markdown.clone()));
+    active
+        .update(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error updating article: {}", e)))?;
+
+    log_audit(db, auth_user, "edit_article", "content", &slug, None).await?;
+
+    Ok(Redirect::to(&format!("/content/{}", slug)))
+}
+
+async fn post_replace_image(
+    wr: WibbleRequest,
+    Path((slug, image_id)): Path<(String, String)>,
+    mut multipart: Multipart,
+) -> Result<Redirect, Error> {
+    let auth_user = wr
+        .auth_user
+        .as_ref()
+        .ok_or_else(|| Error::Auth("Login required".to_string()))?;
+    let db = &wr.state.db;
+
+    let article = Content::find()
+        .filter(content::Column::Slug.eq(&slug))
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
+        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+
+    if !can_edit_article(auth_user, &article) {
+        return Err(Error::Auth("Not authorized".to_string()));
+    }
+
+    let img = ContentImage::find_by_id(image_id.clone())
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error finding image: {}", e)))?
+        .ok_or(Error::NotFound(Some(format!(
+            "Image {} not found",
+            image_id
+        ))))?;
+
+    if img.content_id != article.id {
+        return Err(Error::Auth(
+            "Image does not belong to this article".to_string(),
+        ));
+    }
+
+    let mut image_data = None;
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "image" {
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| Error::Auth(format!("Failed to read upload: {}", e)))?;
+            image_data = Some(data.to_vec());
+        }
+    }
+    let image_data = image_data.ok_or_else(|| Error::Auth("No image uploaded".to_string()))?;
+
+    store_image_file(&image_id, image_data).await?;
+
+    log_audit(
+        db,
+        auth_user,
+        "replace_image",
+        "content_image",
+        &image_id,
+        Some(format!("article={}", slug)),
+    )
+    .await?;
+
+    Ok(Redirect::to(&format!("/content/{}/edit", slug)))
+}
+
+async fn post_toggle_publish(
+    wr: WibbleRequest,
+    Path(slug): Path<String>,
+) -> Result<Redirect, Error> {
+    let auth_user = wr
+        .auth_user
+        .as_ref()
+        .ok_or_else(|| Error::Auth("Login required".to_string()))?;
+    let db = &wr.state.db;
+    let article = Content::find()
+        .filter(content::Column::Slug.eq(&slug))
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
+        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+
+    if !can_toggle_publish(auth_user, &article) {
+        return Err(Error::Auth(
+            "Not authorized to toggle publish state".to_string(),
+        ));
+    }
+
+    let new_state = !article.published;
+    let mut active: content::ActiveModel = article.into();
+    active.published = ActiveValue::set(new_state);
+    active
+        .update(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error updating publish state: {}", e)))?;
+
+    log_audit(
+        db,
+        auth_user,
+        if new_state {
+            "publish_article"
+        } else {
+            "unpublish_article"
+        },
+        "content",
+        &slug,
+        None,
+    )
+    .await?;
+
+    Ok(Redirect::to(&format!("/content/{}", slug)))
+}
+
+#[derive(Deserialize)]
+struct AdminArticleQuery {
+    sort: Option<String>,
+    page: Option<u64>,
+}
+
+async fn get_admin_articles(
+    wr: WibbleRequest,
+    Query(query): Query<AdminArticleQuery>,
+) -> Result<Html<String>, Error> {
+    let auth_user = wr
+        .auth_user
+        .as_ref()
+        .ok_or_else(|| Error::Auth("Login required".to_string()))?;
+    if !auth_user.is_admin() {
+        return Err(Error::Auth("Admin access required".to_string()));
+    }
+
+    let db = &wr.state.db;
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page: u64 = 50;
+    let offset = (page - 1) * per_page;
+
+    let sort_column = match query.sort.as_deref() {
+        Some("title") => content::Column::Title,
+        Some("author") => content::Column::AuthorEmail,
+        Some("clicks") => content::Column::ClickCount,
+        Some("impressions") => content::Column::ImpressionCount,
+        Some("hot") => content::Column::HotScore,
+        Some("votes") => content::Column::Votes,
+        Some("generating") => content::Column::Generating,
+        Some("published") => content::Column::Published,
+        Some("fail_count") => content::Column::FailCount,
+        _ => content::Column::CreatedAt,
+    };
+
+    let articles = Content::find()
+        .order_by_desc(sort_column)
+        .offset(offset)
+        .limit(per_page)
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error loading articles: {}", e)))?;
+
+    let total = Content::find()
+        .count(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error counting articles: {}", e)))?;
+    let total_pages = (total as u64).div_ceil(per_page);
+
+    let articles_data: Vec<_> = articles
+        .iter()
+        .map(|a| {
+            serde_json::json!({
+                "id": a.id,
+                "slug": a.slug,
+                "title": a.title,
+                "description": a.description,
+                "author_email": a.author_email,
+                "user_input": a.user_input,
+                "model": a.model,
+                "created_at": a.created_at.format("%F %T").to_string(),
+                "generating": a.generating,
+                "published": a.published,
+                "flagged": a.flagged,
+                "click_count": a.click_count,
+                "impression_count": a.impression_count,
+                "votes": a.votes,
+                "hot_score": format!("{:.2}", a.hot_score),
+                "fail_count": a.fail_count,
+                "generation_time_ms": a.generation_time_ms,
+                "image_prompt": a.image_prompt,
+            })
+        })
+        .collect();
+
+    let current_sort = query.sort.as_deref().unwrap_or("created_at");
+    wr.template("admin_articles")
+        .await
+        .insert("title", "Admin - Articles")
+        .insert("robots", "noindex,nofollow")
+        .insert("articles", &articles_data)
+        .insert("current_sort", current_sort)
+        .insert("current_page", &page)
+        .insert("total_pages", &total_pages)
+        .insert("has_prev", &(page > 1))
+        .insert("has_next", &(page < total_pages))
+        .render()
 }
 
 async fn handle_error(
@@ -147,9 +538,22 @@ async fn main() {
         .route("/image/{id}", get(get_image))
         .route("/image_info/{id}", get(get_image_info_handler))
         .route("/content/{slug}", get(get_content))
+        .route(
+            "/content/{slug}/edit",
+            get(get_edit_article).post(post_edit_article),
+        )
+        .route(
+            "/content/{slug}/images/{image_id}",
+            post(post_replace_image),
+        )
         .route("/wait/{id}", get(get_wait))
         .route("/create", post(create_en).get(get_create))
         .route("/images", get(wibble::get_images::get_images))
+        .route("/admin/articles", get(get_admin_articles))
+        .route("/content/{slug}/publish", post(post_toggle_publish))
+        .route("/auth/callback", get(auth_callback))
+        .route("/login", get(login))
+        .route("/logout", get(logout))
         .fallback_service(serve_dir)
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn_with_state(

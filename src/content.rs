@@ -365,6 +365,18 @@ impl GetContent for WibbleRequest {
                     c.id
                 ))))?),
             )
+            .insert(
+                "can_edit",
+                &self.auth_user.as_ref().is_some_and(|u| u.is_admin()),
+            )
+            .insert(
+                "can_publish",
+                &self
+                    .auth_user
+                    .as_ref()
+                    .is_some_and(|u| u.is_admin() || c.author_email.as_deref() == Some(&u.email)),
+            )
+            .insert("is_published", &c.published)
             .render()
     }
 }

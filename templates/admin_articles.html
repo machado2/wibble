@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="display-5 mb-4">Admin - All Articles</h1>
+
+<div class="mb-4">
+  <span class="me-3 text-muted">Sort by:</span>
+  {%- if current_sort == "created_at" -%}<strong>Newest</strong>{%- else -%}<a href="?sort=created_at&amp;page={{ current_page }}">Newest</a>{%- endif -%} |
+  {%- if current_sort == "title" -%}<strong>Title</strong>{%- else -%}<a href="?sort=title&amp;page={{ current_page }}">Title</a>{%- endif -%} |
+  {%- if current_sort == "author" -%}<strong>Author</strong>{%- else -%}<a href="?sort=author&amp;page={{ current_page }}">Author</a>{%- endif -%} |
+  {%- if current_sort == "clicks" -%}<strong>Clicks</strong>{%- else -%}<a href="?sort=clicks&amp;page={{ current_page }}">Clicks</a>{%- endif -%} |
+  {%- if current_sort == "impressions" -%}<strong>Impressions</strong>{%- else -%}<a href="?sort=impressions&amp;page={{ current_page }}">Impressions</a>{%- endif -%} |
+  {%- if current_sort == "hot" -%}<strong>Hot Score</strong>{%- else -%}<a href="?sort=hot&amp;page={{ current_page }}">Hot Score</a>{%- endif -%} |
+  {%- if current_sort == "votes" -%}<strong>Votes</strong>{%- else -%}<a href="?sort=votes&amp;page={{ current_page }}">Votes</a>{%- endif -%} |
+  {%- if current_sort == "generating" -%}<strong>Generating</strong>{%- else -%}<a href="?sort=generating&amp;page={{ current_page }}">Generating</a>{%- endif -%} |
+  {%- if current_sort == "published" -%}<strong>Published</strong>{%- else -%}<a href="?sort=published&amp;page={{ current_page }}">Published</a>{%- endif -%} |
+  {%- if current_sort == "fail_count" -%}<strong>Fail Count</strong>{%- else -%}<a href="?sort=fail_count&amp;page={{ current_page }}">Fail Count</a>{%- endif -%}
+</div>
+
+<div class="table-responsive">
+  <table class="table table-striped table-hover">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Author</th>
+        <th>Prompt</th>
+        <th>Model</th>
+        <th>Status</th>
+        <th>Published</th>
+        <th>Created</th>
+        <th>Clicks</th>
+        <th>Impressions</th>
+        <th>Hot</th>
+        <th>Votes</th>
+        <th>Fails</th>
+        <th>Gen (ms)</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for a in articles -%}
+      <tr>
+        <td><a href="/content/{{ a.slug }}">{{ a.title }}</a></td>
+        <td>{{ a.author_email | default(value="—") }}</td>
+        <td title="{{ a.user_input }}">{{ a.user_input | truncate(length=60) }}</td>
+        <td>{{ a.model }}</td>
+        <td>
+          {%- if a.generating -%}
+          <span class="badge bg-info">Generating</span>
+          {%- elif a.flagged -%}
+          <span class="badge bg-danger">Flagged</span>
+          {%- else -%}
+          <span class="badge bg-success">Ready</span>
+          {%- endif -%}
+        </td>
+        <td>
+          {%- if a.published -%}
+          <span class="badge bg-primary">Yes</span>
+          {%- else -%}
+          <span class="badge bg-secondary">No</span>
+          {%- endif -%}
+        </td>
+        <td>{{ a.created_at }}</td>
+        <td>{{ a.click_count }}</td>
+        <td>{{ a.impression_count }}</td>
+        <td>{{ a.hot_score }}</td>
+        <td>{{ a.votes }}</td>
+        <td>{{ a.fail_count }}</td>
+        <td>{{ a.generation_time_ms | default(value="—") }}</td>
+        <td>
+          <a href="/content/{{ a.slug }}/edit" class="btn btn-sm btn-outline-primary">Edit</a>
+          <form method="post" action="/content/{{ a.slug }}/publish" style="display:inline;">
+            {%- if a.published -%}
+            <button type="submit" class="btn btn-sm btn-outline-warning">Unpublish</button>
+            {%- else -%}
+            <button type="submit" class="btn btn-sm btn-outline-success">Publish</button>
+            {%- endif -%}
+          </form>
+        </td>
+      </tr>
+      {%- endfor -%}
+    </tbody>
+  </table>
+</div>
+
+{%- if has_prev or has_next -%}
+<div class="d-flex justify-content-between mt-4">
+  {%- if has_prev -%}
+  <a href="?sort={{ current_sort }}&amp;page={{ current_page - 1 }}" class="btn btn-outline-primary">&laquo; Previous</a>
+  {%- else -%}
+  <span></span>
+  {%- endif -%}
+  <span class="align-self-center text-muted">Page {{ current_page }} of {{ total_pages }}</span>
+  {%- if has_next -%}
+  <a href="?sort={{ current_sort }}&amp;page={{ current_page + 1 }}" class="btn btn-outline-primary">Next &raquo;</a>
+  {%- else -%}
+  <span></span>
+  {%- endif -%}
+</div>
+{%- endif -%}
+{% endblock content %}

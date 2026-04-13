@@ -148,6 +148,7 @@ pub struct Article {
     pub model: String,
     pub description: String,
     pub images: Vec<ImageGenerated>,
+    pub author_email: Option<String>,
 }
 
 pub struct PendingArticle {
@@ -160,6 +161,7 @@ pub struct PendingArticle {
     pub description: String,
     pub images: Vec<ImageToCreate>,
     pub image_generator: String,
+    pub author_email: Option<String>,
 }
 
 pub async fn save_pending_article(
@@ -176,6 +178,7 @@ pub async fn save_pending_article(
         description,
         images,
         image_generator,
+        author_email,
     } = article;
     let existing = Content::find_by_id(id.clone())
         .one(db)
@@ -220,6 +223,8 @@ pub async fn save_pending_article(
         longview_count: 0,
         impression_count: 0,
         click_count: 0,
+        author_email: author_email.clone(),
+        published: author_email.is_some(),
     };
 
     let mut c = content::ActiveModel::from(c);
@@ -320,7 +325,6 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
         image_id: None,
         title: article.title,
         user_input: article.instructions,
-        // view_count removed
         image_prompt: None,
         user_email: None,
         votes: 0,
@@ -329,11 +333,11 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
         flarum_id: None,
         markdown: Some(article.markdown.clone()),
         converted: false,
-        // lemmy-related fields removed
         longview_count: 0,
-        // umami_view_count removed
         impression_count: 0,
         click_count: 0,
+        author_email: article.author_email.clone(),
+        published: article.author_email.is_some(),
     };
 
     let mut c = content::ActiveModel::from(c);

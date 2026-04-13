@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod audit_log;
 pub mod content;
 pub mod content_image;
 pub mod content_proposal;

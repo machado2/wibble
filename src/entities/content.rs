@@ -41,6 +41,8 @@ pub struct Model {
     // umami_view_count removed
     pub impression_count: i32,
     pub click_count: i32,
+    pub author_email: Option<String>,
+    pub published: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

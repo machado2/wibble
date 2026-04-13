@@ -1,4 +1,5 @@
 pub mod app_state;
+pub mod auth;
 pub mod content;
 pub mod create;
 pub mod entities;

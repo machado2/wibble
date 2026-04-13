@@ -12,6 +12,7 @@ use tera::{Context, Tera};
 use tracing::log;
 
 use crate::app_state::AppState;
+use crate::auth::{extract_auth_token, AuthUser};
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
@@ -22,6 +23,7 @@ where
     pub state: AppState,
     pub style: String,
     pub request_path: String,
+    pub auth_user: Option<AuthUser>,
 }
 
 pub struct Template {
@@ -88,6 +90,10 @@ impl WibbleRequest {
         context.insert("site_url", &site_url);
         context.insert("canonical_url", &canonical_url);
         context.insert("text_create_new_article", "Create new article");
+        if let Some(ref user) = self.auth_user {
+            context.insert("auth_user", user);
+            context.insert("is_admin", &user.is_admin());
+        }
         Template {
             name: format!("{}.html", name),
             context,
@@ -112,10 +118,16 @@ where
             .unwrap_or("style".to_string());
         let request_path = parts.uri.path().to_string();
         let state = AppState::from_ref(state);
+        let auth_user = if let Some(token) = extract_auth_token(parts) {
+            state.jwks_client.validate_token(&token).await.ok()
+        } else {
+            None
+        };
         Ok(WibbleRequest {
             state,
             style,
             request_path,
+            auth_user,
         })
     }
 }

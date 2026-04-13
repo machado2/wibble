@@ -15,6 +15,7 @@ pub enum Error {
     Image(image::ImageError),
     Template(tera::Error),
     Storage(String),
+    Auth(String),
 }
 
 impl fmt::Display for Error {
@@ -32,6 +33,7 @@ impl fmt::Display for Error {
             Error::Image(err) => write!(f, "Image error: {}", err),
             Error::Template(err) => write!(f, "Template error: {}", err),
             Error::Storage(msg) => write!(f, "Storage error: {}", msg),
+            Error::Auth(msg) => write!(f, "Auth error: {}", msg),
         }
     }
 }
@@ -54,6 +56,7 @@ impl IntoResponse for Error {
         let status = match self {
             Error::NotFound(_) => http::StatusCode::NOT_FOUND,
             Error::RateLimited => axum::http::StatusCode::TOO_MANY_REQUESTS,
+            Error::Auth(_) => axum::http::StatusCode::FORBIDDEN,
             _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, self.to_string()).into_response()

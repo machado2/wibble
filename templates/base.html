@@ -52,17 +52,18 @@
                     <span class="brand-strong">Wibble</span>
                 </a>
                 <div class="nav-actions">
-                    <a
-                        class="btn btn-outline-primary"
-                        href="https://discord.gg/KuDBKeCx"
-                        rel="noopener"
-                        target="_blank"
-                    >
-                        Join Discord
-                    </a>
-                    <a class="btn btn-primary" href="/create">
+<a class="btn btn-primary" href="/create">
                         {{ text_create_new_article }}
                     </a>
+                    {%- if auth_user -%}
+                    {%- if is_admin -%}
+                    <a class="btn btn-outline-secondary" href="/admin/articles">Admin</a>
+                    {%- endif -%}
+                    <span class="nav-user">{{ auth_user.name }}</span>
+                    <a class="btn btn-outline-secondary" href="/logout">Logout</a>
+                    {%- else -%}
+                    <a class="btn btn-outline-secondary" href="/login">Login</a>
+                    {%- endif -%}
                 </div>
             </div>
         </nav>

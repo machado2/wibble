@@ -50,7 +50,8 @@ async fn get_next_page(
 
         let mut contents = Content::find()
             .filter(content::Column::Flagged.eq(false))
-            .filter(content::Column::Generating.eq(false));
+            .filter(content::Column::Generating.eq(false))
+            .filter(content::Column::Published.eq(true));
         contents = match par.search {
             Some(s) => contents.filter(
                 content::Column::Slug

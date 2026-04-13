@@ -11,6 +11,7 @@ use tera::Tera;
 use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 
+use crate::auth::JwksClient;
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
 use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::image_generator::replicate::ReplicateImageGenerator;
@@ -53,6 +54,36 @@ async fn ensure_async_image_job_columns(db: &DatabaseConnection) {
         let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
         if let Err(err) = db.execute(stmt).await {
             eprintln!("Error ensuring async image job columns: {}", err);
+        }
+    }
+}
+
+async fn ensure_auth_columns(db: &DatabaseConnection) {
+    let statements = [
+        r#"ALTER TABLE "public"."content"
+           ADD COLUMN IF NOT EXISTS "author_email" VARCHAR(350)"#,
+        r#"CREATE TABLE IF NOT EXISTS "public"."audit_log" (
+            "id" VARCHAR(36) PRIMARY KEY,
+            "user_email" VARCHAR(350) NOT NULL,
+            "user_name" VARCHAR(500),
+            "action" VARCHAR(100) NOT NULL,
+            "target_type" VARCHAR(50) NOT NULL,
+            "target_id" VARCHAR(100) NOT NULL,
+            "details" TEXT,
+            "created_at" TIMESTAMP(6) DEFAULT NOW()
+        )"#,
+        r#"CREATE INDEX IF NOT EXISTS "audit_log_created_at_idx"
+           ON "public"."audit_log"("created_at")"#,
+        r#"CREATE INDEX IF NOT EXISTS "audit_log_target_idx"
+           ON "public"."audit_log"("target_type", "target_id")"#,
+        r#"ALTER TABLE "public"."content"
+           ADD COLUMN IF NOT EXISTS "published" BOOLEAN NOT NULL DEFAULT true"#,
+    ];
+
+    for sql in statements {
+        let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
+        if let Err(err) = db.execute(stmt).await {
+            eprintln!("Error ensuring auth columns: {}", err);
         }
     }
 }
@@ -109,6 +140,8 @@ impl AppState {
         let image_mode = env::var("IMAGE_MODE").unwrap_or(String::from(""));
         let db = connect_database().await;
         ensure_async_image_job_columns(&db).await;
+        ensure_auth_columns(&db).await;
+        let jwks_client = JwksClient::new();
         let task_list = TaskList::default();
         let tera = Tera::new("templates/**/*").expect("Failed to load templates");
         let template_auto_reload = env::var("TEMPLATE_AUTO_RELOAD")
@@ -218,6 +251,7 @@ impl AppState {
                 active_image_generation_ids: Arc::new(Mutex::new(HashSet::new())),
                 dead_link_recovery_max_per_day,
                 dead_link_recovery_timestamps: Arc::new(Mutex::new(Vec::new())),
+                jwks_client,
             }
         };
 
@@ -281,4 +315,5 @@ pub struct AppState {
     pub active_image_generation_ids: Arc<Mutex<HashSet<String>>>,
     pub dead_link_recovery_max_per_day: usize,
     pub dead_link_recovery_timestamps: Arc<Mutex<Vec<Instant>>>,
+    pub jwks_client: JwksClient,
 }

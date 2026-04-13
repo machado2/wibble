@@ -36,7 +36,12 @@ pub struct PostCreateData {
     pub prompt: String,
 }
 
-async fn create_article(state: &AppState, id: String, instructions: String) -> Result<(), Error> {
+async fn create_article(
+    state: &AppState,
+    id: String,
+    instructions: String,
+    author_email: Option<String>,
+) -> Result<(), Error> {
     debug!("Generating article for instructions: {}", instructions);
     let model = state
         .llm
@@ -61,9 +66,17 @@ async fn create_article(state: &AppState, id: String, instructions: String) -> R
     let use_examples = can_use_examples;
     debug!("single attempt use_examples {}", use_examples);
     if use_placeholders {
-        create_article_using_placeholders(state, id, instructions, model, use_examples).await
+        create_article_using_placeholders(
+            state,
+            id,
+            instructions,
+            model,
+            use_examples,
+            author_email,
+        )
+        .await
     } else {
-        create_article_attempt(state, id, instructions, model).await
+        create_article_attempt(state, id, instructions, model, author_email).await
     }
 }
 
@@ -111,7 +124,11 @@ pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
     }
 }
 
-pub async fn start_create_article(state: AppState, prompt: String) -> Result<String, Error> {
+pub async fn start_create_article(
+    state: AppState,
+    prompt: String,
+    author_email: Option<String>,
+) -> Result<String, Error> {
     let permit = state
         .article_generation_semaphore
         .clone()
@@ -157,7 +174,7 @@ pub async fn start_create_article(state: AppState, prompt: String) -> Result<Str
                 in_flight,
                 "Started article generation task"
             );
-            let result = create_article(&state, id.clone(), prompt).await;
+            let result = create_article(&state, id.clone(), prompt.clone(), author_email).await;
             let in_flight_after = active_counter
                 .fetch_sub(1, Ordering::SeqCst)
                 .saturating_sub(1);
@@ -176,8 +193,7 @@ pub async fn start_create_article(state: AppState, prompt: String) -> Result<Str
 
 fn recover_prompt_from_slug(slug: &str) -> String {
     let topic = slug
-        .replace('-', " ")
-        .replace('_', " ")
+        .replace(['-', '_'], " ")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
@@ -247,6 +263,8 @@ pub async fn start_recover_article_for_slug(
         longview_count: 0,
         impression_count: 0,
         click_count: 0,
+        author_email: None,
+        published: false,
     };
     let insert_result = Content::insert(content::ActiveModel::from(placeholder))
         .exec(&state.db)
@@ -286,7 +304,7 @@ pub async fn start_recover_article_for_slug(
                 in_flight,
                 "Started dead-link recovery generation task"
             );
-            let result = create_article(&state, id.clone(), prompt).await;
+            let result = create_article(&state, id.clone(), prompt, None).await;
             let in_flight_after = active_counter
                 .fetch_sub(1, Ordering::SeqCst)
                 .saturating_sub(1);

@@ -19,7 +19,8 @@ slugify = "0.1.0"
 tracing = "*"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 image = "0.25.1"
-axum = "0.8.3"
+axum = { version = "0.8.3", features = ["multipart"] }
+jsonwebtoken = "9"
 axum-template = { version = "3.0.0", features = ["tera"] }
 tera = "1.19.1"
 tower-http = { version = "0.6.2", features = ["fs", "trace"] }
