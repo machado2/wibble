@@ -3,24 +3,24 @@
 {% block content %}
 <article class="card border-0 bg-white article-card">
   <div class="card-body article-content">
-    <h1 class="display-4 mb-3">{{title}}</h1>
-    <p class="text-muted mb-4"><time>{{created_at}}</time></p>
-    {%- if can_edit -%}
-    <div class="mb-4">
-      <a class="btn btn-outline-primary" href="/content/{{slug}}/edit">Edit article</a>
-    </div>
-    {%- endif -%}
-    {%- if can_publish -%}
-    <div class="mb-4">
-      {%- if is_published -%}
-      <form method="post" action="/content/{{slug}}/publish" style="display:inline;">
-        <button type="submit" class="btn btn-outline-warning">Unpublish</button>
+    <h1 class="display-4 mb-3">{{ title }}</h1>
+    <p class="text-muted mb-4"><time>{{ created_at }}</time></p>
+    {%- if can_edit or can_publish -%}
+    <div class="article-actions-bar">
+      {%- if can_edit -%}
+      <a class="btn btn-sm btn-outline-primary" href="/content/{{ slug }}/edit">Edit article</a>
+      {%- endif -%}
+      {%- if can_publish -%}
+      <form method="post" action="/content/{{ slug }}/publish" style="display:inline;">
+        {%- if is_published -%}
+        <button type="submit" class="btn btn-sm btn-outline-warning">Unpublish</button>
+        {%- else -%}
+        <button type="submit" class="btn btn-sm btn-outline-success">Publish</button>
+        {%- endif -%}
       </form>
-      {%- else -%}
-      <form method="post" action="/content/{{slug}}/publish" style="display:inline;">
-        <button type="submit" class="btn btn-outline-success">Publish</button>
-      </form>
-      <span class="badge bg-warning text-dark ms-2">Draft</span>
+      {%- if not is_published -%}
+      <span class="badge badge-warning">Draft</span>
+      {%- endif -%}
       {%- endif -%}
     </div>
     {%- endif -%}

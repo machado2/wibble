@@ -1,48 +1,55 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card border-0 bg-white">
-  <div class="card-body">
-    <h1 class="mb-4">Edit article</h1>
-    <form method="post" action="/content/{{slug}}/edit">
-      <div class="mb-3">
-        <label for="title" class="form-label">Title</label>
-        <input type="text" class="form-control" id="title" name="title" value="{{ article_title }}" required>
-      </div>
-      <div class="mb-3">
-        <label for="description" class="form-label">Description</label>
-        <input type="text" class="form-control" id="description" name="description" value="{{ article_description }}" required>
-      </div>
-      <div class="mb-3">
-        <label for="markdown" class="form-label">Content (Markdown)</label>
-        <textarea class="form-control" id="markdown" name="markdown" rows="20" required>{{ article_markdown }}</textarea>
-      </div>
-      <button type="submit" class="btn btn-primary">Save changes</button>
-      <a href="/content/{{slug}}" class="btn btn-outline-secondary ms-2">Cancel</a>
-    </form>
+<div class="edit-layout">
+  <div class="edit-header">
+    <h1>Edit article</h1>
+    <div class="edit-actions">
+      <a href="/content/{{ slug }}" class="btn btn-outline-secondary">View article</a>
+    </div>
+  </div>
 
-    {%- if images -%}
-    <hr class="my-5">
-    <h2 class="mb-4">Images</h2>
-    <div class="row">
+  <div class="card border-0">
+    <div class="card-body">
+      <form method="post" action="/content/{{ slug }}/edit">
+        <div class="edit-form-group">
+          <label for="title" class="form-label">Title</label>
+          <input type="text" class="form-control" id="title" name="title" value="{{ article_title }}" required>
+        </div>
+        <div class="edit-form-group">
+          <label for="description" class="form-label">Description</label>
+          <input type="text" class="form-control" id="description" name="description" value="{{ article_description }}" required>
+        </div>
+        <div class="edit-form-group">
+          <label for="markdown" class="form-label">Content (Markdown)</label>
+          <textarea class="form-control" id="markdown" name="markdown" rows="20" required>{{ article_markdown }}</textarea>
+        </div>
+        <div class="edit-submit-bar">
+          <button type="submit" class="btn btn-primary">Save changes</button>
+          <a href="/content/{{ slug }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {%- if images -%}
+  <div class="edit-images-section">
+    <h2>Images</h2>
+    <div class="edit-images-grid">
       {%- for img in images -%}
-      <div class="col-md-6 col-lg-4 mb-4">
-        <div class="card">
-          <img src="/image/{{ img.id }}" alt="{{ img.alt_text }}" class="card-img-top" style="max-height:200px;object-fit:cover;">
-          <div class="card-body">
-            <p class="card-text small text-muted">{{ img.prompt }}</p>
-            <form method="post" action="/content/{{slug}}/images/{{ img.id }}" enctype="multipart/form-data">
-              <div class="mb-2">
-                <input type="file" class="form-control form-control-sm" name="image" accept="image/*" required>
-              </div>
-              <button type="submit" class="btn btn-sm btn-outline-warning">Replace image</button>
-            </form>
-          </div>
+      <div class="edit-image-card">
+        <img src="/image/{{ img.id }}" alt="{{ img.alt_text }}">
+        <div class="edit-image-card-body">
+          <p>{{ img.prompt }}</p>
+          <form method="post" action="/content/{{ slug }}/images/{{ img.id }}" enctype="multipart/form-data">
+            <input type="file" class="form-control" name="image" accept="image/*" required>
+            <button type="submit" class="btn btn-sm btn-outline-warning">Replace image</button>
+          </form>
         </div>
       </div>
       {%- endfor -%}
     </div>
-    {%- endif -%}
   </div>
+  {%- endif -%}
 </div>
 {% endblock content %}
