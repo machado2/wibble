@@ -68,10 +68,12 @@ async fn ensure_auth_columns(db: &DatabaseConnection) {
             "user_name" VARCHAR(500),
             "action" VARCHAR(100) NOT NULL,
             "target_type" VARCHAR(50) NOT NULL,
-            "target_id" VARCHAR(100) NOT NULL,
+            "target_id" VARCHAR(500) NOT NULL,
             "details" TEXT,
             "created_at" TIMESTAMP(6) DEFAULT NOW()
         )"#,
+        r#"ALTER TABLE "public"."audit_log"
+           ALTER COLUMN "target_id" TYPE VARCHAR(500)"#,
         r#"CREATE INDEX IF NOT EXISTS "audit_log_created_at_idx"
            ON "public"."audit_log"("created_at")"#,
         r#"CREATE INDEX IF NOT EXISTS "audit_log_target_idx"
