@@ -558,6 +558,7 @@ mod tests {
             click_count: 0,
             author_email: None,
             published: true,
+            recovered_from_dead_link: false,
         }
     }
 

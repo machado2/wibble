@@ -43,6 +43,7 @@ pub struct Model {
     pub click_count: i32,
     pub author_email: Option<String>,
     pub published: bool,
+    pub recovered_from_dead_link: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

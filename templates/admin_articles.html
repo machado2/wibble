@@ -43,11 +43,19 @@
     <tbody>
       {%- for a in articles -%}
       <tr>
-        <td class="col-title"><a href="/content/{{ a.slug }}">{{ a.title }}</a></td>
+        <td class="col-title">
+          <a href="/content/{{ a.slug }}">{{ a.title }}</a>
+          {%- if a.recovered_from_dead_link -%}
+          <div><span class="badge badge-warning">Dead-link recovery</span></div>
+          {%- endif -%}
+        </td>
         <td>{{ a.author_email | default(value="system") }}</td>
         <td class="col-prompt" title="{{ a.user_input }}">{{ a.user_input | truncate(length=50) }}</td>
         <td>{{ a.model }}</td>
         <td>
+          {%- if a.recovered_from_dead_link -%}
+          <span class="badge badge-warning">Recovered</span>
+          {%- endif -%}
           {%- if a.generating -%}
           <span class="badge badge-info">Generating</span>
           {%- elif a.flagged -%}

@@ -81,6 +81,8 @@ async fn ensure_auth_columns(db: &DatabaseConnection) {
            ON "public"."audit_log"("target_type", "target_id")"#,
         r#"ALTER TABLE "public"."content"
            ADD COLUMN IF NOT EXISTS "published" BOOLEAN NOT NULL DEFAULT true"#,
+        r#"ALTER TABLE "public"."content"
+           ADD COLUMN IF NOT EXISTS "recovered_from_dead_link" BOOLEAN NOT NULL DEFAULT false"#,
     ];
 
     for sql in statements {

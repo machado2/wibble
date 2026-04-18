@@ -5,9 +5,9 @@
   <div class="card-body article-content">
     <h1 class="display-4 mb-3">{{ title }}</h1>
     <p class="text-muted mb-4"><time>{{ created_at }}</time></p>
-    <section id="article-voting" class="mb-4">
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="badge text-bg-light">Score: {{ vote_score }}</span>
+    <section id="article-voting" class="article-voting mb-4">
+      <div class="article-voting-bar">
+        <span class="article-voting-score">Score: {{ vote_score }}</span>
         {%- if voting_open -%}
           {%- if can_vote -%}
           <form method="post" action="/content/{{ slug }}/vote" style="display:inline;">
@@ -57,9 +57,9 @@
 
 <section id="comments" class="card border-0 bg-white article-card mt-4">
   <div class="card-body">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0">Comments</h2>
-      <span class="text-muted small">{{ comment_count }}</span>
+    <div class="comments-header">
+      <h2 class="comments-title">Comments</h2>
+      <span class="comments-count">{{ comment_count }} {% if comment_count == 1 %}comment{% else %}comments{% endif %}</span>
     </div>
 
     {%- if comments_open and can_comment -%}
@@ -81,10 +81,10 @@
     {%- endif -%}
 
     {%- if comments | length > 0 -%}
-    <div class="d-flex flex-column gap-3">
+    <div class="comments-list">
       {%- for comment in comments -%}
       <article class="border rounded p-3">
-        <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="comments-item-meta mb-2">
           <strong>{{ comment.user_name }}</strong>
           <time class="text-muted small">{{ comment.created_at }}</time>
         </div>
@@ -93,7 +93,7 @@
       {%- endfor -%}
     </div>
     {%- if comment_pager.total_pages > 1 -%}
-    <div class="d-flex justify-content-between align-items-center mt-3">
+    <div class="comments-pager">
       {%- if comment_pager.has_prev -%}
       <a href="/content/{{ slug }}?comments_page={{ comment_pager.prev_page }}#comments" class="btn btn-outline-primary btn-sm">Newer comments</a>
       {%- else -%}

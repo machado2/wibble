@@ -42,6 +42,7 @@ model content {
   language_id             String?         @db.Char(36)
   author_email            String?         @db.VarChar(350)
   published               Boolean         @default(true)
+  recovered_from_dead_link Boolean        @default(false)
   content_comment         content_comment[]
   content_image           content_image[]
   content_vote            content_vote[]

@@ -175,6 +175,7 @@ fn build_saved_content_model(
     title: String,
     instructions: String,
     author_email: Option<String>,
+    recovered_from_dead_link: bool,
     now: DateTime,
 ) -> content::Model {
     content::Model {
@@ -206,6 +207,7 @@ fn build_saved_content_model(
         click_count: 0,
         author_email,
         published: true,
+        recovered_from_dead_link,
     }
 }
 
@@ -236,6 +238,10 @@ pub async fn save_pending_article(
         get_slug_for(db, &title).await.unwrap_or(id.to_string())
     };
     let now = chrono::Utc::now().naive_local();
+    let recovered_from_dead_link = existing
+        .as_ref()
+        .map(|existing| existing.recovered_from_dead_link)
+        .unwrap_or(false);
     let first_image_id = images
         .first()
         .ok_or(Error::ImageGeneration("No images planned".into()))?
@@ -252,6 +258,7 @@ pub async fn save_pending_article(
         title,
         instructions,
         author_email,
+        recovered_from_dead_link,
         now,
     );
 
@@ -331,6 +338,10 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
             .unwrap_or(article.id.to_string())
     };
     let now = chrono::Utc::now().naive_local();
+    let recovered_from_dead_link = existing
+        .as_ref()
+        .map(|existing| existing.recovered_from_dead_link)
+        .unwrap_or(false);
     let first_image_id = article
         .images
         .first()
@@ -348,6 +359,7 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
         article.title,
         article.instructions,
         article.author_email.clone(),
+        recovered_from_dead_link,
         now,
     );
 
@@ -425,6 +437,7 @@ mod tests {
             "Title".to_string(),
             "prompt".to_string(),
             None,
+            false,
             sample_time(),
         );
 
@@ -444,9 +457,30 @@ mod tests {
             "Title".to_string(),
             "prompt".to_string(),
             Some("author@example.com".to_string()),
+            false,
             sample_time(),
         );
 
         assert!(model.published);
+    }
+
+    #[test]
+    fn build_saved_content_model_preserves_dead_link_recovery_flag() {
+        let model = build_saved_content_model(
+            "article-id".to_string(),
+            "article-slug".to_string(),
+            "# Title\n\nBody".to_string(),
+            sample_time(),
+            "test-model".to_string(),
+            "desc".to_string(),
+            None,
+            "Title".to_string(),
+            "prompt".to_string(),
+            None,
+            true,
+            sample_time(),
+        );
+
+        assert!(model.recovered_from_dead_link);
     }
 }

@@ -729,6 +729,7 @@ async fn get_admin_articles(
                 "created_at": a.created_at.format("%F %T").to_string(),
                 "generating": a.generating,
                 "published": a.published,
+                "recovered_from_dead_link": a.recovered_from_dead_link,
                 "flagged": a.flagged,
                 "click_count": a.click_count,
                 "impression_count": a.impression_count,

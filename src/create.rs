@@ -265,6 +265,7 @@ pub async fn start_recover_article_for_slug(
         click_count: 0,
         author_email: None,
         published: true,
+        recovered_from_dead_link: true,
     };
     let insert_result = Content::insert(content::ActiveModel::from(placeholder))
         .exec(&state.db)
