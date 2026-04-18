@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 
 use crate::auth::JwksClient;
+use crate::hot_score::update_hot_score_statement;
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
 use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::image_generator::replicate::ReplicateImageGenerator;
@@ -270,22 +271,7 @@ impl AppState {
                 let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(secs));
                 loop {
                     interval.tick().await;
-                    // Mirror the previous formula: click_rate * 0.7 + (1 / age_hours) * 0.3
-                    let sql = r#"
-                    UPDATE content
-                    SET hot_score = (
-                        (CASE WHEN impression_count > 0
-                            THEN (click_count::double precision / impression_count::double precision)
-                            ELSE 0.0
-                        END) * 0.7
-                    )
-                    + (
-                        (1.0 / GREATEST(EXTRACT(EPOCH FROM (now() - created_at)) / 3600.0, 1.0))
-                        * 0.3
-                    )
-                    WHERE generating = false AND flagged = false;
-                    "#;
-                    let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
+                    let stmt = update_hot_score_statement();
                     if let Err(e) = db_clone.execute(stmt).await {
                         eprintln!("Error updating hot_score: {}", e);
                     }

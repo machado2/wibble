@@ -5,6 +5,7 @@ pub mod create;
 pub mod entities;
 pub mod error;
 pub mod get_images;
+pub mod hot_score;
 pub mod image;
 pub mod image_generator;
 pub mod image_info;

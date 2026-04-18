@@ -202,6 +202,10 @@ fn markdown_to_html(markdown_str: &str) -> String {
     }
 }
 
+fn should_track_top_click(source: Option<&str>, is_logged_in: bool) -> bool {
+    source == Some("top") && is_logged_in
+}
+
 impl GetContent for WibbleRequest {
     async fn get_content_paged(
         &self,
@@ -339,7 +343,7 @@ impl GetContent for WibbleRequest {
             }
         }
 
-        if source == Some("top") {
+        if should_track_top_click(source, self.auth_user.is_some()) {
             Content::update_many()
                 .filter(content::Column::Id.eq(c.id.clone()))
                 .col_expr(
@@ -378,5 +382,18 @@ impl GetContent for WibbleRequest {
             )
             .insert("is_published", &c.published)
             .render()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_track_top_click;
+
+    #[test]
+    fn tracks_top_clicks_for_logged_in_users_only() {
+        assert!(should_track_top_click(Some("top"), true));
+        assert!(!should_track_top_click(Some("top"), false));
+        assert!(!should_track_top_click(None, true));
+        assert!(!should_track_top_click(Some("other"), true));
     }
 }

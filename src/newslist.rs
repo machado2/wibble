@@ -34,8 +34,13 @@ pub struct Headline {
     pub description: String,
     pub image_id: Option<String>,
     pub title: String,
-    pub impression_count: i32,
-    pub click_count: i32,
+}
+
+fn public_sort_column(sort: Option<&str>) -> content::Column {
+    match sort {
+        Some("hot") => content::Column::HotScore,
+        _ => content::Column::CreatedAt,
+    }
 }
 
 async fn get_next_page(
@@ -71,13 +76,8 @@ async fn get_next_page(
             contents = contents
                 .filter(content::Column::CreatedAt.gt(chrono::Utc::now().naive_utc() - days));
         }
-        // Use DB-side columns for ordering. "most_viewed" now maps to click_count
-        // because view_count was removed as it is redundant with click_count.
-        let sort_column = match par.sort {
-            Some(s) if s == "most_viewed" => content::Column::ClickCount,
-            Some(s) if s == "hot" => content::Column::HotScore,
-            _ => content::Column::CreatedAt,
-        };
+        // Public ranking ignores click data because it is too noisy.
+        let sort_column = public_sort_column(par.sort.as_deref());
 
         let after_content = match par.afterId {
             Some(id) => {
@@ -150,7 +150,7 @@ impl NewsList for WibbleRequest {
             || params.search.is_some()
             || params.t.is_some()
             || params.sort.is_some();
-        // Ordering is performed in SQL (hot_score / click_count). Do not re-sort in Rust.
+        // Ordering is performed in SQL. Do not re-sort in Rust.
         let items = get_next_page(db, params).await?;
         let top_ids: Vec<String> = items.iter().take(3).map(|h| h.id.clone()).collect();
         if !top_ids.is_empty() {
@@ -181,5 +181,28 @@ impl NewsList for WibbleRequest {
             template.insert("robots", "noindex,follow");
         }
         template.render()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::public_sort_column;
+    use crate::entities::content;
+    use std::mem::discriminant;
+
+    #[test]
+    fn hot_sort_uses_hot_score() {
+        assert_eq!(
+            discriminant(&public_sort_column(Some("hot"))),
+            discriminant(&content::Column::HotScore)
+        );
+    }
+
+    #[test]
+    fn most_viewed_falls_back_to_newest() {
+        assert_eq!(
+            discriminant(&public_sort_column(Some("most_viewed"))),
+            discriminant(&content::Column::CreatedAt)
+        );
     }
 }

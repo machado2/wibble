@@ -1,7 +1,8 @@
 use dotenvy::dotenv;
-use sea_orm::{ConnectionTrait, Database, DbBackend, DbConn, DbErr, Statement};
+use sea_orm::{ConnectionTrait, Database, DbConn, DbErr};
 use std::env;
 use tracing::{error, info};
+use wibble::hot_score::update_hot_score_statement;
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
@@ -18,12 +19,11 @@ async fn main() -> Result<(), ()> {
     // ALTER TABLE content DROP COLUMN IF EXISTS lemmy_id;
     // ALTER TABLE content DROP COLUMN IF EXISTS last_lemmy_post_attempt;
     //
-    // The score formula used here mirrors the previous Rust in-memory heuristic:
-    // hot = click_rate * 0.7 + (1 / age_hours) * 0.3
-    // where click_rate = click_count / impression_count (0 when impressions = 0)
+    // The score formula used here is vote-based:
+    // hot = votes + ((1 / age_hours) * 0.3)
     //
     // We compute age_hours using PostgreSQL EXTRACT(EPOCH FROM (now() - created_at))/3600
-    // and use GREATEST(..., 1) to avoid division by zero and match previous .max(1).
+    // and use GREATEST(..., 1) to avoid division by zero.
 
     dotenv().ok();
     tracing_subscriber::fmt::init();
@@ -54,23 +54,5 @@ async fn main() -> Result<(), ()> {
 }
 
 async fn update_hot_scores(db: &DbConn) -> Result<(), DbErr> {
-    // PostgreSQL expression implementing the hot score formula
-    let sql = r#"
-    UPDATE content
-    SET hot_score = (
-        (CASE WHEN impression_count > 0
-            THEN (click_count::double precision / impression_count::double precision)
-            ELSE 0.0
-        END) * 0.7
-    )
-    + (
-        (1.0 / GREATEST(EXTRACT(EPOCH FROM (now() - created_at)) / 3600.0, 1.0))
-        * 0.3
-    )
-    WHERE generating = false AND flagged = false;
-    "#;
-
-    // Use Postgres backend here because schema is Postgres; adjust if using another DB.
-    let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
-    db.execute(stmt).await.map(|_| ())
+    db.execute(update_hot_score_statement()).await.map(|_| ())
 }
