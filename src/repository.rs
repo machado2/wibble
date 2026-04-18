@@ -164,6 +164,51 @@ pub struct PendingArticle {
     pub author_email: Option<String>,
 }
 
+fn build_saved_content_model(
+    id: String,
+    slug: String,
+    markdown: String,
+    start_time: DateTime,
+    model: String,
+    description: String,
+    image_id: Option<String>,
+    title: String,
+    instructions: String,
+    author_email: Option<String>,
+    now: DateTime,
+) -> content::Model {
+    content::Model {
+        id,
+        slug,
+        content: Some(markdown.clone()),
+        created_at: now,
+        generating: false,
+        generation_started_at: Some(start_time),
+        generation_finished_at: Some(now),
+        flagged: false,
+        model,
+        prompt_version: 0,
+        fail_count: 0,
+        description,
+        image_id,
+        title,
+        user_input: instructions,
+        image_prompt: None,
+        user_email: None,
+        votes: 0,
+        hot_score: 0.0,
+        generation_time_ms: None,
+        flarum_id: None,
+        markdown: Some(markdown),
+        converted: false,
+        longview_count: 0,
+        impression_count: 0,
+        click_count: 0,
+        author_email,
+        published: true,
+    }
+}
+
 pub async fn save_pending_article(
     db: &DatabaseConnection,
     article: PendingArticle,
@@ -196,36 +241,19 @@ pub async fn save_pending_article(
         .ok_or(Error::ImageGeneration("No images planned".into()))?
         .id
         .clone();
-    let c = content::Model {
-        id: id.to_string(),
+    let c = build_saved_content_model(
+        id.to_string(),
         slug,
-        content: Some(markdown.clone()),
-        created_at: now,
-        generating: false,
-        generation_started_at: Some(start_time),
-        generation_finished_at: Some(now),
-        flagged: false,
+        markdown.clone(),
+        start_time,
         model,
-        prompt_version: 0,
-        fail_count: 0,
         description,
-        image_id: Some(first_image_id),
+        Some(first_image_id),
         title,
-        user_input: instructions,
-        image_prompt: None,
-        user_email: None,
-        votes: 0,
-        hot_score: 0.0,
-        generation_time_ms: None,
-        flarum_id: None,
-        markdown: Some(markdown.clone()),
-        converted: false,
-        longview_count: 0,
-        impression_count: 0,
-        click_count: 0,
-        author_email: author_email.clone(),
-        published: author_email.is_some(),
-    };
+        instructions,
+        author_email,
+        now,
+    );
 
     let mut c = content::ActiveModel::from(c);
     if has_existing {
@@ -309,36 +337,19 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
         .ok_or(Error::ImageGeneration("No images generated".into()))?
         .id
         .clone();
-    let c = content::Model {
-        id: article.id.to_string(),
+    let c = build_saved_content_model(
+        article.id.to_string(),
         slug,
-        content: Some(article.markdown.clone()),
-        created_at: now,
-        generating: false,
-        generation_started_at: Some(article.start_time),
-        generation_finished_at: Some(now),
-        flagged: false,
-        model: article.model,
-        prompt_version: 0,
-        fail_count: 0,
-        description: article.description,
-        image_id: None,
-        title: article.title,
-        user_input: article.instructions,
-        image_prompt: None,
-        user_email: None,
-        votes: 0,
-        hot_score: 0.0,
-        generation_time_ms: None,
-        flarum_id: None,
-        markdown: Some(article.markdown.clone()),
-        converted: false,
-        longview_count: 0,
-        impression_count: 0,
-        click_count: 0,
-        author_email: article.author_email.clone(),
-        published: article.author_email.is_some(),
-    };
+        article.markdown.clone(),
+        article.start_time,
+        article.model,
+        article.description,
+        None,
+        article.title,
+        article.instructions,
+        article.author_email.clone(),
+        now,
+    );
 
     let mut c = content::ActiveModel::from(c);
     // When updating an existing placeholder row (dead-link recovery), convert
@@ -388,4 +399,54 @@ pub async fn save_article(db: &DatabaseConnection, article: Article) -> Result<(
     .await
     .map_err(|e| Error::Database(format!("Error creating article: {}", e)))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_time() -> DateTime {
+        chrono::NaiveDate::from_ymd_opt(2026, 4, 18)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap()
+    }
+
+    #[test]
+    fn build_saved_content_model_publishes_articles_without_author_email() {
+        let model = build_saved_content_model(
+            "article-id".to_string(),
+            "article-slug".to_string(),
+            "# Title\n\nBody".to_string(),
+            sample_time(),
+            "test-model".to_string(),
+            "desc".to_string(),
+            Some("image-id".to_string()),
+            "Title".to_string(),
+            "prompt".to_string(),
+            None,
+            sample_time(),
+        );
+
+        assert!(model.published);
+    }
+
+    #[test]
+    fn build_saved_content_model_keeps_articles_published_with_author_email() {
+        let model = build_saved_content_model(
+            "article-id".to_string(),
+            "article-slug".to_string(),
+            "# Title\n\nBody".to_string(),
+            sample_time(),
+            "test-model".to_string(),
+            "desc".to_string(),
+            None,
+            "Title".to_string(),
+            "prompt".to_string(),
+            Some("author@example.com".to_string()),
+            sample_time(),
+        );
+
+        assert!(model.published);
+    }
 }
