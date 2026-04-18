@@ -24,15 +24,6 @@
       </div>
     </form>
 
-    <div class="discovery-status" aria-label="Feed summary">
-      <span class="home-context-pill home-context-pill-live">{{ visible_count }} on page</span>
-      {% if has_active_search %}
-      <span class="home-context-pill">{{ current_search }}</span>
-      {% endif %}
-      <span class="home-context-pill">Sort: {{ active_sort_label }}</span>
-      <span class="home-context-pill">Window: {{ active_time_label }}</span>
-    </div>
-
     <div class="discovery-toolbar" aria-label="Feed controls">
       <div class="discovery-group">
         <span class="discovery-label">Sort by</span>

@@ -269,16 +269,6 @@ impl NewsList for WibbleRequest {
         );
         let sort_options = sort_options(&params);
         let time_options = time_options(&params);
-        let active_sort_label = sort_options
-            .iter()
-            .find(|option| option.active)
-            .map(|option| option.label)
-            .unwrap_or("Newest");
-        let active_time_label = time_options
-            .iter()
-            .find(|option| option.active)
-            .map(|option| option.label)
-            .unwrap_or("Any time");
         let has_results = !items.is_empty();
         template
             .insert("items", &items)
@@ -294,9 +284,6 @@ impl NewsList for WibbleRequest {
             .insert("current_time_key", &params.t.clone().unwrap_or_default())
             .insert("sort_options", &sort_options)
             .insert("time_options", &time_options)
-            .insert("active_sort_label", &active_sort_label)
-            .insert("active_time_label", &active_time_label)
-            .insert("visible_count", &items.len())
             .insert("has_results", &has_results)
             .insert("has_active_search", &has_active_search)
             .insert(

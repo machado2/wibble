@@ -1,5 +1,43 @@
 {% extends "base.html" %}
 
+{% block nav_context_actions %}
+{%- if can_edit -%}
+<a
+  class="btn btn-outline-secondary nav-icon-btn"
+  href="/content/{{ slug }}/edit"
+  aria-label="Edit article"
+  title="Edit article"
+>
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 20h9"></path>
+    <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+  </svg>
+</a>
+{%- endif -%}
+{%- if can_publish -%}
+<form method="post" action="/content/{{ slug }}/publish">
+  <button
+    type="submit"
+    class="btn btn-outline-secondary nav-icon-btn{% if not is_published %} nav-icon-btn-draft{% endif %}"
+    aria-label="{% if is_published %}Unpublish article{% else %}Publish article{% endif %}"
+    title="{% if is_published %}Unpublish article{% else %}Publish article{% endif %}"
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {% if is_published %}
+      <path d="M3 3l18 18"></path>
+      <path d="M10.6 10.7a3 3 0 0 0 4.2 4.2"></path>
+      <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c5 0 9.3 3 11 8-0.5 1.4-1.3 2.7-2.3 3.8"></path>
+      <path d="M6.2 6.3C4.3 7.6 2.8 9.5 2 12c1.7 5 6 8 10 8 1.5 0 2.9-0.3 4.2-0.8"></path>
+      {% else %}
+      <path d="M2 12s3.6-8 10-8 10 8 10 8-3.6 8-10 8S2 12 2 12z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+      {% endif %}
+    </svg>
+  </button>
+</form>
+{%- endif -%}
+{% endblock nav_context_actions %}
+
 {% block content %}
 <article class="card border-0 bg-white article-card">
   <div class="card-body article-content">
@@ -8,54 +46,60 @@
       This article is unpublished and hidden from the public feed and sitemap.
     </div>
     {%- endif -%}
-    <h1 class="display-4 mb-3">{{ title }}</h1>
-    <p class="text-muted mb-4"><time>{{ created_at }}</time></p>
-    <section id="article-voting" class="article-voting mb-4">
-      <div class="article-voting-bar">
-        <span class="article-voting-score">Score: {{ vote_score }}</span>
-        {%- if voting_open -%}
-          {%- if can_vote -%}
-          <form method="post" action="/content/{{ slug }}/vote" style="display:inline;">
-            <input type="hidden" name="direction" value="up">
-            <button type="submit" class="btn btn-sm {% if user_vote == "up" %}btn-success{% else %}btn-outline-success{% endif %}">▲ Upvote</button>
-          </form>
-          <form method="post" action="/content/{{ slug }}/vote" style="display:inline;">
-            <input type="hidden" name="direction" value="down">
-            <button type="submit" class="btn btn-sm {% if user_vote == "down" %}btn-danger{% else %}btn-outline-danger{% endif %}">▼ Downvote</button>
-          </form>
-          {%- if user_vote != "" -%}
-          <form method="post" action="/content/{{ slug }}/vote" style="display:inline;">
-            <input type="hidden" name="direction" value="clear">
-            <button type="submit" class="btn btn-sm btn-outline-secondary">Clear vote</button>
-          </form>
-          {%- endif -%}
+    <header class="article-header">
+      <div class="article-header-top">
+        <h1 class="display-4 mb-0">{{ title }}</h1>
+        <div id="article-voting" class="article-vote-cluster" aria-label="Article score">
+          {%- if voting_open -%}
+            {%- if can_vote -%}
+            <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
+              <input type="hidden" name="direction" value="{% if user_vote == "up" %}clear{% else %}up{% endif %}">
+              <button
+                type="submit"
+                class="article-vote-arrow is-up{% if user_vote == "up" %} active{% endif %}"
+                aria-label="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
+                title="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
+              >
+                ▲
+              </button>
+            </form>
+            {%- else -%}
+            <a href="/login" class="article-vote-arrow is-up" aria-label="Log in to upvote" title="Log in to upvote">▲</a>
+            {%- endif -%}
           {%- else -%}
-          <a href="/login" class="btn btn-sm btn-outline-secondary">Log in to vote</a>
+          <span class="article-vote-arrow is-disabled">▲</span>
           {%- endif -%}
-        {%- else -%}
-        <span class="text-muted small">Voting opens on published articles.</span>
+
+          <span class="article-vote-score">{{ vote_score }}</span>
+
+          {%- if voting_open -%}
+            {%- if can_vote -%}
+            <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
+              <input type="hidden" name="direction" value="{% if user_vote == "down" %}clear{% else %}down{% endif %}">
+              <button
+                type="submit"
+                class="article-vote-arrow is-down{% if user_vote == "down" %} active{% endif %}"
+                aria-label="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
+                title="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
+              >
+                ▼
+              </button>
+            </form>
+            {%- else -%}
+            <a href="/login" class="article-vote-arrow is-down" aria-label="Log in to downvote" title="Log in to downvote">▼</a>
+            {%- endif -%}
+          {%- else -%}
+          <span class="article-vote-arrow is-disabled">▼</span>
+          {%- endif -%}
+        </div>
+      </div>
+      <div class="article-meta-row">
+        <p class="text-muted mb-0"><time>{{ created_at }}</time></p>
+        {%- if not is_published -%}
+        <span class="badge badge-warning">Draft</span>
         {%- endif -%}
       </div>
-    </section>
-    {%- if can_edit or can_publish -%}
-    <div class="article-actions-bar">
-      {%- if can_edit -%}
-      <a class="btn btn-sm btn-outline-primary" href="/content/{{ slug }}/edit">Edit article</a>
-      {%- endif -%}
-      {%- if can_publish -%}
-      <form method="post" action="/content/{{ slug }}/publish" style="display:inline;">
-        {%- if is_published -%}
-        <button type="submit" class="btn btn-sm btn-outline-warning">Unpublish</button>
-        {%- else -%}
-        <button type="submit" class="btn btn-sm btn-outline-success">Publish</button>
-        {%- endif -%}
-      </form>
-      {%- if not is_published -%}
-      <span class="badge badge-warning">Draft</span>
-      {%- endif -%}
-      {%- endif -%}
-    </div>
-    {%- endif -%}
+    </header>
     {{ body | safe }}
   </div>
 </article>
