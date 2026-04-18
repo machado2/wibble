@@ -52,8 +52,16 @@
                     <span class="brand-strong">Wibble</span>
                 </a>
                 <div class="nav-actions">
-<a class="btn btn-primary" href="/create">
+                    <a class="btn btn-primary" href="/create">
                         {{ text_create_new_article }}
+                    </a>
+                    <a
+                        class="btn btn-outline-secondary"
+                        href="https://discord.gg/UaCzdsNy"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                    >
+                        Join Discord
                     </a>
                     {%- if auth_user -%}
                     {%- if is_admin -%}

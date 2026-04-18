@@ -236,6 +236,10 @@ impl NewsList for WibbleRequest {
             || params.search.is_some()
             || params.t.is_some()
             || params.sort.is_some();
+        let has_active_search = params
+            .search
+            .as_ref()
+            .is_some_and(|search| !search.trim().is_empty());
         // Ordering is performed in SQL. Do not re-sort in Rust.
         let (items, next_after_id) = get_next_page(db, params.clone()).await?;
         let top_ids: Vec<String> = items.iter().take(3).map(|h| h.id.clone()).collect();
@@ -265,11 +269,17 @@ impl NewsList for WibbleRequest {
         );
         let sort_options = sort_options(&params);
         let time_options = time_options(&params);
+        let active_sort_label = sort_options
+            .iter()
+            .find(|option| option.active)
+            .map(|option| option.label)
+            .unwrap_or("Newest");
+        let active_time_label = time_options
+            .iter()
+            .find(|option| option.active)
+            .map(|option| option.label)
+            .unwrap_or("Any time");
         let has_results = !items.is_empty();
-        let has_active_search = params
-            .search
-            .as_ref()
-            .is_some_and(|search| !search.trim().is_empty());
         template
             .insert("items", &items)
             .insert("load_more_url", &load_more_url)
@@ -284,6 +294,9 @@ impl NewsList for WibbleRequest {
             .insert("current_time_key", &params.t.clone().unwrap_or_default())
             .insert("sort_options", &sort_options)
             .insert("time_options", &time_options)
+            .insert("active_sort_label", &active_sort_label)
+            .insert("active_time_label", &active_time_label)
+            .insert("visible_count", &items.len())
             .insert("has_results", &has_results)
             .insert("has_active_search", &has_active_search)
             .insert(

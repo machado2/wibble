@@ -1,13 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="home-hero card border-0">
-  <div class="card-body home-hero-body">
-    <div class="home-hero-copy">
-      <p class="home-eyebrow">AI satire desk</p>
-      <h1 class="display-5 mb-2">{{ title }}</h1>
-      <p class="text-muted mb-0">Fresh absurdity, stranger headlines, and synthetic news energy calibrated for a quick scroll.</p>
-    </div>
+<section class="home-hero">
+  <div class="home-hero-body">
+    <h1 class="visually-hidden">{{ title }}</h1>
 
     <form action="/" method="get" class="discovery-form" role="search">
       {% if current_sort_key == "hot" %}
@@ -19,25 +15,40 @@
       <div class="discovery-search-row">
         <label class="visually-hidden" for="search">Search articles</label>
         <input id="search" class="form-control discovery-search" type="search" name="search" value="{{ current_search }}" placeholder="Search by headline, description, or keyword">
-        <button type="submit" class="btn btn-primary">Search</button>
-        {% if has_active_search %}
-        <a href="{{ reset_filters_url }}" class="btn btn-outline-secondary">Clear</a>
-        {% endif %}
+        <div class="discovery-search-actions">
+          <button type="submit" class="btn btn-primary">Search</button>
+          {% if has_active_search %}
+          <a href="{{ reset_filters_url }}" class="btn btn-outline-secondary">Clear</a>
+          {% endif %}
+        </div>
       </div>
     </form>
 
+    <div class="discovery-status" aria-label="Feed summary">
+      <span class="home-context-pill home-context-pill-live">{{ visible_count }} on page</span>
+      {% if has_active_search %}
+      <span class="home-context-pill">{{ current_search }}</span>
+      {% endif %}
+      <span class="home-context-pill">Sort: {{ active_sort_label }}</span>
+      <span class="home-context-pill">Window: {{ active_time_label }}</span>
+    </div>
+
     <div class="discovery-toolbar" aria-label="Feed controls">
       <div class="discovery-group">
-        <span class="discovery-label">Sort</span>
-        {% for option in sort_options %}
-        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
-        {% endfor %}
+        <span class="discovery-label">Sort by</span>
+        <div class="discovery-options">
+          {% for option in sort_options %}
+          <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
+          {% endfor %}
+        </div>
       </div>
       <div class="discovery-group">
-        <span class="discovery-label">Window</span>
-        {% for option in time_options %}
-        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
-        {% endfor %}
+        <span class="discovery-label">Time range</span>
+        <div class="discovery-options">
+          {% for option in time_options %}
+          <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </div>
