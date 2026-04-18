@@ -2,19 +2,37 @@
 
 {% block content %}
 <header class="mb-4">
+  <p class="home-eyebrow">Illustration archive</p>
   <h1 class="display-5 mb-2">Generated Image Gallery</h1>
-  <p class="text-muted mb-0">Recent images produced for Wibble stories.</p>
+  <p class="text-muted mb-0">Browse the visual side of Wibble stories and jump straight into the articles they belong to.</p>
 </header>
 
-<div class="image-grid">
-  {% for i in items %}
-  <a href="/image_info/{{ i }}" class="text-decoration-none">
-    <img src="/image/{{ i }}" class="img-fluid rounded" alt="">
-  </a>
+{% if items | length > 0 %}
+<div class="gallery-grid">
+  {% for item in items %}
+  <article class="gallery-card card border-0 hover-shadow">
+    <a href="/image_info/{{ item.id }}" class="text-decoration-none">
+      <img src="/image/{{ item.id }}" class="gallery-card-image" alt="{{ item.alt_text }}">
+    </a>
+    <div class="card-body gallery-card-body">
+      <p class="gallery-card-caption">{{ item.alt_text }}</p>
+      <a href="/content/{{ item.article_slug }}" class="gallery-card-link">Used in "{{ item.article_title }}"</a>
+    </div>
+  </article>
   {% endfor %}
 </div>
 
+{% if next_page_url %}
 <div class="text-center mt-4">
-  <a href="?afterId={{ last_id }}" class="btn btn-primary">Next Page</a>
+  <a href="{{ next_page_url }}" class="btn btn-primary">Next Page</a>
 </div>
+{% endif %}
+{% else %}
+<section class="empty-state card border-0">
+  <div class="card-body">
+    <h2 class="mb-2">No gallery images yet</h2>
+    <p class="text-muted mb-0">Once articles finish rendering, their illustrations will show up here.</p>
+  </div>
+</section>
+{% endif %}
 {% endblock content %}

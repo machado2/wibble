@@ -31,6 +31,7 @@ pub async fn get_sitemap(State(state): State<AppState>) -> Result<impl IntoRespo
     let items: Vec<(String, DateTime)> = Content::find()
         .filter(content::Column::Flagged.eq(false))
         .filter(content::Column::Generating.eq(false))
+        .filter(content::Column::Published.eq(true))
         .select_only()
         .column(content::Column::Slug)
         .column(content::Column::CreatedAt)

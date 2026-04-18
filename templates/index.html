@@ -1,18 +1,58 @@
 {% extends "base.html" %}
 
 {% block content %}
-<header class="mb-4">
-  <h1 class="display-5 mb-2">Latest Wibble News</h1>
-  <p class="text-muted mb-0">Fresh AI-generated satire and bizarre headlines.</p>
-</header>
+<section class="home-hero card border-0">
+  <div class="card-body home-hero-body">
+    <div class="home-hero-copy">
+      <p class="home-eyebrow">AI satire desk</p>
+      <h1 class="display-5 mb-2">{{ title }}</h1>
+      <p class="text-muted mb-0">Fresh absurdity, stranger headlines, and synthetic news energy calibrated for a quick scroll.</p>
+    </div>
 
+    <form action="/" method="get" class="discovery-form" role="search">
+      {% if current_sort_key == "hot" %}
+      <input type="hidden" name="sort" value="hot">
+      {% endif %}
+      {% if current_time_key != "" %}
+      <input type="hidden" name="t" value="{{ current_time_key }}">
+      {% endif %}
+      <div class="discovery-search-row">
+        <label class="visually-hidden" for="search">Search articles</label>
+        <input id="search" class="form-control discovery-search" type="search" name="search" value="{{ current_search }}" placeholder="Search by headline, description, or keyword">
+        <button type="submit" class="btn btn-primary">Search</button>
+        {% if has_active_search %}
+        <a href="{{ reset_filters_url }}" class="btn btn-outline-secondary">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+
+    <div class="discovery-toolbar" aria-label="Feed controls">
+      <div class="discovery-group">
+        <span class="discovery-label">Sort</span>
+        {% for option in sort_options %}
+        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
+        {% endfor %}
+      </div>
+      <div class="discovery-group">
+        <span class="discovery-label">Window</span>
+        {% for option in time_options %}
+        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if has_results %}
 <div class="feed-grid">
   {% for i in items %}
   <div class="card border-0 bg-white hover-shadow">
     <a href="/content/{{ i.slug }}{% if loop.index0 < 3 %}?source=top{% endif %}" class="text-decoration-none feed-card stretched-link">
+      {% if i.image_id %}
       <img src="/image/{{ i.image_id }}"
            class="feed-card-image"
-           alt="">
+           alt="{{ i.title }}">
+      {% endif %}
       <div class="card-body d-flex flex-column">
         <h5 class="card-title mb-2">{{ i.title }}</h5>
         <p class="text-muted small mb-2">{{ i.created_at }}</p>
@@ -23,7 +63,26 @@
   {% endfor %}
 </div>
 
+{% if has_more %}
 <div class="text-center mt-5">
-  <a href="?afterId={{ after_id }}" class="btn btn-outline-primary">Load More Articles</a>
+  <a href="{{ load_more_url }}" class="btn btn-outline-primary">Load More Articles</a>
 </div>
+{% endif %}
+{% else %}
+<section class="empty-state card border-0">
+  <div class="card-body">
+    {% if has_active_search %}
+    <h2 class="mb-2">No articles matched that search</h2>
+    <p class="text-muted mb-3">Try a broader keyword, switch back to newest, or clear the filters and let the feed wobble again.</p>
+    {% else %}
+    <h2 class="mb-2">No published articles yet</h2>
+    <p class="text-muted mb-3">The feed is empty right now. Generate one and give the homepage something strange to say.</p>
+    <a href="/create" class="btn btn-primary">Create the first article</a>
+    {% endif %}
+    {% if has_active_search %}
+    <a href="{{ reset_filters_url }}" class="btn btn-primary">Reset feed</a>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 {% endblock content %}

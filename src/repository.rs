@@ -1,7 +1,8 @@
 use rand::prelude::*;
 use sea_orm::prelude::*;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, QueryFilter, QuerySelect, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, QueryFilter, QuerySelect,
+    TransactionTrait,
 };
 use serde_json::Value;
 use slugify::slugify;
@@ -70,18 +71,51 @@ pub async fn get_examples(db: &DatabaseConnection) -> Result<Vec<(String, String
 }
 
 async fn get_slug_for(db: &DatabaseConnection, title: &str) -> Result<String, Error> {
-    let slug = slugify!(title);
-    if Content::find()
-        .filter(content::Column::Slug.contains(&slug))
-        .one(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error checking for slug: {}", e)))?
-        .is_none()
-    {
-        Ok(slug)
-    } else {
-        Ok(Uuid::new_v4().to_string())
+    let base_slug = slugify!(title);
+    if base_slug.trim().is_empty() {
+        return Ok(Uuid::new_v4().to_string());
     }
+
+    let slug_prefix = format!("{}-", base_slug);
+    let existing_slugs = Content::find()
+        .filter(
+            Condition::any()
+                .add(content::Column::Slug.eq(base_slug.clone()))
+                .add(content::Column::Slug.starts_with(&slug_prefix)),
+        )
+        .select_only()
+        .column(content::Column::Slug)
+        .into_tuple::<String>()
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error checking for slug: {}", e)))?;
+
+    Ok(next_available_slug(&base_slug, &existing_slugs))
+}
+
+fn next_available_slug(base_slug: &str, existing_slugs: &[String]) -> String {
+    if base_slug.is_empty() {
+        return Uuid::new_v4().to_string();
+    }
+    if existing_slugs.is_empty() {
+        return base_slug.to_string();
+    }
+
+    let mut next_suffix = 2u32;
+    let prefix = format!("{}-", base_slug);
+    for slug in existing_slugs {
+        if slug == base_slug {
+            continue;
+        }
+        if let Some(suffix) = slug
+            .strip_prefix(&prefix)
+            .and_then(|value| value.parse::<u32>().ok())
+        {
+            next_suffix = next_suffix.max(suffix.saturating_add(1));
+        }
+    }
+
+    format!("{}-{}", base_slug, next_suffix)
 }
 
 pub async fn store_image_file(id: &str, img: Vec<u8>) -> Result<(), Error> {
@@ -482,5 +516,25 @@ mod tests {
         );
 
         assert!(model.recovered_from_dead_link);
+    }
+
+    #[test]
+    fn next_available_slug_keeps_human_readable_suffixes() {
+        assert_eq!(next_available_slug("story", &[]), "story");
+        assert_eq!(
+            next_available_slug("story", &["story".to_string()]),
+            "story-2"
+        );
+        assert_eq!(
+            next_available_slug(
+                "story",
+                &[
+                    "story".to_string(),
+                    "story-2".to_string(),
+                    "story-9".to_string(),
+                ],
+            ),
+            "story-10"
+        );
     }
 }

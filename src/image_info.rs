@@ -2,6 +2,7 @@ use axum::extract::Path;
 use axum::response::Html;
 use sea_orm::EntityTrait;
 
+use crate::content::can_view_article;
 use crate::entities::prelude::*;
 use crate::error::Error;
 use crate::wibble_request::WibbleRequest;
@@ -18,6 +19,9 @@ pub async fn get_image_info_handler(
         .map_err(|e| Error::Database(format!("Database error reading image info: {}", e)))?
         .ok_or(Error::NotFound(Some(format!("Image {} not found", id))))?;
     let (slug, article_title) = if let Some(article) = article {
+        if !can_view_article(wr.auth_user.as_ref(), &article) {
+            return Err(Error::NotFound(Some(format!("Image {} not found", id))));
+        }
         (article.slug, article.title)
     } else {
         return Err(Error::NotFound(Some(format!(

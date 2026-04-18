@@ -39,6 +39,7 @@ thiserror = "2.0.12"
 async-trait = "0.1.62"
 aws-sdk-s3 = { version = "1.103.0", features = ["rt-tokio", "rustls"] }
 governor = "0.6"
+url = "2.5.4"
 
 
 [dependencies.backoff]
@@ -48,4 +49,3 @@ features = ["tokio"]
 [dependencies.uuid]
 version = "*"
 features = ["v4"]
-

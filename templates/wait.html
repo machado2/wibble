@@ -1,17 +1,54 @@
 {% extends "base.html" %}
 
 {% block headers %}
-<meta http-equiv="refresh" content="5">
+<meta http-equiv="refresh" content="4">
 {% endblock headers %}
 
 {% block content %}
-<div class="card">
-  <div class="card-body text-center">
-    <h1 class="card-title">Generating article...</h1>
-    <p class="text-muted">This page refreshes automatically until the article is ready.</p>
-    <div class="spinner-border text-primary" role="status">
-      <span class="visually-hidden">Loading...</span>
+<section class="wait-layout">
+  <div class="card wait-shell border-0">
+    <div class="card-body wait-shell-body">
+      <div class="wait-shell-copy">
+        <p class="home-eyebrow">Generation status</p>
+        <h1 class="card-title">{{ wait_summary.stage_title }}</h1>
+        <p class="text-muted">{{ wait_summary.stage_description }}</p>
+        {% if wait_summary.article_title %}
+        <p class="wait-article-title">Working on: <strong>{{ wait_summary.article_title }}</strong></p>
+        {% endif %}
+      </div>
+
+      <div class="wait-spinner-wrap">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+
+      <div class="wait-metrics" aria-label="Generation progress">
+        <div class="image-meta-chip">
+          <span class="image-meta-label">Images planned</span>
+          <strong>{{ wait_summary.image_total }}</strong>
+        </div>
+        <div class="image-meta-chip">
+          <span class="image-meta-label">Completed</span>
+          <strong>{{ wait_summary.image_completed }}</strong>
+        </div>
+        <div class="image-meta-chip">
+          <span class="image-meta-label">In progress</span>
+          <strong>{{ wait_summary.image_processing }}</strong>
+        </div>
+        <div class="image-meta-chip">
+          <span class="image-meta-label">Failed</span>
+          <strong>{{ wait_summary.image_failed }}</strong>
+        </div>
+      </div>
+
+      <div class="wait-actions">
+        <a href="/wait/{{ id }}" class="btn btn-outline-primary">Refresh now</a>
+        {% if wait_summary.slug %}
+        <a href="/content/{{ wait_summary.slug }}" class="btn btn-outline-secondary">Open article</a>
+        {% endif %}
+      </div>
     </div>
   </div>
-</div>
+</section>
 {% endblock content %}

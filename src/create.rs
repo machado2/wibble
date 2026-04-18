@@ -6,29 +6,104 @@ use std::sync::atomic::Ordering;
 use axum::response::Html;
 use sea_orm::QueryFilter;
 use sea_orm::{ColumnTrait, EntityTrait};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, event, Level};
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::entities::content;
 use crate::entities::prelude::*;
+use crate::entities::{content, content_image};
 use crate::error::Error;
+use crate::image_status::{
+    IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED, IMAGE_STATUS_PENDING, IMAGE_STATUS_PROCESSING,
+};
 use crate::llm::article_generator::{create_article_attempt, create_article_using_placeholders};
 use crate::rate_limit::ArticleRateLimit;
 use crate::tasklist::TaskResult;
 use crate::wibble_request::WibbleRequest;
 
-pub async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
-    wr.template("create")
-        .await
+const MAX_PROMPT_CHARS: usize = 600;
+
+#[derive(Serialize)]
+struct PromptPreset {
+    label: &'static str,
+    prompt: &'static str,
+}
+
+#[derive(Serialize)]
+struct WaitSummary {
+    article_title: Option<String>,
+    slug: Option<String>,
+    stage_title: String,
+    stage_description: String,
+    image_total: usize,
+    image_completed: usize,
+    image_processing: usize,
+    image_failed: usize,
+}
+
+fn create_prompt_presets() -> [PromptPreset; 4] {
+    [
+        PromptPreset {
+            label: "Tech Meltdown",
+            prompt: "A major tech company accidentally replaces its CEO with an overly enthusiastic AI intern during a product launch.",
+        },
+        PromptPreset {
+            label: "Town Hall",
+            prompt: "A sleepy coastal town becomes obsessed with electing a seagull as mayor after it solves one local problem too many.",
+        },
+        PromptPreset {
+            label: "Sports Chaos",
+            prompt: "A football match spirals into absurdity when every coach starts using motivational corporate jargon instead of tactics.",
+        },
+        PromptPreset {
+            label: "Science Desk",
+            prompt: "Scientists announce a world-changing discovery, but the lab notes read like a group chat that got wildly out of hand.",
+        },
+    ]
+}
+
+pub fn normalize_create_prompt(raw: &str) -> Result<String, Error> {
+    let prompt = raw.trim();
+    if prompt.is_empty() {
+        return Err(Error::BadRequest(
+            "Add a prompt before generating an article.".to_string(),
+        ));
+    }
+    if prompt.chars().count() > MAX_PROMPT_CHARS {
+        return Err(Error::BadRequest(format!(
+            "Prompt is too long. Keep it under {} characters.",
+            MAX_PROMPT_CHARS
+        )));
+    }
+    Ok(prompt.to_string())
+}
+
+pub async fn render_create_page(
+    wr: &WibbleRequest,
+    prompt: &str,
+    error_message: Option<&str>,
+) -> Result<Html<String>, Error> {
+    let presets = create_prompt_presets();
+    let mut template = wr.template("create").await;
+    template
         .insert("title", "Create a new article")
         .insert(
             "description",
             "Submit a prompt and let The Wibble generate a new satirical article.",
         )
         .insert("robots", "noindex,nofollow")
-        .render()
+        .insert("prompt", &prompt)
+        .insert("prompt_max_length", &MAX_PROMPT_CHARS)
+        .insert("prompt_presets", &presets);
+    if let Some(error_message) = error_message {
+        template.insert("error_message", error_message);
+    }
+    template.render()
+}
+
+pub async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
+    render_create_page(&wr, "", None).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -88,6 +163,103 @@ pub enum WaitResponse {
     NotFound,
 }
 
+async fn build_wait_summary(state: &AppState, id: &str) -> Result<WaitSummary, Error> {
+    let article = Content::find()
+        .filter(content::Column::Id.eq(id))
+        .one(&state.db)
+        .await
+        .map_err(|e| Error::Database(format!("Error loading article wait state: {}", e)))?;
+
+    if let Some(article) = article {
+        let images = ContentImage::find()
+            .filter(content_image::Column::ContentId.eq(article.id.clone()))
+            .all(&state.db)
+            .await
+            .map_err(|e| Error::Database(format!("Error loading image wait state: {}", e)))?;
+        let image_total = images.len();
+        let image_completed = images
+            .iter()
+            .filter(|img| img.status == IMAGE_STATUS_COMPLETED)
+            .count();
+        let image_processing = images
+            .iter()
+            .filter(|img| {
+                img.status == IMAGE_STATUS_PROCESSING || img.status == IMAGE_STATUS_PENDING
+            })
+            .count();
+        let image_failed = images
+            .iter()
+            .filter(|img| img.status == IMAGE_STATUS_FAILED)
+            .count();
+        let (stage_title, stage_description) = if image_total == 0 && article.markdown.is_none() {
+            (
+                "Drafting the story".to_string(),
+                "The headline, angle, and article body are still being assembled.".to_string(),
+            )
+        } else if image_total == 0 {
+            (
+                "Preparing the article".to_string(),
+                "The story draft is ready and the page is being finalized.".to_string(),
+            )
+        } else if image_processing > 0 {
+            (
+                "Rendering illustrations".to_string(),
+                "The story is ready and the image queue is actively rendering art.".to_string(),
+            )
+        } else if image_failed > 0 && image_completed < image_total {
+            (
+                "Recovering the image set".to_string(),
+                "Some illustrations failed and the article is waiting on the remaining results."
+                    .to_string(),
+            )
+        } else {
+            (
+                "Finalizing the article".to_string(),
+                "The draft is complete and the page is about to go live.".to_string(),
+            )
+        };
+
+        Ok(WaitSummary {
+            article_title: Some(article.title),
+            slug: Some(article.slug),
+            stage_title,
+            stage_description,
+            image_total,
+            image_completed,
+            image_processing,
+            image_failed,
+        })
+    } else {
+        Ok(WaitSummary {
+            article_title: None,
+            slug: None,
+            stage_title: "Drafting the story".to_string(),
+            stage_description:
+                "The prompt is in the queue and the article body is still being written."
+                    .to_string(),
+            image_total: 0,
+            image_completed: 0,
+            image_processing: 0,
+            image_failed: 0,
+        })
+    }
+}
+
+pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<String>, Error> {
+    let wait_summary = build_wait_summary(&wr.state, id).await?;
+    wr.template("wait")
+        .await
+        .insert("id", id)
+        .insert("title", "Generating article")
+        .insert(
+            "description",
+            "The article is still being generated and this page auto-refreshes.",
+        )
+        .insert("robots", "noindex,nofollow")
+        .insert("wait_summary", &wait_summary)
+        .render()
+}
+
 pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
     let task = wr.state.task_list.get(id).await;
     match task {
@@ -103,23 +275,10 @@ pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
             }
         }
         Ok(TaskResult::Error) => WaitResponse::InternalError,
-        Ok(TaskResult::Processing) => {
-            let r = wr
-                .template("wait")
-                .await
-                .insert("id", id)
-                .insert("title", "Generating article")
-                .insert(
-                    "description",
-                    "The article is still being generated and this page auto-refreshes.",
-                )
-                .insert("robots", "noindex,nofollow")
-                .render();
-            match r {
-                Ok(html) => WaitResponse::Html(html),
-                Err(_) => WaitResponse::InternalError,
-            }
-        }
+        Ok(TaskResult::Processing) => match render_wait_page(&wr, id).await {
+            Ok(html) => WaitResponse::Html(html),
+            Err(_) => WaitResponse::InternalError,
+        },
         _ => WaitResponse::NotFound,
     }
 }
@@ -129,6 +288,7 @@ pub async fn start_create_article(
     prompt: String,
     author_email: Option<String>,
 ) -> Result<String, Error> {
+    let prompt = normalize_create_prompt(&prompt)?;
     let permit = state
         .article_generation_semaphore
         .clone()
@@ -325,4 +485,24 @@ pub async fn start_recover_article_for_slug(
         .await;
 
     Ok(Some(return_id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_create_prompt;
+
+    #[test]
+    fn create_prompt_validation_trims_and_rejects_empty_input() {
+        assert_eq!(
+            normalize_create_prompt("  hello wobble  ").unwrap(),
+            "hello wobble"
+        );
+        assert!(normalize_create_prompt("   ").is_err());
+    }
+
+    #[test]
+    fn create_prompt_validation_rejects_overly_long_input() {
+        let prompt = "a".repeat(601);
+        assert!(normalize_create_prompt(&prompt).is_err());
+    }
 }

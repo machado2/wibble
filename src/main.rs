@@ -21,12 +21,16 @@ use serde::Deserialize;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
+use url::form_urlencoded::Serializer;
 use uuid::Uuid;
 
 use wibble::app_state::AppState;
 use wibble::auth::AuthUser;
 use wibble::content::{article_accepts_public_interactions, normalize_comment_body, GetContent};
-use wibble::create::{start_create_article, wait, PostCreateData, WaitResponse};
+use wibble::create::{
+    normalize_create_prompt, render_create_page, start_create_article, wait, PostCreateData,
+    WaitResponse,
+};
 use wibble::entities::{
     audit_log, content, content_comment, content_image, content_vote, prelude::*,
 };
@@ -41,7 +45,7 @@ use wibble::wibble_request::WibbleRequest;
 // #[debug_handler(state = AppState)]
 async fn get_index(
     wr: WibbleRequest,
-    Form(data): Form<ContentListParams>,
+    Query(data): Query<ContentListParams>,
 ) -> Result<Html<String>, Error> {
     wr.news_list(data).await
 }
@@ -61,11 +65,8 @@ async fn get_content(
         .await
 }
 
-async fn get_image(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Response, StatusCode> {
-    let img = wibble::image::get_image(&state, &id)
+async fn get_image(wr: WibbleRequest, Path(id): Path<String>) -> Result<Response, StatusCode> {
+    let img = wibble::image::get_image(&wr.state, &id, wr.auth_user.as_ref())
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
     Response::builder()
@@ -87,9 +88,57 @@ async fn get_wait(wr: WibbleRequest, Path(id): Path<String>) -> Response {
     }
 }
 
+fn site_url_from_env() -> String {
+    env::var("SITE_URL")
+        .unwrap_or_else(|_| "http://localhost:8000".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn auth_cookie(token: &str, max_age: u64) -> String {
+    let secure = if site_url_from_env().starts_with("https://") {
+        "; Secure"
+    } else {
+        ""
+    };
+    format!(
+        "__auth={}; Path=/; HttpOnly; SameSite=Lax{}; Max-Age={}",
+        token, secure, max_age
+    )
+}
+
+fn sanitize_redirect_target(raw: Option<String>) -> String {
+    let site_url = site_url_from_env();
+    raw.and_then(|target| {
+        if target.starts_with('/') && !target.starts_with("//") {
+            Some(target)
+        } else if target.starts_with(&site_url) {
+            let relative = target[site_url.len()..].to_string();
+            if relative.starts_with('/') {
+                Some(relative)
+            } else {
+                Some("/".to_string())
+            }
+        } else {
+            None
+        }
+    })
+    .unwrap_or_else(|| "/".to_string())
+}
+
 async fn create_en(wr: WibbleRequest, Form(data): Form<PostCreateData>) -> impl IntoResponse {
     let author_email = wr.auth_user.as_ref().map(|u| u.email.clone());
-    match start_create_article(wr.state, data.prompt, author_email).await {
+    let prompt = match normalize_create_prompt(&data.prompt) {
+        Ok(prompt) => prompt,
+        Err(Error::BadRequest(message)) => {
+            return match render_create_page(&wr, data.prompt.trim(), Some(&message)).await {
+                Ok(html) => (StatusCode::BAD_REQUEST, html).into_response(),
+                Err(e) => e.into_response(),
+            };
+        }
+        Err(e) => return e.into_response(),
+    };
+    match start_create_article(wr.state, prompt, author_email).await {
         Ok(id) => Redirect::to(&format!("/wait/{}", id)).into_response(),
         Err(e) => e.into_response(),
     }
@@ -113,33 +162,36 @@ async fn auth_callback(
         .token
         .ok_or_else(|| Error::Auth("Missing token".to_string()))?;
     let _user = state.jwks_client.validate_token(&token).await?;
-    let cookie = format!(
-        "__auth={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-        token,
-        30 * 24 * 60 * 60
-    );
-    let redirect_url = params.redirect.unwrap_or_else(|| "/".to_string());
+    let cookie = auth_cookie(&token, 30 * 24 * 60 * 60);
+    let redirect_url = sanitize_redirect_target(params.redirect);
     Ok(([(SET_COOKIE, cookie)], Redirect::to(&redirect_url)).into_response())
 }
 
 async fn login() -> Redirect {
     let auth_url =
         env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "https://auth.fbmac.net".to_string());
-    let our_url = env::var("SITE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
-    Redirect::to(&format!(
-        "{}/login?redirect={}/auth/callback&mode=both",
-        auth_url, our_url
-    ))
+    let callback_url = format!(
+        "{}/auth/callback",
+        site_url_from_env().trim_end_matches('/')
+    );
+    let query = Serializer::new(String::new())
+        .append_pair("redirect", &callback_url)
+        .append_pair("mode", "both")
+        .finish();
+    Redirect::to(&format!("{}/login?{}", auth_url, query))
 }
 
 async fn logout() -> Response {
     let auth_url =
         env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "https://auth.fbmac.net".to_string());
-    let our_url = env::var("SITE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
-    let cookie = "__auth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+    let our_url = site_url_from_env();
+    let cookie = auth_cookie("", 0);
+    let query = Serializer::new(String::new())
+        .append_pair("redirect", &our_url)
+        .finish();
     (
         [(SET_COOKIE, cookie)],
-        Redirect::to(&format!("{}/logout?redirect={}", auth_url, our_url)),
+        Redirect::to(&format!("{}/logout?{}", auth_url, query)),
     )
         .into_response()
 }
@@ -810,7 +862,9 @@ async fn main() {
         .parse()
         .unwrap();
     let serve_dir = ServeDir::new("static");
-    let state = AppState::init().await;
+    let state = AppState::init()
+        .await
+        .unwrap_or_else(|e| panic!("Failed to initialize application state: {}", e));
     let app = Router::new()
         .route("/", get(get_index))
         .route("/sitemap.xml", get(wibble::sitemap::get_sitemap))

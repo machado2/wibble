@@ -6,6 +6,8 @@ use image::ImageError;
 use sea_orm::EntityTrait;
 
 use crate::app_state::AppState;
+use crate::auth::AuthUser;
+use crate::content::can_view_article;
 use crate::entities::prelude::*;
 use crate::error::{Error, Result};
 use crate::image_jobs::spawn_image_generation;
@@ -73,16 +75,13 @@ fn placeholder_svg(status: &str, alt_text: &str) -> Vec<u8> {
     .into_bytes()
 }
 
-pub async fn get_image(state: &AppState, id: &str) -> Result<ImagePayload> {
-    if let Ok(bytes) = read_stored_image(id).await {
-        return Ok(ImagePayload {
-            bytes,
-            content_type: "image/jpeg",
-            cache_control: "public, max-age=31536000, immutable",
-        });
-    }
-
-    let image = ContentImage::find_by_id(id.to_string())
+pub async fn get_image(
+    state: &AppState,
+    id: &str,
+    auth_user: Option<&AuthUser>,
+) -> Result<ImagePayload> {
+    let (image, article) = ContentImage::find_by_id(id.to_string())
+        .find_also_related(Content)
         .one(&state.db)
         .await
         .map_err(|e| Error::Database(format!("Database error reading image {}: {}", id, e)))?
@@ -92,6 +91,23 @@ pub async fn get_image(state: &AppState, id: &str) -> Result<ImagePayload> {
                 format!("Image {} not found", id),
             )))
         })?;
+    let article = article.ok_or_else(|| {
+        Error::Image(ImageError::IoError(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Article for image {} not found", id),
+        )))
+    })?;
+    if !can_view_article(auth_user, &article) {
+        return Err(Error::NotFound(Some(format!("Image {} not found", id))));
+    }
+
+    if let Ok(bytes) = read_stored_image(id).await {
+        return Ok(ImagePayload {
+            bytes,
+            content_type: "image/jpeg",
+            cache_control: "public, max-age=31536000, immutable",
+        });
+    }
 
     if is_pending_status(&image.status) && !state.is_image_generation_active(id).await {
         spawn_image_generation(state.clone(), id.to_string()).await;

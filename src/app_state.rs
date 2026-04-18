@@ -6,12 +6,16 @@ use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 use bustdir::BustDir;
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement};
+use sea_orm::{
+    ConnectionTrait, Database, DatabaseConnection, DbBackend, EntityTrait, QuerySelect, Statement,
+};
 use tera::Tera;
 use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 
 use crate::auth::JwksClient;
+use crate::entities::prelude::*;
+use crate::error::Error;
 use crate::hot_score::update_hot_score_statement;
 use crate::image_generator::ai_horde::AiHordeImageGenerator;
 use crate::image_generator::huggingface::HuggingFaceImageGenerator;
@@ -23,11 +27,36 @@ use crate::llm::Llm;
 use crate::rate_limit::RateLimitState;
 use crate::tasklist::TaskList;
 
-async fn connect_database() -> DatabaseConnection {
-    let connection = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+async fn connect_database() -> Result<DatabaseConnection, Error> {
+    let connection = env::var("DATABASE_URL")
+        .map_err(|_| Error::Database("DATABASE_URL must be set".to_string()))?;
     Database::connect(connection)
         .await
-        .expect("Failed to connect to database")
+        .map_err(|e| Error::Database(format!("Failed to connect to database: {}", e)))
+}
+
+async fn validate_required_schema(db: &DatabaseConnection) -> Result<(), Error> {
+    Content::find()
+        .limit(1)
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("Content schema validation failed: {}", e)))?;
+    ContentImage::find()
+        .limit(1)
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("ContentImage schema validation failed: {}", e)))?;
+    ContentComment::find()
+        .limit(1)
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("ContentComment schema validation failed: {}", e)))?;
+    AuditLog::find()
+        .limit(1)
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("AuditLog schema validation failed: {}", e)))?;
+    Ok(())
 }
 
 async fn ensure_async_image_job_columns(db: &DatabaseConnection) {
@@ -54,7 +83,10 @@ async fn ensure_async_image_job_columns(db: &DatabaseConnection) {
     for sql in statements {
         let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
         if let Err(err) = db.execute(stmt).await {
-            eprintln!("Error ensuring async image job columns: {}", err);
+            eprintln!(
+                "Error ensuring async image job schema compatibility: {}",
+                err
+            );
         }
     }
 }
@@ -88,7 +120,7 @@ async fn ensure_auth_columns(db: &DatabaseConnection) {
     for sql in statements {
         let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
         if let Err(err) = db.execute(stmt).await {
-            eprintln!("Error ensuring auth columns: {}", err);
+            eprintln!("Error ensuring auth schema compatibility: {}", err);
         }
     }
 }
@@ -125,7 +157,7 @@ async fn ensure_comment_tables(db: &DatabaseConnection) {
     for sql in statements {
         let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
         if let Err(err) = db.execute(stmt).await {
-            eprintln!("Error ensuring comment tables: {}", err);
+            eprintln!("Error ensuring comment schema compatibility: {}", err);
         }
     }
 }
@@ -178,15 +210,18 @@ impl AppState {
         true
     }
 
-    pub async fn init() -> Self {
+    pub async fn init() -> Result<Self, Error> {
         let image_mode = env::var("IMAGE_MODE").unwrap_or(String::from(""));
-        let db = connect_database().await;
+        let db = connect_database().await?;
         ensure_async_image_job_columns(&db).await;
         ensure_auth_columns(&db).await;
         ensure_comment_tables(&db).await;
+        validate_required_schema(&db).await?;
         let jwks_client = JwksClient::new();
         let task_list = TaskList::default();
-        let tera = Tera::new("templates/**/*").expect("Failed to load templates");
+        let tera = Tera::new("templates/**/*").map_err(|e| {
+            Error::Template(tera::Error::msg(format!("Failed to load templates: {}", e)))
+        })?;
         let template_auto_reload = env::var("TEMPLATE_AUTO_RELOAD")
             .ok()
             .map(|val| {
@@ -283,7 +318,8 @@ impl AppState {
                 image_generator,
                 image_generator_name,
                 replicate_image_generator,
-                bust_dir: BustDir::new("static").expect("Failed to build bust dir"),
+                bust_dir: BustDir::new("static")
+                    .map_err(|e| Error::Storage(format!("Failed to build bust dir: {}", e)))?,
                 rate_limit_state,
                 template_auto_reload,
                 article_generation_semaphore: Arc::new(Semaphore::new(
@@ -321,7 +357,7 @@ impl AppState {
 
         image_jobs::spawn_resume_loop(state.clone());
 
-        state
+        Ok(state)
     }
 }
 

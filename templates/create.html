@@ -1,20 +1,82 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card">
-  <div class="card-body">
-    <h1 class="card-title">Enter your prompt</h1>
-    <p class="card-text">
-      Type anything here for guiding the AI and it will try to guess what
-      you mean. You can try a title, part of a title, keywords,
-      instructions, or anything else you can think of.
-    </p>
-    <form action="/create" method="post">
-      <div class="mb-3">
-        <textarea class="form-control" name="prompt" placeholder="Enter your prompt / hint / instructions here..." rows="10" autoFocus></textarea>
+<section class="create-layout">
+  <div class="card create-shell">
+    <div class="card-body create-shell-body">
+      <div class="create-intro">
+        <p class="home-eyebrow">Prompt studio</p>
+        <h1 class="card-title">Steer the next Wibble headline</h1>
+        <p class="card-text">
+          Drop in a scene, premise, title fragment, or chaotic instruction. The model works best when you give it a concrete situation and a tone to play with.
+        </p>
+        <div class="create-tips">
+          <span class="badge badge-info">Specific beats > vague topics</span>
+          <span class="badge badge-info">One clear premise is enough</span>
+          <span class="badge badge-info">Absurd details help the satire land</span>
+        </div>
       </div>
-      <button type="submit" class="btn btn-primary">Submit</button>
-    </form>
+
+      {% if error_message %}
+      <div class="alert alert-danger mb-4" role="alert">
+        {{ error_message }}
+      </div>
+      {% endif %}
+
+      <form action="/create" method="post" class="create-form">
+        <div class="mb-3">
+          <label class="form-label" for="prompt">Prompt</label>
+          <textarea id="prompt" class="form-control create-textarea" name="prompt" placeholder="Example: A national weather service starts issuing horoscope-style storm warnings and everyone takes them seriously." rows="9" maxlength="{{ prompt_max_length }}" required autofocus>{{ prompt }}</textarea>
+          <div class="create-form-footer">
+            <span class="text-muted small">Give the model a premise, subject, and twist.</span>
+            <span id="prompt-counter" class="small text-muted">{{ prompt | length }}/{{ prompt_max_length }}</span>
+          </div>
+        </div>
+        <div class="create-submit-row">
+          <button type="submit" class="btn btn-primary">Generate article</button>
+          <span class="text-muted small">Typical wait: a few seconds to a minute depending on the image queue.</span>
+        </div>
+      </form>
+    </div>
   </div>
-</div>
+
+  <section class="card create-presets">
+    <div class="card-body">
+      <div class="create-presets-header">
+        <h2 class="mb-2">Need a starting point?</h2>
+        <p class="text-muted mb-0">Tap a preset to drop a prompt into the editor, then adjust it.</p>
+      </div>
+      <div class="preset-grid">
+        {% for preset in prompt_presets %}
+        <button type="button" class="preset-card" data-prompt="{{ preset.prompt }}">
+          <span class="preset-label">{{ preset.label }}</span>
+          <span class="preset-text">{{ preset.prompt }}</span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+</section>
+
+<script>
+  (() => {
+    const prompt = document.getElementById("prompt");
+    const counter = document.getElementById("prompt-counter");
+    const presetButtons = document.querySelectorAll("[data-prompt]");
+    const updateCounter = () => {
+      counter.textContent = `${prompt.value.length}/{{ prompt_max_length }}`;
+    };
+
+    presetButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        prompt.value = button.dataset.prompt || "";
+        prompt.focus();
+        updateCounter();
+      });
+    });
+
+    prompt.addEventListener("input", updateCounter);
+    updateCounter();
+  })();
+</script>
 {% endblock content %}

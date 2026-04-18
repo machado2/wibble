@@ -29,6 +29,7 @@ struct JwtClaims {
     iss: String,
     sub: String,
     iat: u64,
+    exp: Option<u64>,
     email: String,
     name: String,
     picture: Option<String>,
@@ -154,6 +155,11 @@ impl JwksClient {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
+        if let Some(exp) = token_data.claims.exp {
+            if now >= exp {
+                return Err(Error::Auth("Token has expired".to_string()));
+            }
+        }
         if now.saturating_sub(token_data.claims.iat) > max_age_secs {
             return Err(Error::Auth("Token is too old".to_string()));
         }

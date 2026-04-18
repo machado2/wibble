@@ -3,6 +3,11 @@
 {% block content %}
 <article class="card border-0 bg-white article-card">
   <div class="card-body article-content">
+    {%- if not is_published -%}
+    <div class="alert alert-warning mb-4" role="status">
+      This article is unpublished and hidden from the public feed and sitemap.
+    </div>
+    {%- endif -%}
     <h1 class="display-4 mb-3">{{ title }}</h1>
     <p class="text-muted mb-4"><time>{{ created_at }}</time></p>
     <section id="article-voting" class="article-voting mb-4">
