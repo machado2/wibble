@@ -91,6 +91,43 @@ async fn ensure_auth_columns(db: &DatabaseConnection) {
     }
 }
 
+async fn ensure_comment_tables(db: &DatabaseConnection) {
+    let statements = [
+        r#"CREATE TABLE IF NOT EXISTS "public"."content_comment" (
+            "id" VARCHAR(36) PRIMARY KEY,
+            "content_id" VARCHAR(36) NOT NULL,
+            "user_email" VARCHAR(350) NOT NULL,
+            "user_name" VARCHAR(500) NOT NULL,
+            "body" TEXT NOT NULL,
+            "created_at" TIMESTAMP(6) DEFAULT NOW()
+        )"#,
+        r#"CREATE INDEX IF NOT EXISTS "idx_content_comment_content_created_at"
+           ON "public"."content_comment"("content_id", "created_at")"#,
+        r#"CREATE INDEX IF NOT EXISTS "idx_content_comment_user_created_at"
+           ON "public"."content_comment"("user_email", "created_at")"#,
+        r#"DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'content_comment_content_id_fkey'
+            ) THEN
+                ALTER TABLE "public"."content_comment"
+                ADD CONSTRAINT "content_comment_content_id_fkey"
+                FOREIGN KEY ("content_id") REFERENCES "public"."content"("id")
+                ON DELETE CASCADE ON UPDATE NO ACTION;
+            END IF;
+        END $$"#,
+    ];
+
+    for sql in statements {
+        let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
+        if let Err(err) = db.execute(stmt).await {
+            eprintln!("Error ensuring comment tables: {}", err);
+        }
+    }
+}
+
 impl AppState {
     pub async fn mark_generation_started(&self, article_id: &str) {
         self.active_generation_ids
@@ -144,6 +181,7 @@ impl AppState {
         let db = connect_database().await;
         ensure_async_image_job_columns(&db).await;
         ensure_auth_columns(&db).await;
+        ensure_comment_tables(&db).await;
         let jwks_client = JwksClient::new();
         let task_list = TaskList::default();
         let tera = Tera::new("templates/**/*").expect("Failed to load templates");

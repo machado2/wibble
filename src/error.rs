@@ -7,6 +7,7 @@ use tracing::{event, Level};
 #[derive(Debug)]
 pub enum Error {
     NotFound(Option<String>),
+    BadRequest(String),
     Database(String),
     Llm(String),
     ImageGeneration(String),
@@ -25,6 +26,7 @@ impl fmt::Display for Error {
                 Some(m) => write!(f, "Not found: {}", m),
                 None => write!(f, "Not found"),
             },
+            Error::BadRequest(msg) => write!(f, "Bad request: {}", msg),
             Error::Database(msg) => write!(f, "Database error: {}", msg),
             Error::Llm(msg) => write!(f, "LLM error: {}", msg),
             Error::ImageGeneration(msg) => write!(f, "Image generation error: {}", msg),
@@ -55,6 +57,7 @@ impl IntoResponse for Error {
         event!(Level::ERROR, "{}", self);
         let status = match self {
             Error::NotFound(_) => http::StatusCode::NOT_FOUND,
+            Error::BadRequest(_) => http::StatusCode::BAD_REQUEST,
             Error::RateLimited => axum::http::StatusCode::TOO_MANY_REQUESTS,
             Error::Auth(_) => axum::http::StatusCode::FORBIDDEN,
             _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,

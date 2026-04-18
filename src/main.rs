@@ -23,9 +23,9 @@ use uuid::Uuid;
 
 use wibble::app_state::AppState;
 use wibble::auth::AuthUser;
-use wibble::content::GetContent;
+use wibble::content::{normalize_comment_body, GetContent};
 use wibble::create::{start_create_article, wait, PostCreateData, WaitResponse};
-use wibble::entities::{audit_log, content, content_image, prelude::*};
+use wibble::entities::{audit_log, content, content_comment, content_image, prelude::*};
 use wibble::error::Error;
 use wibble::image_info::get_image_info_handler;
 use wibble::newslist::{ContentListParams, NewsList};
@@ -135,6 +135,11 @@ async fn logout() -> Response {
         Redirect::to(&format!("{}/logout?redirect={}", auth_url, our_url)),
     )
         .into_response()
+}
+
+#[derive(Deserialize)]
+struct PostCommentData {
+    body: String,
 }
 
 fn can_edit_article(auth_user: &AuthUser, _article: &content::Model) -> bool {
@@ -386,6 +391,43 @@ async fn post_toggle_publish(
     Ok(Redirect::to(&format!("/content/{}", slug)))
 }
 
+async fn post_comment(
+    wr: WibbleRequest,
+    Path(slug): Path<String>,
+    Form(data): Form<PostCommentData>,
+) -> Result<Redirect, Error> {
+    let auth_user = wr
+        .auth_user
+        .as_ref()
+        .ok_or_else(|| Error::Auth("Login required".to_string()))?;
+    let body = normalize_comment_body(&data.body)?;
+    let db = &wr.state.db;
+    let article = Content::find()
+        .filter(content::Column::Slug.eq(&slug))
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
+        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+
+    let comment = content_comment::Model {
+        id: Uuid::new_v4().to_string(),
+        content_id: article.id,
+        user_email: auth_user.email.clone(),
+        user_name: auth_user.name.clone(),
+        body,
+        created_at: chrono::Utc::now().naive_local(),
+    };
+
+    ContentComment::insert(content_comment::ActiveModel::from(comment))
+        .exec(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error inserting comment: {}", e)))?;
+
+    log_audit(db, auth_user, "create_comment", "content", &slug, None).await?;
+
+    Ok(Redirect::to(&format!("/content/{}#comments", slug)))
+}
+
 #[derive(Deserialize)]
 struct AdminArticleQuery {
     sort: Option<String>,
@@ -538,6 +580,7 @@ async fn main() {
         .route("/image/{id}", get(get_image))
         .route("/image_info/{id}", get(get_image_info_handler))
         .route("/content/{slug}", get(get_content))
+        .route("/content/{slug}/comments", post(post_comment))
         .route(
             "/content/{slug}/edit",
             get(get_edit_article).post(post_edit_article),

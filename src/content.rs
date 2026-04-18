@@ -2,14 +2,15 @@ use axum::response::Html;
 use markdown::mdast::Node;
 use markdown::{to_html, to_mdast, ParseOptions};
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use serde::Serialize;
 use tracing::{event, warn, Level};
 
 use crate::create::start_recover_article_for_slug;
 use crate::tasklist::TaskResult;
 use crate::wibble_request::WibbleRequest;
 use crate::{
-    entities::{content, content_image, prelude::*},
+    entities::{content, content_comment, content_image, prelude::*},
     error::Error,
 };
 
@@ -206,6 +207,26 @@ fn should_track_top_click(source: Option<&str>, is_logged_in: bool) -> bool {
     source == Some("top") && is_logged_in
 }
 
+pub fn normalize_comment_body(raw: &str) -> Result<String, Error> {
+    let body = raw.trim();
+    if body.is_empty() {
+        return Err(Error::BadRequest("Comment cannot be empty".to_string()));
+    }
+    if body.chars().count() > 5_000 {
+        return Err(Error::BadRequest("Comment is too long".to_string()));
+    }
+    Ok(body.to_string())
+}
+
+#[derive(Serialize)]
+struct CommentView {
+    id: String,
+    user_name: String,
+    user_email: String,
+    body: String,
+    created_at: String,
+}
+
 impl GetContent for WibbleRequest {
     async fn get_content_paged(
         &self,
@@ -354,6 +375,23 @@ impl GetContent for WibbleRequest {
                 .await
                 .map_err(|e| Error::Database(format!("Error updating click count: {}", e)))?;
         }
+        let comments = ContentComment::find()
+            .filter(content_comment::Column::ContentId.eq(c.id.clone()))
+            .order_by_asc(content_comment::Column::CreatedAt)
+            .all(db)
+            .await
+            .map_err(|e| Error::Database(format!("Error loading comments: {}", e)))?;
+        let comments: Vec<_> = comments
+            .into_iter()
+            .map(|comment| CommentView {
+                id: comment.id,
+                user_name: comment.user_name,
+                user_email: comment.user_email,
+                body: comment.body,
+                created_at: comment.created_at.format("%F %R").to_string(),
+            })
+            .collect();
+
         self.template("content")
             .await
             .insert("id", &c.id)
@@ -381,13 +419,16 @@ impl GetContent for WibbleRequest {
                     .is_some_and(|u| u.is_admin() || c.author_email.as_deref() == Some(&u.email)),
             )
             .insert("is_published", &c.published)
+            .insert("comments", &comments)
+            .insert("comment_count", &comments.len())
+            .insert("can_comment", &self.auth_user.is_some())
             .render()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::should_track_top_click;
+    use super::{normalize_comment_body, should_track_top_click};
 
     #[test]
     fn tracks_top_clicks_for_logged_in_users_only() {
@@ -395,5 +436,14 @@ mod tests {
         assert!(!should_track_top_click(Some("top"), false));
         assert!(!should_track_top_click(None, true));
         assert!(!should_track_top_click(Some("other"), true));
+    }
+
+    #[test]
+    fn normalizes_comment_body() {
+        assert_eq!(
+            normalize_comment_body("  hello world  ").unwrap(),
+            "hello world"
+        );
+        assert!(normalize_comment_body("   ").is_err());
     }
 }

@@ -27,4 +27,43 @@
     {{ body | safe }}
   </div>
 </article>
+
+<section id="comments" class="card border-0 bg-white article-card mt-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h4 mb-0">Comments</h2>
+      <span class="text-muted small">{{ comment_count }}</span>
+    </div>
+
+    {%- if can_comment -%}
+    <form method="post" action="/content/{{ slug }}/comments" class="mb-4">
+      <div class="mb-3">
+        <label for="comment-body" class="form-label">Add a comment</label>
+        <textarea id="comment-body" name="body" class="form-control" rows="4" maxlength="5000" required></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Post comment</button>
+    </form>
+    {%- else -%}
+    <div class="alert alert-light border mb-4">
+      <a href="/login">Log in</a> to join the discussion.
+    </div>
+    {%- endif -%}
+
+    {%- if comments | length > 0 -%}
+    <div class="d-flex flex-column gap-3">
+      {%- for comment in comments -%}
+      <article class="border rounded p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong>{{ comment.user_name }}</strong>
+          <time class="text-muted small">{{ comment.created_at }}</time>
+        </div>
+        <pre class="mb-0" style="white-space: pre-wrap; font: inherit;">{{ comment.body }}</pre>
+      </article>
+      {%- endfor -%}
+    </div>
+    {%- else -%}
+    <p class="text-muted mb-0">No comments yet.</p>
+    {%- endif -%}
+  </div>
+</section>
 {% endblock content %}

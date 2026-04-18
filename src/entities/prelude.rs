@@ -3,6 +3,7 @@
 #![allow(unused_imports)]
 pub use super::audit_log::Entity as AuditLog;
 pub use super::content::Entity as Content;
+pub use super::content_comment::Entity as ContentComment;
 pub use super::content_image::Entity as ContentImage;
 pub use super::content_proposal::Entity as ContentProposal;
 pub use super::content_vote::Entity as ContentVote;
