@@ -5,6 +5,33 @@
   <div class="card-body article-content">
     <h1 class="display-4 mb-3">{{ title }}</h1>
     <p class="text-muted mb-4"><time>{{ created_at }}</time></p>
+    <section id="article-voting" class="mb-4">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="badge text-bg-light">Score: {{ vote_score }}</span>
+        {%- if voting_open -%}
+          {%- if can_vote -%}
+          <form method="post" action="/content/{{ slug }}/vote" style="display:inline;">
+            <input type="hidden" name="direction" value="up">
+            <button type="submit" class="btn btn-sm {% if user_vote == "up" %}btn-success{% else %}btn-outline-success{% endif %}">▲ Upvote</button>
+          </form>
+          <form method="post" action="/content/{{ slug }}/vote" style="display:inline;">
+            <input type="hidden" name="direction" value="down">
+            <button type="submit" class="btn btn-sm {% if user_vote == "down" %}btn-danger{% else %}btn-outline-danger{% endif %}">▼ Downvote</button>
+          </form>
+          {%- if user_vote != "" -%}
+          <form method="post" action="/content/{{ slug }}/vote" style="display:inline;">
+            <input type="hidden" name="direction" value="clear">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Clear vote</button>
+          </form>
+          {%- endif -%}
+          {%- else -%}
+          <a href="/login" class="btn btn-sm btn-outline-secondary">Log in to vote</a>
+          {%- endif -%}
+        {%- else -%}
+        <span class="text-muted small">Voting opens on published articles.</span>
+        {%- endif -%}
+      </div>
+    </section>
     {%- if can_edit or can_publish -%}
     <div class="article-actions-bar">
       {%- if can_edit -%}
@@ -35,7 +62,7 @@
       <span class="text-muted small">{{ comment_count }}</span>
     </div>
 
-    {%- if can_comment -%}
+    {%- if comments_open and can_comment -%}
     <form method="post" action="/content/{{ slug }}/comments" class="mb-4">
       <div class="mb-3">
         <label for="comment-body" class="form-label">Add a comment</label>
@@ -43,9 +70,13 @@
       </div>
       <button type="submit" class="btn btn-primary">Post comment</button>
     </form>
-    {%- else -%}
+    {%- elif comments_open -%}
     <div class="alert alert-light border mb-4">
       <a href="/login">Log in</a> to join the discussion.
+    </div>
+    {%- else -%}
+    <div class="alert alert-light border mb-4">
+      Comments open on published articles.
     </div>
     {%- endif -%}
 
@@ -61,7 +92,22 @@
       </article>
       {%- endfor -%}
     </div>
-    {%- else -%}
+    {%- if comment_pager.total_pages > 1 -%}
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      {%- if comment_pager.has_prev -%}
+      <a href="/content/{{ slug }}?comments_page={{ comment_pager.prev_page }}#comments" class="btn btn-outline-primary btn-sm">Newer comments</a>
+      {%- else -%}
+      <span></span>
+      {%- endif -%}
+      <span class="text-muted small">Page {{ comment_pager.current_page }} / {{ comment_pager.total_pages }}</span>
+      {%- if comment_pager.has_next -%}
+      <a href="/content/{{ slug }}?comments_page={{ comment_pager.next_page }}#comments" class="btn btn-outline-primary btn-sm">Older comments</a>
+      {%- else -%}
+      <span></span>
+      {%- endif -%}
+    </div>
+    {%- endif -%}
+    {%- elif comments_open -%}
     <p class="text-muted mb-0">No comments yet.</p>
     {%- endif -%}
   </div>

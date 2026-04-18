@@ -9,11 +9,13 @@ use axum::middleware::Next;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{middleware, serve, Form, Router};
+use chrono::TimeDelta;
 use dotenvy::dotenv;
 use rand::Rng;
+use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect,
+    QueryOrder, QuerySelect, TransactionTrait,
 };
 use serde::Deserialize;
 use tokio::net::TcpListener;
@@ -23,10 +25,13 @@ use uuid::Uuid;
 
 use wibble::app_state::AppState;
 use wibble::auth::AuthUser;
-use wibble::content::{normalize_comment_body, GetContent};
+use wibble::content::{article_accepts_public_interactions, normalize_comment_body, GetContent};
 use wibble::create::{start_create_article, wait, PostCreateData, WaitResponse};
-use wibble::entities::{audit_log, content, content_comment, content_image, prelude::*};
+use wibble::entities::{
+    audit_log, content, content_comment, content_image, content_vote, prelude::*,
+};
 use wibble::error::Error;
+use wibble::hot_score::calculate_hot_score;
 use wibble::image_info::get_image_info_handler;
 use wibble::newslist::{ContentListParams, NewsList};
 use wibble::rate_limit::rate_limit_middleware;
@@ -44,6 +49,7 @@ async fn get_index(
 #[derive(Deserialize)]
 struct ContentQuery {
     source: Option<String>,
+    comments_page: Option<u64>,
 }
 
 async fn get_content(
@@ -51,7 +57,8 @@ async fn get_content(
     Path(slug): Path<String>,
     Query(query): Query<ContentQuery>,
 ) -> Result<Html<String>, Error> {
-    wr.get_content(&slug, query.source.as_deref()).await
+    wr.get_content(&slug, query.source.as_deref(), query.comments_page)
+        .await
 }
 
 async fn get_image(
@@ -140,6 +147,78 @@ async fn logout() -> Response {
 #[derive(Deserialize)]
 struct PostCommentData {
     body: String,
+}
+
+#[derive(Deserialize)]
+struct VoteData {
+    direction: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum VoteAction {
+    Up,
+    Down,
+    Clear,
+}
+
+fn parse_vote_action(raw: &str) -> Result<VoteAction, Error> {
+    match raw {
+        "up" => Ok(VoteAction::Up),
+        "down" => Ok(VoteAction::Down),
+        "clear" => Ok(VoteAction::Clear),
+        _ => Err(Error::BadRequest("Invalid vote direction".to_string())),
+    }
+}
+
+fn comment_min_interval_seconds() -> i64 {
+    env::var("COMMENT_MIN_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(30)
+        .max(0)
+}
+
+fn comment_max_per_hour() -> u64 {
+    env::var("COMMENT_MAX_PER_HOUR")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(20)
+}
+
+async fn enforce_comment_rate_limit(
+    db: &sea_orm::DatabaseConnection,
+    auth_user: &AuthUser,
+) -> Result<(), Error> {
+    let now = chrono::Utc::now().naive_local();
+    let min_interval_seconds = comment_min_interval_seconds();
+    if min_interval_seconds > 0 {
+        let recent_cutoff = now - TimeDelta::seconds(min_interval_seconds);
+        let recent_comments = ContentComment::find()
+            .filter(content_comment::Column::UserEmail.eq(auth_user.email.clone()))
+            .filter(content_comment::Column::CreatedAt.gte(recent_cutoff))
+            .count(db)
+            .await
+            .map_err(|e| Error::Database(format!("Error checking recent comments: {}", e)))?;
+        if recent_comments > 0 {
+            return Err(Error::RateLimited);
+        }
+    }
+
+    let max_per_hour = comment_max_per_hour();
+    if max_per_hour > 0 {
+        let hourly_cutoff = now - TimeDelta::hours(1);
+        let hourly_comments = ContentComment::find()
+            .filter(content_comment::Column::UserEmail.eq(auth_user.email.clone()))
+            .filter(content_comment::Column::CreatedAt.gte(hourly_cutoff))
+            .count(db)
+            .await
+            .map_err(|e| Error::Database(format!("Error checking comment rate limit: {}", e)))?;
+        if hourly_comments >= max_per_hour {
+            return Err(Error::RateLimited);
+        }
+    }
+
+    Ok(())
 }
 
 fn can_edit_article(auth_user: &AuthUser, _article: &content::Model) -> bool {
@@ -408,6 +487,12 @@ async fn post_comment(
         .await
         .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
         .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+    if !article_accepts_public_interactions(&article) {
+        return Err(Error::BadRequest(
+            "Comments are only available on published articles".to_string(),
+        ));
+    }
+    enforce_comment_rate_limit(db, auth_user).await?;
 
     let comment = content_comment::Model {
         id: Uuid::new_v4().to_string(),
@@ -426,6 +511,158 @@ async fn post_comment(
     log_audit(db, auth_user, "create_comment", "content", &slug, None).await?;
 
     Ok(Redirect::to(&format!("/content/{}#comments", slug)))
+}
+
+async fn post_vote(
+    wr: WibbleRequest,
+    Path(slug): Path<String>,
+    Form(data): Form<VoteData>,
+) -> Result<Redirect, Error> {
+    let auth_user = wr
+        .auth_user
+        .as_ref()
+        .ok_or_else(|| Error::Auth("Login required".to_string()))?;
+    let action = parse_vote_action(&data.direction)?;
+    let db = &wr.state.db;
+    let article = Content::find()
+        .filter(content::Column::Slug.eq(&slug))
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
+        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+    if !article_accepts_public_interactions(&article) {
+        return Err(Error::BadRequest(
+            "Voting is only available on published articles".to_string(),
+        ));
+    }
+
+    let vote_user = auth_user.clone();
+    let audit_user = auth_user.clone();
+    let article_id = article.id.clone();
+    let created_at = article.created_at;
+    match db
+        .transaction::<_, (), Error>(|tx| {
+            Box::pin(async move {
+                let existing =
+                    ContentVote::find_by_id((article_id.clone(), vote_user.email.clone()))
+                        .one(tx)
+                        .await
+                        .map_err(|e| Error::Database(format!("Error loading vote: {}", e)))?;
+
+                match (action, existing) {
+                    (VoteAction::Up, Some(existing)) if !existing.downvote => {
+                        ContentVote::delete_by_id((article_id.clone(), vote_user.email.clone()))
+                            .exec(tx)
+                            .await
+                            .map_err(|e| Error::Database(format!("Error clearing vote: {}", e)))?;
+                    }
+                    (VoteAction::Down, Some(existing)) if existing.downvote => {
+                        ContentVote::delete_by_id((article_id.clone(), vote_user.email.clone()))
+                            .exec(tx)
+                            .await
+                            .map_err(|e| Error::Database(format!("Error clearing vote: {}", e)))?;
+                    }
+                    (VoteAction::Clear, Some(_)) => {
+                        ContentVote::delete_by_id((article_id.clone(), vote_user.email.clone()))
+                            .exec(tx)
+                            .await
+                            .map_err(|e| Error::Database(format!("Error clearing vote: {}", e)))?;
+                    }
+                    (VoteAction::Up, Some(existing)) => {
+                        let mut active: content_vote::ActiveModel = existing.into();
+                        active.downvote = ActiveValue::set(false);
+                        active
+                            .update(tx)
+                            .await
+                            .map_err(|e| Error::Database(format!("Error updating vote: {}", e)))?;
+                    }
+                    (VoteAction::Down, Some(existing)) => {
+                        let mut active: content_vote::ActiveModel = existing.into();
+                        active.downvote = ActiveValue::set(true);
+                        active
+                            .update(tx)
+                            .await
+                            .map_err(|e| Error::Database(format!("Error updating vote: {}", e)))?;
+                    }
+                    (VoteAction::Up, None) => {
+                        ContentVote::insert(content_vote::ActiveModel {
+                            content_id: ActiveValue::set(article_id.clone()),
+                            user_email: ActiveValue::set(vote_user.email.clone()),
+                            created_at: ActiveValue::set(chrono::Utc::now().naive_local()),
+                            downvote: ActiveValue::set(false),
+                            ..Default::default()
+                        })
+                        .exec(tx)
+                        .await
+                        .map_err(|e| Error::Database(format!("Error inserting vote: {}", e)))?;
+                    }
+                    (VoteAction::Down, None) => {
+                        ContentVote::insert(content_vote::ActiveModel {
+                            content_id: ActiveValue::set(article_id.clone()),
+                            user_email: ActiveValue::set(vote_user.email.clone()),
+                            created_at: ActiveValue::set(chrono::Utc::now().naive_local()),
+                            downvote: ActiveValue::set(true),
+                            ..Default::default()
+                        })
+                        .exec(tx)
+                        .await
+                        .map_err(|e| Error::Database(format!("Error inserting vote: {}", e)))?;
+                    }
+                    (VoteAction::Clear, None) => {}
+                }
+
+                let upvotes = ContentVote::find()
+                    .filter(content_vote::Column::ContentId.eq(article_id.clone()))
+                    .filter(content_vote::Column::Downvote.eq(false))
+                    .count(tx)
+                    .await
+                    .map_err(|e| Error::Database(format!("Error counting upvotes: {}", e)))?;
+                let downvotes = ContentVote::find()
+                    .filter(content_vote::Column::ContentId.eq(article_id.clone()))
+                    .filter(content_vote::Column::Downvote.eq(true))
+                    .count(tx)
+                    .await
+                    .map_err(|e| Error::Database(format!("Error counting downvotes: {}", e)))?;
+                let vote_score = (upvotes as i64 - downvotes as i64)
+                    .clamp(i32::MIN as i64, i32::MAX as i64)
+                    as i32;
+                let hot_score =
+                    calculate_hot_score(vote_score, created_at, chrono::Utc::now().naive_local());
+
+                Content::update_many()
+                    .filter(content::Column::Id.eq(article_id))
+                    .col_expr(content::Column::Votes, Expr::value(vote_score))
+                    .col_expr(content::Column::HotScore, Expr::value(hot_score))
+                    .exec(tx)
+                    .await
+                    .map_err(|e| Error::Database(format!("Error updating article score: {}", e)))?;
+
+                Ok(())
+            })
+        })
+        .await
+    {
+        Ok(()) => {}
+        Err(sea_orm::TransactionError::Connection(e)) => {
+            return Err(Error::Database(format!(
+                "Error applying vote transaction: {}",
+                e
+            )))
+        }
+        Err(sea_orm::TransactionError::Transaction(e)) => return Err(e),
+    }
+
+    log_audit(
+        db,
+        &audit_user,
+        "vote_article",
+        "content",
+        &slug,
+        Some(data.direction),
+    )
+    .await?;
+
+    Ok(Redirect::to(&format!("/content/{}#article-voting", slug)))
 }
 
 #[derive(Deserialize)]
@@ -580,6 +817,7 @@ async fn main() {
         .route("/image/{id}", get(get_image))
         .route("/image_info/{id}", get(get_image_info_handler))
         .route("/content/{slug}", get(get_content))
+        .route("/content/{slug}/vote", post(post_vote))
         .route("/content/{slug}/comments", post(post_comment))
         .route(
             "/content/{slug}/edit",

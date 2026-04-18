@@ -2,7 +2,7 @@ use axum::response::Html;
 use markdown::mdast::Node;
 use markdown::{to_html, to_mdast, ParseOptions};
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::Serialize;
 use tracing::{event, warn, Level};
 
@@ -16,7 +16,12 @@ use crate::{
 
 #[allow(async_fn_in_trait)]
 pub trait GetContent {
-    async fn get_content(&self, slug: &str, source: Option<&str>) -> Result<Html<String>, Error>;
+    async fn get_content(
+        &self,
+        slug: &str,
+        source: Option<&str>,
+        comments_page: Option<u64>,
+    ) -> Result<Html<String>, Error>;
     async fn get_content_paged(
         &self,
         slug: &str,
@@ -207,6 +212,14 @@ fn should_track_top_click(source: Option<&str>, is_logged_in: bool) -> bool {
     source == Some("top") && is_logged_in
 }
 
+pub fn article_accepts_public_interactions(article: &content::Model) -> bool {
+    article.published && !article.flagged && !article.generating
+}
+
+pub fn normalize_comments_page(page: Option<u64>) -> u64 {
+    page.unwrap_or(1).max(1)
+}
+
 pub fn normalize_comment_body(raw: &str) -> Result<String, Error> {
     let body = raw.trim();
     if body.is_empty() {
@@ -220,11 +233,19 @@ pub fn normalize_comment_body(raw: &str) -> Result<String, Error> {
 
 #[derive(Serialize)]
 struct CommentView {
-    id: String,
     user_name: String,
-    user_email: String,
     body: String,
     created_at: String,
+}
+
+#[derive(Serialize)]
+struct CommentPager {
+    current_page: u64,
+    total_pages: u64,
+    has_prev: bool,
+    has_next: bool,
+    prev_page: u64,
+    next_page: u64,
 }
 
 impl GetContent for WibbleRequest {
@@ -248,7 +269,12 @@ impl GetContent for WibbleRequest {
         Ok(Html("".to_string()))
     }
 
-    async fn get_content(&self, slug: &str, source: Option<&str>) -> Result<Html<String>, Error> {
+    async fn get_content(
+        &self,
+        slug: &str,
+        source: Option<&str>,
+        comments_page: Option<u64>,
+    ) -> Result<Html<String>, Error> {
         let state = &self.state;
         let db = &state.db;
         let mut c = Content::find()
@@ -375,22 +401,78 @@ impl GetContent for WibbleRequest {
                 .await
                 .map_err(|e| Error::Database(format!("Error updating click count: {}", e)))?;
         }
-        let comments = ContentComment::find()
-            .filter(content_comment::Column::ContentId.eq(c.id.clone()))
-            .order_by_asc(content_comment::Column::CreatedAt)
-            .all(db)
-            .await
-            .map_err(|e| Error::Database(format!("Error loading comments: {}", e)))?;
-        let comments: Vec<_> = comments
-            .into_iter()
-            .map(|comment| CommentView {
-                id: comment.id,
-                user_name: comment.user_name,
-                user_email: comment.user_email,
-                body: comment.body,
-                created_at: comment.created_at.format("%F %R").to_string(),
-            })
-            .collect();
+        let interactions_open = article_accepts_public_interactions(&c);
+        let comment_page = normalize_comments_page(comments_page);
+        let (comments, comment_count, comment_pager) = if interactions_open {
+            const COMMENTS_PER_PAGE: u64 = 50;
+            let comment_count = ContentComment::find()
+                .filter(content_comment::Column::ContentId.eq(c.id.clone()))
+                .count(db)
+                .await
+                .map_err(|e| Error::Database(format!("Error counting comments: {}", e)))?;
+            let total_pages = comment_count.max(1).div_ceil(COMMENTS_PER_PAGE);
+            let current_page = comment_page.min(total_pages);
+            let offset = (current_page - 1) * COMMENTS_PER_PAGE;
+            let mut comments = ContentComment::find()
+                .filter(content_comment::Column::ContentId.eq(c.id.clone()))
+                .order_by_desc(content_comment::Column::CreatedAt)
+                .offset(offset)
+                .limit(COMMENTS_PER_PAGE)
+                .all(db)
+                .await
+                .map_err(|e| Error::Database(format!("Error loading comments: {}", e)))?;
+            comments.reverse();
+            let comments = comments
+                .into_iter()
+                .map(|comment| CommentView {
+                    user_name: comment.user_name,
+                    body: comment.body,
+                    created_at: comment.created_at.format("%F %R").to_string(),
+                })
+                .collect::<Vec<_>>();
+            let pager = CommentPager {
+                current_page,
+                total_pages,
+                has_prev: current_page > 1,
+                has_next: current_page < total_pages,
+                prev_page: current_page.saturating_sub(1).max(1),
+                next_page: current_page + 1,
+            };
+            (comments, comment_count, pager)
+        } else {
+            (
+                Vec::new(),
+                0,
+                CommentPager {
+                    current_page: 1,
+                    total_pages: 1,
+                    has_prev: false,
+                    has_next: false,
+                    prev_page: 1,
+                    next_page: 1,
+                },
+            )
+        };
+        let user_vote = if interactions_open {
+            if let Some(auth_user) = self.auth_user.as_ref() {
+                ContentVote::find_by_id((c.id.clone(), auth_user.email.clone()))
+                    .one(db)
+                    .await
+                    .map_err(|e| Error::Database(format!("Error loading vote: {}", e)))?
+                    .map(|vote| {
+                        if vote.downvote {
+                            "down".to_string()
+                        } else {
+                            "up".to_string()
+                        }
+                    })
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
 
         self.template("content")
             .await
@@ -419,16 +501,65 @@ impl GetContent for WibbleRequest {
                     .is_some_and(|u| u.is_admin() || c.author_email.as_deref() == Some(&u.email)),
             )
             .insert("is_published", &c.published)
+            .insert("vote_score", &c.votes)
+            .insert("voting_open", &interactions_open)
+            .insert("can_vote", &(interactions_open && self.auth_user.is_some()))
+            .insert("user_vote", &user_vote)
             .insert("comments", &comments)
-            .insert("comment_count", &comments.len())
-            .insert("can_comment", &self.auth_user.is_some())
+            .insert("comment_count", &comment_count)
+            .insert("comments_open", &interactions_open)
+            .insert(
+                "can_comment",
+                &(interactions_open && self.auth_user.is_some()),
+            )
+            .insert("comment_pager", &comment_pager)
             .render()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_comment_body, should_track_top_click};
+    use super::{
+        article_accepts_public_interactions, normalize_comment_body, normalize_comments_page,
+        should_track_top_click,
+    };
+    use crate::entities::content;
+
+    fn sample_article() -> content::Model {
+        content::Model {
+            id: "id".to_string(),
+            slug: "slug".to_string(),
+            content: None,
+            created_at: chrono::NaiveDate::from_ymd_opt(2026, 4, 18)
+                .unwrap()
+                .and_hms_opt(10, 0, 0)
+                .unwrap(),
+            generating: false,
+            generation_started_at: None,
+            generation_finished_at: None,
+            flagged: false,
+            model: "model".to_string(),
+            prompt_version: 0,
+            fail_count: 0,
+            description: "desc".to_string(),
+            image_id: None,
+            title: "title".to_string(),
+            user_input: "input".to_string(),
+            image_prompt: None,
+            user_email: None,
+            votes: 0,
+            hot_score: 0.0,
+            generation_time_ms: None,
+            flarum_id: None,
+            markdown: None,
+            converted: false,
+            longview_count: 0,
+            impression_count: 0,
+            click_count: 0,
+            author_email: None,
+            published: true,
+        }
+    }
 
     #[test]
     fn tracks_top_clicks_for_logged_in_users_only() {
@@ -445,5 +576,30 @@ mod tests {
             "hello world"
         );
         assert!(normalize_comment_body("   ").is_err());
+    }
+
+    #[test]
+    fn only_published_finished_unflagged_articles_accept_public_interactions() {
+        let base = sample_article();
+        assert!(article_accepts_public_interactions(&base));
+
+        let mut draft = sample_article();
+        draft.published = false;
+        assert!(!article_accepts_public_interactions(&draft));
+
+        let mut generating = sample_article();
+        generating.generating = true;
+        assert!(!article_accepts_public_interactions(&generating));
+
+        let mut flagged = sample_article();
+        flagged.flagged = true;
+        assert!(!article_accepts_public_interactions(&flagged));
+    }
+
+    #[test]
+    fn normalizes_comment_page_numbers() {
+        assert_eq!(normalize_comments_page(None), 1);
+        assert_eq!(normalize_comments_page(Some(0)), 1);
+        assert_eq!(normalize_comments_page(Some(3)), 3);
     }
 }
