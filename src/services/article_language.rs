@@ -4,6 +4,7 @@ use crate::llm::prompt_registry::{
 use crate::llm::translate::default_translation_fallback_language;
 
 const DEFAULT_SOURCE_LANGUAGE_CODE: &str = "en";
+pub const AUTOMATIC_LANGUAGE_QUERY_VALUE: &str = "auto";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PreferredLanguageSource {
@@ -37,13 +38,12 @@ pub fn article_source_language() -> SupportedTranslationLanguage {
 }
 
 pub fn resolve_article_language(
-    explicit_language: Option<&str>,
+    explicit_language: Option<SupportedTranslationLanguage>,
     saved_language: Option<SupportedTranslationLanguage>,
     browser_language: Option<SupportedTranslationLanguage>,
     available_translations: &[SupportedTranslationLanguage],
 ) -> ArticleLanguageSelection {
     let source_language = article_source_language();
-    let explicit_language = explicit_language.and_then(resolve_supported_language_preference);
 
     let (preferred_language, preferred_language_source) = match explicit_language {
         Some(language) => (language, PreferredLanguageSource::Explicit),
@@ -98,13 +98,29 @@ pub fn resolve_supported_language_preference(value: &str) -> Option<SupportedTra
     })
 }
 
+pub fn resolve_requested_article_language(
+    value: Option<&str>,
+) -> Option<Option<SupportedTranslationLanguage>> {
+    match value {
+        None => Some(None),
+        Some(value) if value.eq_ignore_ascii_case(AUTOMATIC_LANGUAGE_QUERY_VALUE) => Some(None),
+        Some(value) => resolve_supported_language_preference(value).map(Some),
+    }
+}
+
+pub fn requested_article_language_query_value(
+    language: Option<SupportedTranslationLanguage>,
+) -> &'static str {
+    language.map_or(AUTOMATIC_LANGUAGE_QUERY_VALUE, |language| language.code)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::llm::prompt_registry::find_supported_translation_language;
 
     use super::{
-        article_source_language, resolve_article_language, PreferredLanguageSource,
-        ServedLanguageSource,
+        article_source_language, requested_article_language_query_value, resolve_article_language,
+        resolve_requested_article_language, PreferredLanguageSource, ServedLanguageSource,
     };
 
     #[test]
@@ -118,7 +134,7 @@ mod tests {
         let available_translations = [find_supported_translation_language("pt").unwrap()];
 
         let selection = resolve_article_language(
-            Some("pt-BR"),
+            find_supported_translation_language("pt"),
             None,
             browser_language,
             &available_translations,
@@ -169,16 +185,12 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_explicit_language_falls_back_to_browser_preference() {
+    fn missing_explicit_language_falls_back_to_browser_preference() {
         let browser_language = find_supported_translation_language("de");
         let available_translations = [find_supported_translation_language("de").unwrap()];
 
-        let selection = resolve_article_language(
-            Some("klingon"),
-            None,
-            browser_language,
-            &available_translations,
-        );
+        let selection =
+            resolve_article_language(None, None, browser_language, &available_translations);
 
         assert_eq!(selection.preferred_language.code, "de");
         assert_eq!(
@@ -200,5 +212,32 @@ mod tests {
             selection.preferred_language_source,
             PreferredLanguageSource::Cookie
         );
+    }
+
+    #[test]
+    fn resolve_requested_article_language_normalizes_supported_aliases() {
+        let requested = resolve_requested_article_language(Some("pt-BR")).unwrap();
+
+        assert_eq!(requested.unwrap().code, "pt");
+    }
+
+    #[test]
+    fn resolve_requested_article_language_allows_automatic_mode() {
+        let requested = resolve_requested_article_language(Some("auto")).unwrap();
+
+        assert!(requested.is_none());
+    }
+
+    #[test]
+    fn resolve_requested_article_language_rejects_unknown_values() {
+        assert!(resolve_requested_article_language(Some("klingon")).is_none());
+    }
+
+    #[test]
+    fn requested_article_language_query_value_uses_canonical_codes() {
+        let requested = find_supported_translation_language("pt");
+
+        assert_eq!(requested_article_language_query_value(requested), "pt");
+        assert_eq!(requested_article_language_query_value(None), "auto");
     }
 }

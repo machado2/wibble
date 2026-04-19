@@ -109,7 +109,7 @@ pub trait GetContent {
         slug: &str,
         source: Option<&str>,
         comments_page: Option<u64>,
-        requested_language: Option<&str>,
+        requested_language: Option<SupportedTranslationLanguage>,
     ) -> Result<Html<String>, Error>;
     async fn get_content_paged(
         &self,
@@ -133,7 +133,7 @@ impl GetContent for WibbleRequest {
         slug: &str,
         source: Option<&str>,
         comments_page: Option<u64>,
-        requested_language: Option<&str>,
+        requested_language: Option<SupportedTranslationLanguage>,
     ) -> Result<Html<String>, Error> {
         let article = match query::load_content_page_article(self, slug).await? {
             query::ContentPageArticle::Ready(article) => *article,
@@ -321,7 +321,8 @@ mod tests {
 
     #[test]
     fn requested_language_option_stays_active_while_falling_back() {
-        let selection = resolve_article_language(Some("pt-BR"), None, None, &[]);
+        let selection =
+            resolve_article_language(find_supported_translation_language("pt"), None, None, &[]);
 
         let options = build_article_language_options("story-slug", selection, None);
         let portuguese = options

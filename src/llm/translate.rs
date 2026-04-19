@@ -12,7 +12,11 @@ const ENGLISH_LANGUAGE_CODE: &str = "en";
 
 #[allow(async_fn_in_trait)]
 pub trait Translate {
-    async fn translate(&self, text: &str, target_language: &str) -> Result<String, Error>;
+    async fn translate(
+        &self,
+        text: &str,
+        target_language: SupportedTranslationLanguage,
+    ) -> Result<String, Error>;
 }
 
 pub struct TranslationService<'a> {
@@ -76,15 +80,8 @@ impl<'a> TranslationService<'a> {
     pub async fn translate_text(
         &self,
         text: &str,
-        target_language: &str,
+        target_language: SupportedTranslationLanguage,
     ) -> Result<TranslationResult, Error> {
-        let target_language =
-            find_supported_translation_language(target_language).ok_or_else(|| {
-                Error::BadRequest(format!(
-                    "Unsupported translation target language: {}",
-                    target_language
-                ))
-            })?;
         let prompt = translation_prompt();
         let messages = vec![
             Message::System(prompt.body.to_string()),
@@ -113,7 +110,11 @@ impl<'a> TranslationService<'a> {
 }
 
 impl Translate for Llm {
-    async fn translate(&self, text: &str, target_language: &str) -> Result<String, Error> {
+    async fn translate(
+        &self,
+        text: &str,
+        target_language: SupportedTranslationLanguage,
+    ) -> Result<String, Error> {
         translation_service(self)
             .translate_text(text, target_language)
             .await

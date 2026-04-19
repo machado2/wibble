@@ -348,8 +348,8 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 8.6 Safety and abuse controls
 
-- [ ] Restrict automatic translation to the supported language whitelist.
-- [ ] Do not allow user-supplied arbitrary target language strings.
+- [x] Restrict automatic translation to the supported language whitelist.
+- [x] Do not allow user-supplied arbitrary target language strings.
 - [ ] Rate-limit translation creation separately from article generation.
 - [ ] Prevent translation spam from anonymous traffic by deduplicating in-flight translation jobs per article/language.
 

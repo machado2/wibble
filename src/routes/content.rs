@@ -22,12 +22,12 @@ use crate::entities::{content as content_entity, content_comment, content_vote, 
 use crate::error::Error;
 use crate::hot_score::calculate_hot_score;
 use crate::services::article_language::{
-    resolve_article_language, resolve_supported_language_preference,
+    requested_article_language_query_value, resolve_article_language,
+    resolve_requested_article_language,
 };
 use crate::wibble_request::WibbleRequest;
 
 const ARTICLE_LANGUAGE_COOKIE_NAME: &str = "__article_lang";
-const ARTICLE_LANGUAGE_AUTOMATIC: &str = "auto";
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -67,15 +67,31 @@ async fn get_content(
     Path(slug): Path<String>,
     Query(query): Query<ContentQuery>,
 ) -> Result<Response, Error> {
+    let requested_language = resolve_requested_article_language(query.lang.as_deref());
+    if let Some(raw_language) = query.lang.as_deref() {
+        let canonical_language = requested_language.map(requested_article_language_query_value);
+        if canonical_language != Some(raw_language) {
+            return Ok(Redirect::to(&content_location_with_query(
+                &slug,
+                query.source.as_deref(),
+                query.comments_page,
+                canonical_language,
+                None,
+            ))
+            .into_response());
+        }
+    }
+    let requested_language = requested_language.unwrap_or(None);
     let automatic_selection =
         resolve_article_language(None, None, wr.browser_translation_language, &[]);
     let cookie_header = article_language_cookie_header(
         &slug,
-        query.lang.as_deref(),
+        requested_language,
         automatic_selection.preferred_language.code,
+        query.lang.is_some(),
     );
     let mut content_request = wr.clone();
-    if matches!(query.lang.as_deref(), Some(ARTICLE_LANGUAGE_AUTOMATIC)) {
+    if query.lang.is_some() && requested_language.is_none() {
         content_request.saved_article_language = None;
     }
     let response = content_page::GetContent::get_content(
@@ -83,7 +99,7 @@ async fn get_content(
         &slug,
         query.source.as_deref(),
         query.comments_page,
-        requested_article_language(query.lang.as_deref()),
+        requested_language,
     )
     .await?;
 
@@ -94,23 +110,36 @@ async fn get_content(
 }
 
 fn content_location(slug: &str, lang: Option<&str>, anchor: Option<&str>) -> String {
+    content_location_with_query(slug, None, None, lang, anchor)
+}
+
+fn content_location_with_query(
+    slug: &str,
+    source: Option<&str>,
+    comments_page: Option<u64>,
+    lang: Option<&str>,
+    anchor: Option<&str>,
+) -> String {
     let mut path = format!("/content/{}", slug);
+    let mut query = Vec::new();
+    if let Some(source) = source {
+        query.push(format!("source={}", source));
+    }
+    if let Some(comments_page) = comments_page {
+        query.push(format!("comments_page={}", comments_page));
+    }
     if let Some(lang) = lang {
-        path.push_str("?lang=");
-        path.push_str(lang);
+        query.push(format!("lang={}", lang));
+    }
+    if !query.is_empty() {
+        path.push('?');
+        path.push_str(&query.join("&"));
     }
     if let Some(anchor) = anchor {
         path.push('#');
         path.push_str(anchor);
     }
     path
-}
-
-fn requested_article_language(lang: Option<&str>) -> Option<&str> {
-    match lang {
-        Some(ARTICLE_LANGUAGE_AUTOMATIC) => None,
-        other => other,
-    }
 }
 
 fn article_language_cookie_path(slug: &str) -> String {
@@ -142,24 +171,27 @@ fn clear_article_language_cookie(slug: &str) -> String {
 
 fn article_language_cookie_header(
     slug: &str,
-    lang: Option<&str>,
+    requested_language: Option<crate::llm::prompt_registry::SupportedTranslationLanguage>,
     automatic_language_code: &str,
+    update_requested: bool,
 ) -> Option<String> {
-    match lang {
-        Some(ARTICLE_LANGUAGE_AUTOMATIC) => Some(clear_article_language_cookie(slug)),
+    if !update_requested {
+        return None;
+    }
+
+    match requested_language {
+        None => Some(clear_article_language_cookie(slug)),
         Some(language) => {
-            let normalized = resolve_supported_language_preference(language)?;
-            if normalized.code == automatic_language_code {
+            if language.code == automatic_language_code {
                 Some(clear_article_language_cookie(slug))
             } else {
                 Some(article_language_cookie(
                     slug,
-                    normalized.code,
+                    language.code,
                     30 * 24 * 60 * 60,
                 ))
             }
         }
-        None => None,
     }
 }
 
@@ -260,7 +292,9 @@ async fn post_comment(
 
     Ok(Redirect::to(&content_location(
         &slug,
-        data.lang.as_deref(),
+        resolve_requested_article_language(data.lang.as_deref())
+            .flatten()
+            .map(|language| language.code),
         Some("comments"),
     )))
 }
@@ -409,14 +443,18 @@ async fn post_vote(
 
     Ok(Redirect::to(&content_location(
         &slug,
-        data.lang.as_deref(),
+        resolve_requested_article_language(data.lang.as_deref())
+            .flatten()
+            .map(|language| language.code),
         Some("article-voting"),
     )))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{article_language_cookie_header, content_location};
+    use crate::llm::prompt_registry::find_supported_translation_language;
+
+    use super::{article_language_cookie_header, content_location, content_location_with_query};
 
     #[test]
     fn content_location_preserves_language_query() {
@@ -435,8 +473,28 @@ mod tests {
     }
 
     #[test]
+    fn content_location_with_query_preserves_existing_params() {
+        assert_eq!(
+            content_location_with_query(
+                "test-story",
+                Some("top"),
+                Some(3),
+                Some("pt"),
+                Some("comments"),
+            ),
+            "/content/test-story?source=top&comments_page=3&lang=pt#comments"
+        );
+    }
+
+    #[test]
     fn article_language_cookie_header_sets_manual_article_cookie() {
-        let cookie = article_language_cookie_header("test-story", Some("pt-BR"), "en").unwrap();
+        let cookie = article_language_cookie_header(
+            "test-story",
+            find_supported_translation_language("pt"),
+            "en",
+            true,
+        )
+        .unwrap();
 
         assert!(cookie.contains("__article_lang=pt"));
         assert!(cookie.contains("Path=/content/test-story"));
@@ -444,20 +502,26 @@ mod tests {
 
     #[test]
     fn article_language_cookie_header_clears_cookie_for_automatic_mode() {
-        let cookie = article_language_cookie_header("test-story", Some("auto"), "en").unwrap();
+        let cookie = article_language_cookie_header("test-story", None, "en", true).unwrap();
 
         assert!(cookie.contains("__article_lang="));
         assert!(cookie.contains("Max-Age=0"));
     }
 
     #[test]
-    fn article_language_cookie_header_skips_cookie_when_language_is_unsupported() {
-        assert!(article_language_cookie_header("test-story", Some("klingon"), "en").is_none());
+    fn article_language_cookie_header_skips_cookie_when_no_query_was_provided() {
+        assert!(article_language_cookie_header("test-story", None, "en", false).is_none());
     }
 
     #[test]
     fn article_language_cookie_header_clears_cookie_when_choice_matches_automatic_language() {
-        let cookie = article_language_cookie_header("test-story", Some("pt"), "pt").unwrap();
+        let cookie = article_language_cookie_header(
+            "test-story",
+            find_supported_translation_language("pt"),
+            "pt",
+            true,
+        )
+        .unwrap();
 
         assert!(cookie.contains("Max-Age=0"));
     }
