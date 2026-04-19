@@ -6,6 +6,7 @@ use std::sync::RwLock;
 
 use axum::extract::{FromRef, FromRequestParts, Query};
 use axum::response::Html;
+use http::header::ACCEPT_LANGUAGE;
 use http::request::Parts;
 use serde::Serialize;
 use tera::{Context, Tera};
@@ -14,6 +15,8 @@ use tracing::log;
 use crate::app_state::AppState;
 use crate::auth::{extract_auth_token, AuthUser};
 use crate::error::Error;
+use crate::llm::prompt_registry::SupportedTranslationLanguage;
+use crate::llm::translate::detect_browser_translation_language;
 
 #[derive(Debug, Clone)]
 pub struct WibbleRequest
@@ -24,6 +27,7 @@ where
     pub style: String,
     pub request_path: String,
     pub auth_user: Option<AuthUser>,
+    pub browser_translation_language: Option<SupportedTranslationLanguage>,
 }
 
 pub struct Template {
@@ -90,6 +94,10 @@ impl WibbleRequest {
         context.insert("site_url", &site_url);
         context.insert("canonical_url", &canonical_url);
         context.insert("text_create_new_article", "Draft article");
+        if let Some(language) = self.browser_translation_language {
+            context.insert("browser_translation_language_code", language.code);
+            context.insert("browser_translation_language_name", language.name);
+        }
         if let Some(ref user) = self.auth_user {
             context.insert("auth_user", user);
             context.insert("is_admin", &user.is_admin());
@@ -100,6 +108,16 @@ impl WibbleRequest {
             tera: Arc::clone(&self.state.tera),
             auto_reload: self.state.template_auto_reload,
         }
+    }
+
+    fn browser_translation_language_from_headers(
+        headers: &http::HeaderMap,
+    ) -> Option<SupportedTranslationLanguage> {
+        detect_browser_translation_language(
+            headers
+                .get(ACCEPT_LANGUAGE)
+                .and_then(|value| value.to_str().ok()),
+        )
     }
 }
 
@@ -118,6 +136,8 @@ where
             .unwrap_or("style".to_string());
         let request_path = parts.uri.path().to_string();
         let state = AppState::from_ref(state);
+        let browser_translation_language =
+            WibbleRequest::browser_translation_language_from_headers(&parts.headers);
         let auth_user = if let Some(token) = extract_auth_token(parts) {
             state.jwks_client.validate_token(&token).await.ok()
         } else {
@@ -128,6 +148,40 @@ where
             style,
             request_path,
             auth_user,
+            browser_translation_language,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use http::{header::ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
+
+    use super::WibbleRequest;
+
+    #[test]
+    fn browser_translation_language_from_headers_reads_supported_language() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            ACCEPT_LANGUAGE,
+            HeaderValue::from_static("es-MX,pt-BR;q=0.8,en;q=0.5"),
+        );
+
+        let language = WibbleRequest::browser_translation_language_from_headers(&headers).unwrap();
+
+        assert_eq!(language.code, "es");
+    }
+
+    #[test]
+    fn browser_translation_language_from_headers_ignores_unsupported_languages() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            ACCEPT_LANGUAGE,
+            HeaderValue::from_static("zh-CN,ja;q=0.8,it;q=0.5"),
+        );
+
+        let language = WibbleRequest::browser_translation_language_from_headers(&headers).unwrap();
+
+        assert_eq!(language.code, "it");
     }
 }

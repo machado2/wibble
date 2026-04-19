@@ -289,8 +289,8 @@ No release until every phase below is complete or explicitly removed from scope.
 - [ ] Define the source-language model for articles:
   - article language is the generated language
   - English is the baseline fallback if browser-language translation is unavailable
-- [ ] Detect the user's preferred language from the browser request.
-- [ ] Restrict translation targets to a curated whitelist of languages the model handles well.
+- [x] Detect the user's preferred language from the browser request.
+- [x] Restrict translation targets to a curated whitelist of languages the model handles well.
 - [ ] Define fallback rules:
   - if browser language is unsupported, serve English or the source article immediately
   - if translation is missing or in progress, do not block the page; serve the source article immediately
@@ -467,7 +467,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - [x] split planning, generation, parsing, validation, and image brief generation
   - add support for research mode and edit-agent reuse
 
-- [ ] `src/llm/translate.rs`
+- [x] `src/llm/translate.rs`
   - [x] move from orphan helper to a real translation service entry point
   - [x] add structured target-language whitelist and prompt versioning
 
