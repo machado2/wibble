@@ -207,7 +207,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 - [ ] Keep a cheap default path for prompts that do not need browsing.
 - [ ] Use the current prompt-based generation as the baseline non-research path.
-- [ ] Refactor `src/llm/article_generator.rs` into:
+- [x] Refactor `src/llm/article_generator.rs` into:
   - prompt builder
   - planning
   - article draft generation
@@ -463,7 +463,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - preserve in-memory active tracking as an optimization only
 
 - [ ] `src/llm/article_generator.rs`
-  - split planning, generation, parsing, validation, and image brief generation
+  - [x] split planning, generation, parsing, validation, and image brief generation
   - add support for research mode and edit-agent reuse
 
 - [ ] `src/llm/translate.rs`
