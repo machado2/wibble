@@ -1,23 +1,21 @@
+use crate::llm::prompt_registry::{
+    article_generation_prompt, image_brief_generation_prompt, placeholder_generation_prompt,
+};
 use crate::llm::Message;
 
-const SYSTEM_MESSAGE_ARTICLE: &str = include_str!("../../../prompts/system_article.txt");
-const SYSTEM_WITH_PLACEHOLDERS: &str =
-    include_str!("../../../prompts/system_with_placeholders.txt");
-const SYSTEM_MESSAGE_ILLUSTRATOR: &str = include_str!("../../../prompts/illustrator.txt");
-
 pub fn build_article_messages(instructions: &str) -> Vec<Message> {
-    build_messages(SYSTEM_MESSAGE_ARTICLE, None, instructions)
+    build_messages(article_generation_prompt().body, None, instructions)
 }
 
 pub fn build_placeholder_messages(
     examples: Option<Vec<(String, String)>>,
     instructions: &str,
 ) -> Vec<Message> {
-    build_messages(SYSTEM_WITH_PLACEHOLDERS, examples, instructions)
+    build_messages(placeholder_generation_prompt().body, examples, instructions)
 }
 
 pub fn build_illustrator_messages(article: &str) -> Vec<Message> {
-    build_messages(SYSTEM_MESSAGE_ILLUSTRATOR, None, article)
+    build_messages(image_brief_generation_prompt().body, None, article)
 }
 
 fn build_messages(

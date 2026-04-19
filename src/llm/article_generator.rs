@@ -8,6 +8,7 @@ use crate::app_state::AppState;
 use crate::error::Error;
 use crate::image_generator::generate_images;
 use crate::image_jobs::enqueue_pending_images;
+use crate::llm::prompt_registry::{article_generation_prompt, placeholder_generation_prompt};
 use crate::repositories::{
     articles::{save_article, save_pending_article, Article, PendingArticle},
     examples::get_examples,
@@ -50,6 +51,7 @@ pub async fn create_article_using_placeholders(
             id,
             title: article.title,
             markdown: placeholder_images.markdown,
+            prompt_version: placeholder_generation_prompt().version,
             instructions,
             start_time: chrono::Utc::now().naive_local(),
             model: model.to_string(),
@@ -88,6 +90,7 @@ pub async fn create_article_attempt(
             id,
             title: article.title,
             markdown,
+            prompt_version: article_generation_prompt().version,
             instructions,
             start_time,
             model: model.to_string(),

@@ -11,6 +11,7 @@ use crate::llm::function_definition::FunctionDefinition;
 
 pub mod article_generator;
 mod function_definition;
+pub mod prompt_registry;
 pub mod translate;
 
 const URL: &str = "https://openrouter.ai/api/v1/chat/completions";

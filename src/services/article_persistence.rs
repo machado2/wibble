@@ -10,6 +10,7 @@ pub struct SavedContentInput {
     pub id: String,
     pub slug: String,
     pub markdown: String,
+    pub prompt_version: i32,
     pub start_time: DateTime,
     pub model: String,
     pub description: String,
@@ -54,7 +55,7 @@ pub fn build_saved_content_model(input: SavedContentInput, now: DateTime) -> con
         generation_finished_at: Some(now),
         flagged: false,
         model: input.model,
-        prompt_version: 0,
+        prompt_version: input.prompt_version,
         fail_count: 0,
         description: input.description,
         image_id: input.image_id,
@@ -139,6 +140,7 @@ mod tests {
                 id: "article-id".to_string(),
                 slug: "article-slug".to_string(),
                 markdown: "# Title\n\nBody".to_string(),
+                prompt_version: 11,
                 start_time: sample_time(),
                 model: "test-model".to_string(),
                 description: "desc".to_string(),
@@ -161,6 +163,7 @@ mod tests {
                 id: "article-id".to_string(),
                 slug: "article-slug".to_string(),
                 markdown: "# Title\n\nBody".to_string(),
+                prompt_version: 12,
                 start_time: sample_time(),
                 model: "test-model".to_string(),
                 description: "desc".to_string(),
@@ -183,6 +186,7 @@ mod tests {
                 id: "article-id".to_string(),
                 slug: "article-slug".to_string(),
                 markdown: "# Title\n\nBody".to_string(),
+                prompt_version: 13,
                 start_time: sample_time(),
                 model: "test-model".to_string(),
                 description: "desc".to_string(),
@@ -196,5 +200,28 @@ mod tests {
         );
 
         assert!(model.recovered_from_dead_link);
+    }
+
+    #[test]
+    fn build_saved_content_model_preserves_prompt_version() {
+        let model = build_saved_content_model(
+            SavedContentInput {
+                id: "article-id".to_string(),
+                slug: "article-slug".to_string(),
+                markdown: "# Title\n\nBody".to_string(),
+                prompt_version: 42,
+                start_time: sample_time(),
+                model: "test-model".to_string(),
+                description: "desc".to_string(),
+                image_id: None,
+                title: "Title".to_string(),
+                instructions: "prompt".to_string(),
+                author_email: None,
+                recovered_from_dead_link: false,
+            },
+            sample_time(),
+        );
+
+        assert_eq!(model.prompt_version, 42);
     }
 }

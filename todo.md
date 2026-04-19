@@ -270,16 +270,17 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Phase 7: Prompt System Cleanup
 
-- [ ] Introduce explicit prompt versioning for:
+- [x] Introduce explicit prompt versioning for:
   - article generation
   - placeholder generation
-  - research-enabled generation
-  - edit-agent rewriting
   - image brief generation
   - translation
-- [ ] Move prompt assembly rules out of scattered string constants into a prompt module.
+- [ ] Extend prompt versioning to:
+  - research-enabled generation
+  - edit-agent rewriting
+- [x] Move prompt assembly rules out of scattered string constants into a prompt module.
 - [ ] Add tests or fixtures that validate prompt structure and output parsers.
-- [ ] Store the prompt version used on each generated article.
+- [x] Store the prompt version used on each generated article.
 
 ## Phase 8: Automatic Translation
 
@@ -467,10 +468,10 @@ No release until every phase below is complete or explicitly removed from scope.
   - add support for research mode and edit-agent reuse
 
 - [ ] `src/llm/translate.rs`
-  - move from orphan helper to a real translation service entry point
-  - add structured target-language whitelist and prompt versioning
+  - [x] move from orphan helper to a real translation service entry point
+  - [x] add structured target-language whitelist and prompt versioning
 
-- [ ] `prompts/*`
+- [x] `prompts/*`
   - introduce versioning and a prompt registry
   - stop relying on scattered include_str files without metadata
 
