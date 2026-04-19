@@ -389,7 +389,12 @@ fn decode_html_entities(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{prompt_requires_research, resolve_duckduckgo_url, source_domain_score};
+    use crate::{error::Error, rate_limit::RequesterTier};
+
+    use super::{
+        prompt_requires_research, resolve_duckduckgo_url, resolve_research_mode,
+        source_domain_score, ResearchModeSource,
+    };
 
     #[test]
     fn research_detection_triggers_for_public_policy_topics() {
@@ -418,5 +423,29 @@ mod tests {
     #[test]
     fn primary_domains_rank_above_generic_results() {
         assert!(source_domain_score("transport.gov") > source_domain_score("example.com"));
+    }
+
+    #[test]
+    fn manual_research_requires_login() {
+        let err = resolve_research_mode(
+            "The transport ministry publishes a policy update after a parliamentary review",
+            true,
+            RequesterTier::Anonymous,
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, Error::Auth(_)));
+    }
+
+    #[test]
+    fn authenticated_public_briefs_auto_enable_research() {
+        let mode = resolve_research_mode(
+            "The transport ministry publishes a detailed policy update after a parliamentary review of regional emissions targets",
+            false,
+            RequesterTier::Authenticated,
+        )
+        .unwrap();
+
+        assert_eq!(mode, Some(ResearchModeSource::Auto));
     }
 }

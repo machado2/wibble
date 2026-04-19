@@ -112,3 +112,56 @@ async fn article_generation_limit_is_keyed_by_request_identity() {
         .expect("request failed");
     assert_eq!(different_key_response.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn authenticated_article_quota_exceeds_anonymous_quota() {
+    let state = RateLimitState::new();
+    let anonymous_hourly = RateLimitState::quota_summary_for(
+        wibble::rate_limit::RateLimitCapability::PlainArticleGeneration,
+        RequesterTier::Anonymous,
+    )
+    .hourly;
+    let authenticated_hourly = RateLimitState::quota_summary_for(
+        wibble::rate_limit::RateLimitCapability::PlainArticleGeneration,
+        RequesterTier::Authenticated,
+    )
+    .hourly;
+
+    assert!(authenticated_hourly > anonymous_hourly);
+
+    for _ in 0..anonymous_hourly {
+        assert!(state
+            .check_article_generation_limit(RequesterTier::Anonymous, "anon-key")
+            .is_ok());
+    }
+    assert_eq!(
+        state.check_article_generation_limit(RequesterTier::Anonymous, "anon-key"),
+        Err(ArticleRateLimit::Hourly)
+    );
+    assert!(state
+        .check_article_generation_limit(RequesterTier::Authenticated, "user:author@example.com")
+        .is_ok());
+}
+
+#[tokio::test]
+async fn research_generation_limit_is_separate_from_plain_generation() {
+    let state = RateLimitState::new();
+    let allowed = RateLimitState::quota_summary_for(
+        wibble::rate_limit::RateLimitCapability::PlainArticleGeneration,
+        RequesterTier::Anonymous,
+    )
+    .hourly;
+
+    for _ in 0..allowed {
+        assert!(state
+            .check_article_generation_limit(RequesterTier::Anonymous, "anon-key")
+            .is_ok());
+    }
+    assert_eq!(
+        state.check_article_generation_limit(RequesterTier::Anonymous, "anon-key"),
+        Err(ArticleRateLimit::Hourly)
+    );
+    assert!(state
+        .check_research_generation_limit(RequesterTier::Anonymous, "anon-key")
+        .is_ok());
+}

@@ -578,4 +578,48 @@ mod tests {
             .check_translation_generation_limit(RequesterTier::Anonymous, "anon-b")
             .is_ok());
     }
+
+    #[test]
+    fn research_generation_uses_separate_capability_bucket() {
+        let state = RateLimitState::new();
+        let max = RateLimitState::capability_limit(
+            RateLimitCapability::PlainArticleGeneration,
+            RequesterTier::Anonymous,
+            LimitWindow::Hourly,
+        );
+        let burst = RateLimitState::capability_burst(
+            RateLimitCapability::PlainArticleGeneration,
+            RequesterTier::Anonymous,
+            LimitWindow::Hourly,
+            max,
+        );
+
+        for _ in 0..burst {
+            assert!(state
+                .check_article_generation_limit(RequesterTier::Anonymous, "anon-a")
+                .is_ok());
+        }
+        assert_eq!(
+            state.check_article_generation_limit(RequesterTier::Anonymous, "anon-a"),
+            Err(ArticleRateLimit::Hourly)
+        );
+        assert!(state
+            .check_research_generation_limit(RequesterTier::Anonymous, "anon-a")
+            .is_ok());
+    }
+
+    #[test]
+    fn authenticated_research_quota_exceeds_anonymous_quota() {
+        let anonymous = RateLimitState::quota_summary_for(
+            RateLimitCapability::ResearchGeneration,
+            RequesterTier::Anonymous,
+        );
+        let authenticated = RateLimitState::quota_summary_for(
+            RateLimitCapability::ResearchGeneration,
+            RequesterTier::Authenticated,
+        );
+
+        assert!(authenticated.hourly > anonymous.hourly);
+        assert!(authenticated.daily > anonymous.daily);
+    }
 }

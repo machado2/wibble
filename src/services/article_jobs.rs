@@ -1206,18 +1206,58 @@ fn log_job_transition(
 
 #[cfg(test)]
 mod tests {
+    use crate::entities::content;
+    use crate::llm::article_generator::ResearchModeSource;
     use serde_json::Value;
 
     use super::{
-        default_usage_counters, is_in_progress_job_status, is_terminal_job_status,
-        merge_job_usage_counters, ImageProgress, ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
-        ARTICLE_JOB_PHASE_CANCELLED, ARTICLE_JOB_PHASE_COMPLETED, ARTICLE_JOB_PHASE_EDITING,
-        ARTICLE_JOB_PHASE_FAILED, ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_QUEUED,
-        ARTICLE_JOB_PHASE_READY_FOR_REVIEW, ARTICLE_JOB_PHASE_RENDERING_IMAGES,
-        ARTICLE_JOB_PHASE_RESEARCHING, ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING,
-        ARTICLE_JOB_STATUS_CANCELLED, ARTICLE_JOB_STATUS_COMPLETED, ARTICLE_JOB_STATUS_FAILED,
-        ARTICLE_JOB_STATUS_PROCESSING, ARTICLE_JOB_STATUS_QUEUED,
+        build_job_preview_payload, default_usage_counters, is_in_progress_job_status,
+        is_terminal_job_status, merge_job_usage_counters, ArticleJobFeatureType, ImageProgress,
+        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, ARTICLE_JOB_PHASE_CANCELLED,
+        ARTICLE_JOB_PHASE_COMPLETED, ARTICLE_JOB_PHASE_EDITING, ARTICLE_JOB_PHASE_FAILED,
+        ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_QUEUED, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
+        ARTICLE_JOB_PHASE_RENDERING_IMAGES, ARTICLE_JOB_PHASE_RESEARCHING,
+        ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING, ARTICLE_JOB_STATUS_CANCELLED,
+        ARTICLE_JOB_STATUS_COMPLETED, ARTICLE_JOB_STATUS_FAILED, ARTICLE_JOB_STATUS_PROCESSING,
+        ARTICLE_JOB_STATUS_QUEUED,
     };
+
+    fn sample_article() -> content::Model {
+        content::Model {
+            id: "article-1".to_string(),
+            slug: "article-1".to_string(),
+            content: None,
+            created_at: chrono::NaiveDate::from_ymd_opt(2026, 4, 19)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap(),
+            generating: false,
+            generation_started_at: None,
+            generation_finished_at: None,
+            flagged: false,
+            model: "model".to_string(),
+            prompt_version: 1,
+            fail_count: 0,
+            description: "desc".to_string(),
+            image_id: None,
+            title: "headline".to_string(),
+            user_input: "input".to_string(),
+            image_prompt: None,
+            user_email: None,
+            votes: 0,
+            hot_score: 0.0,
+            generation_time_ms: None,
+            flarum_id: None,
+            markdown: Some("body".to_string()),
+            converted: false,
+            longview_count: 0,
+            impression_count: 0,
+            click_count: 0,
+            author_email: Some("author@example.com".to_string()),
+            published: false,
+            recovered_from_dead_link: false,
+        }
+    }
 
     #[test]
     fn explicit_phase_constants_cover_persisted_agent_lifecycle() {
@@ -1273,5 +1313,45 @@ mod tests {
         assert!(json.contains("\"model_calls\":2"));
         assert!(json.contains("\"image_total\":3"));
         assert!(json.contains("\"image_failed\":1"));
+    }
+
+    #[test]
+    fn research_feature_types_round_trip_mode_source() {
+        let auto = ArticleJobFeatureType::from_research_mode(Some(ResearchModeSource::Auto));
+        let manual = ArticleJobFeatureType::from_research_mode(Some(ResearchModeSource::Manual));
+
+        assert_eq!(auto.as_str(), "create_research_auto");
+        assert_eq!(manual.as_str(), "create_research_manual");
+        assert_eq!(
+            ArticleJobFeatureType::from_str(auto.as_str())
+                .unwrap()
+                .research_mode(),
+            Some(ResearchModeSource::Auto)
+        );
+        assert_eq!(
+            ArticleJobFeatureType::from_str(manual.as_str())
+                .unwrap()
+                .research_mode(),
+            Some(ResearchModeSource::Manual)
+        );
+    }
+
+    #[test]
+    fn preview_payload_merge_preserves_existing_research_metadata() {
+        let payload = build_job_preview_payload(
+            Some(r#"{"research":{"mode":"manual","source_count":2}}"#),
+            &sample_article(),
+            &ImageProgress {
+                total: 2,
+                completed: 1,
+                processing: 0,
+                failed: 1,
+                pending_ids: Vec::new(),
+            },
+        );
+
+        assert!(payload.contains("\"research\":{\"mode\":\"manual\",\"source_count\":2}"));
+        assert!(payload.contains("\"publication_state\":\"draft\""));
+        assert!(payload.contains("\"image_failed\":1"));
     }
 }

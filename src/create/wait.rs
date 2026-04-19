@@ -347,3 +347,28 @@ pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
         Err(_) => WaitResponse::InternalError,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{build_wait_phase_items, queued_stage_copy};
+    use crate::services::article_jobs::{
+        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, ARTICLE_JOB_PHASE_RESEARCHING,
+    };
+
+    #[test]
+    fn wait_phase_items_include_clarify_step_when_question_is_pending() {
+        let items = build_wait_phase_items(Some(ARTICLE_JOB_PHASE_AWAITING_USER_INPUT), true);
+
+        assert_eq!(items.len(), 5);
+        assert_eq!(items[1].label, "Clarify");
+        assert_eq!(items[1].state, "active");
+    }
+
+    #[test]
+    fn queued_stage_copy_describes_research_phase() {
+        let (title, description) = queued_stage_copy(Some(ARTICLE_JOB_PHASE_RESEARCHING));
+
+        assert!(title.contains("Researching"));
+        assert!(description.contains("bounded context"));
+    }
+}

@@ -380,8 +380,8 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 11.1 Automated tests
 
-- [ ] Expand beyond the current lightweight test coverage.
-- [ ] Add unit tests for:
+- [x] Expand beyond the current lightweight test coverage.
+- [x] Add unit tests for:
   - keyed quotas
   - ownership checks
   - job state transitions

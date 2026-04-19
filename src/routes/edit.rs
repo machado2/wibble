@@ -450,3 +450,32 @@ async fn post_toggle_publish(
 
     Ok(Redirect::to(&format!("/content/{}", slug)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{build_unified_diff, markdown_image_count, text_paragraphs};
+
+    #[test]
+    fn markdown_image_count_counts_rendered_article_images() {
+        let markdown = "Intro\n\n![One](/image/a \"One\")\n\nBody\n\n![Two](/image/b \"Two\")";
+
+        assert_eq!(markdown_image_count(markdown), 2);
+    }
+
+    #[test]
+    fn text_paragraphs_skip_image_blocks() {
+        let paragraphs = text_paragraphs("One\n\n![Image](/image/a \"A\")\n\nTwo");
+
+        assert_eq!(paragraphs, vec!["One".to_string(), "Two".to_string()]);
+    }
+
+    #[test]
+    fn unified_diff_includes_labels_and_changed_line() {
+        let diff = build_unified_diff("old line", "new line", "before", "after");
+
+        assert!(diff.contains("--- before"));
+        assert!(diff.contains("+++ after"));
+        assert!(diff.contains("-old line"));
+        assert!(diff.contains("+new line"));
+    }
+}

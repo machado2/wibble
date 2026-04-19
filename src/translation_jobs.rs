@@ -578,6 +578,16 @@ async fn queue_translation_refresh(
     .await
 }
 
+fn stale_translation_languages_for_refresh(
+    cached_languages: &[SupportedTranslationLanguage],
+) -> Vec<SupportedTranslationLanguage> {
+    cached_languages
+        .iter()
+        .copied()
+        .filter(|language| language.code != article_source_language().code)
+        .collect()
+}
+
 pub async fn refresh_article_translations_after_edit(
     state: AppState,
     auth_user: &AuthUser,
@@ -595,11 +605,7 @@ pub async fn refresh_article_translations_after_edit(
         return Ok(());
     }
 
-    let stale_languages = cached_languages
-        .iter()
-        .copied()
-        .filter(|language| language.code != article_source_language().code)
-        .collect::<Vec<_>>();
+    let stale_languages = stale_translation_languages_for_refresh(&cached_languages);
     if stale_languages.is_empty() {
         return Ok(());
     }
@@ -657,11 +663,12 @@ pub fn spawn_resume_loop(state: AppState) {
 
 #[cfg(test)]
 mod tests {
+    use crate::llm::prompt_registry::find_supported_translation_language;
     use crate::services::article_language::PreferredLanguageSource;
 
     use super::{
-        request_source_from_preferred_language, translation_retry_delay,
-        TranslationJobRequestSource,
+        request_source_from_preferred_language, stale_translation_languages_for_refresh,
+        translation_retry_delay, TranslationJobRequestSource,
     };
 
     #[test]
@@ -689,5 +696,19 @@ mod tests {
         assert!(second > first);
         assert!(sixth >= second);
         assert!(sixth.as_secs() <= 15 * 60);
+    }
+
+    #[test]
+    fn stale_translation_refresh_excludes_source_language() {
+        let languages = vec![
+            find_supported_translation_language("en").unwrap(),
+            find_supported_translation_language("pt").unwrap(),
+            find_supported_translation_language("fr").unwrap(),
+        ];
+
+        let stale = stale_translation_languages_for_refresh(&languages);
+
+        assert_eq!(stale.len(), 2);
+        assert!(stale.iter().all(|language| language.code != "en"));
     }
 }
