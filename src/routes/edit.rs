@@ -11,6 +11,8 @@ use crate::entities::{content as content_entity, content_image, prelude::*};
 use crate::error::Error;
 use crate::permissions::{can_edit_article, can_toggle_publish};
 use crate::repositories::images::store_image_file;
+use crate::services::article_translations::owned_article_source_text;
+use crate::translation_jobs::refresh_article_translations_after_edit;
 use crate::wibble_request::WibbleRequest;
 
 pub fn router() -> Router<AppState> {
@@ -110,10 +112,15 @@ async fn post_edit_article(
             "Not authorized to edit this article".to_string(),
         ));
     }
+    let previous_source = owned_article_source_text(&article);
+    let translatable_content_changed = article.title != data.title
+        || article.description != data.description
+        || article.markdown.as_deref().unwrap_or("") != data.markdown;
+    let article_id = article.id.clone();
 
     let mut active: content_entity::ActiveModel = article.into();
     active.title = ActiveValue::set(data.title.clone());
-    active.description = ActiveValue::set(data.description);
+    active.description = ActiveValue::set(data.description.clone());
     active.markdown = ActiveValue::set(Some(data.markdown.clone()));
     active
         .update(db)
@@ -121,6 +128,23 @@ async fn post_edit_article(
         .map_err(|e| Error::Database(format!("Error updating article: {}", e)))?;
 
     log_audit(db, auth_user, "edit_article", "content", &slug, None).await?;
+    if translatable_content_changed {
+        if let Some(previous_source) = previous_source {
+            refresh_article_translations_after_edit(
+                wr.state.clone(),
+                auth_user,
+                &slug,
+                previous_source,
+                crate::services::article_translations::OwnedArticleSourceText {
+                    article_id,
+                    title: data.title,
+                    description: data.description,
+                    markdown: data.markdown,
+                },
+            )
+            .await?;
+        }
+    }
 
     Ok(Redirect::to(&format!("/content/{}", slug)))
 }

@@ -6,13 +6,12 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Current Findings
 
-- [ ] **Automatic translation is not implemented end-to-end today**
-  - `src/llm/translate.rs` contains an LLM translation helper.
-  - `language` / `translation` tables and entities exist.
-  - There are no routes, jobs, UI controls, persistence flows, or call sites wiring translation into article generation or rendering.
-  - `language_id` exists in the schema but is not used in the runtime path.
-  - The release target is now automatic background translation to the user's browser language, restricted to a whitelist of languages the models handle well.
-  - Fallback behavior must serve the source article immediately until a cached translation is ready.
+- [x] **Automatic translation is implemented end-to-end**
+  - `src/llm/translate.rs` is wired through a translation service and runtime call sites.
+  - `language` / `translation` tables back the persisted translation cache.
+  - Article pages detect browser language, support explicit per-article overrides, and serve the source article immediately while background translation work runs.
+  - Translation jobs are now persisted and resume-safe, with queue priority, retry/backoff, and edit-triggered invalidation/refresh.
+  - Remaining translation release work is about broader product policy and future agent-edit semantics, not missing runtime plumbing.
 
 - [ ] **Current architecture is not ready for open-ended agents**
   - Article generation is async, but the job model is too thin: `Processing | Success | Error` in `src/tasklist.rs`.
@@ -315,11 +314,11 @@ No release until every phase below is complete or explicitly removed from scope.
 ### 8.3 Background generation and resume behavior
 
 - [x] Translation must happen asynchronously in the background when a requested language variant is missing.
-- [ ] Add translation jobs with dedicated quotas and queue priority.
-- [ ] Add resume-safe translation jobs so work can continue gracefully after server crash or stop.
+- [x] Add translation jobs with dedicated quotas and queue priority.
+- [x] Add resume-safe translation jobs so work can continue gracefully after server crash or stop.
 - [x] Ensure half-finished translations do not corrupt the cache or block reads.
-- [ ] Add idempotent retry rules for failed translations.
-- [ ] Keep translation state persisted so the server can recover mid-flight work after restart.
+- [x] Add idempotent retry rules for failed translations.
+- [x] Keep translation state persisted so the server can recover mid-flight work after restart.
 
 ### 8.4 Serving behavior
 
@@ -350,15 +349,15 @@ No release until every phase below is complete or explicitly removed from scope.
 
 - [x] Restrict automatic translation to the supported language whitelist.
 - [x] Do not allow user-supplied arbitrary target language strings.
-- [ ] Rate-limit translation creation separately from article generation.
+- [x] Rate-limit translation creation separately from article generation.
 - [x] Prevent translation spam from anonymous traffic by deduplicating in-flight translation jobs per article/language.
 
 ### 8.7 Editing and translation coherence
 
 - [ ] Decide how agent edits interact with existing translations.
-- [ ] Mark translations stale when the source article is edited.
-- [ ] Re-queue background translation refresh after edits.
-- [ ] Add auditability for translation generation and invalidation.
+- [x] Mark translations stale when the source article is edited.
+- [x] Re-queue background translation refresh after edits.
+- [x] Add auditability for translation generation and invalidation.
 
 ## Phase 9: UI and Product Flow
 

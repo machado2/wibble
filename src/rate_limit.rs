@@ -18,12 +18,21 @@ use std::{
 pub struct RateLimitState {
     pub hourly_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     pub daily_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    pub translation_hourly_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
+    pub translation_daily_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     pub global_rate_limit_hits: Arc<AtomicU64>,
+    pub translation_rate_limit_hits: Arc<AtomicU64>,
     pub total_requests: Arc<AtomicU64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArticleRateLimit {
+    Hourly,
+    Daily,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TranslationRateLimit {
     Hourly,
     Daily,
 }
@@ -55,6 +64,12 @@ impl RateLimitState {
         let max_per_day = Self::read_limit("MAX_ARTICLES_PER_DAY", 20);
         let hourly_burst = Self::read_burst("MAX_ARTICLES_BURST_PER_HOUR", max_per_hour);
         let daily_burst = Self::read_burst("MAX_ARTICLES_BURST_PER_DAY", max_per_day);
+        let max_translations_per_hour = Self::read_limit("MAX_TRANSLATIONS_PER_HOUR", 40);
+        let max_translations_per_day = Self::read_limit("MAX_TRANSLATIONS_PER_DAY", 100);
+        let translation_hourly_burst =
+            Self::read_burst("MAX_TRANSLATIONS_BURST_PER_HOUR", max_translations_per_hour);
+        let translation_daily_burst =
+            Self::read_burst("MAX_TRANSLATIONS_BURST_PER_DAY", max_translations_per_day);
 
         let hourly_quota = Quota::per_hour(
             NonZeroU32::new(max_per_hour).expect("MAX_ARTICLES_PER_HOUR must be > 0"),
@@ -64,6 +79,16 @@ impl RateLimitState {
             Quota::with_period(std::time::Duration::from_secs(86400 / max_per_day as u64))
                 .expect("MAX_ARTICLES_PER_DAY must be > 0")
                 .allow_burst(NonZeroU32::new(daily_burst).unwrap());
+        let translation_hourly_quota = Quota::per_hour(
+            NonZeroU32::new(max_translations_per_hour)
+                .expect("MAX_TRANSLATIONS_PER_HOUR must be > 0"),
+        )
+        .allow_burst(NonZeroU32::new(translation_hourly_burst).unwrap());
+        let translation_daily_quota = Quota::with_period(std::time::Duration::from_secs(
+            86400 / max_translations_per_day as u64,
+        ))
+        .expect("MAX_TRANSLATIONS_PER_DAY must be > 0")
+        .allow_burst(NonZeroU32::new(translation_daily_burst).unwrap());
 
         Self {
             hourly_limiter: Arc::new(RateLimiter::new(
@@ -76,7 +101,18 @@ impl RateLimitState {
                 InMemoryState::default(),
                 &DefaultClock::default(),
             )),
+            translation_hourly_limiter: Arc::new(RateLimiter::new(
+                translation_hourly_quota,
+                InMemoryState::default(),
+                &DefaultClock::default(),
+            )),
+            translation_daily_limiter: Arc::new(RateLimiter::new(
+                translation_daily_quota,
+                InMemoryState::default(),
+                &DefaultClock::default(),
+            )),
             global_rate_limit_hits: Arc::new(AtomicU64::new(0)),
+            translation_rate_limit_hits: Arc::new(AtomicU64::new(0)),
             total_requests: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -91,6 +127,23 @@ impl RateLimitState {
             self.global_rate_limit_hits.fetch_add(1, Ordering::Relaxed);
             tracing::warn!("Daily rate limit exceeded for article creation");
             return Err(ArticleRateLimit::Daily);
+        }
+
+        Ok(())
+    }
+
+    pub fn check_translation_generation_limit(&self) -> Result<(), TranslationRateLimit> {
+        if self.translation_hourly_limiter.check().is_err() {
+            self.translation_rate_limit_hits
+                .fetch_add(1, Ordering::Relaxed);
+            tracing::warn!("Hourly rate limit exceeded for translation creation");
+            return Err(TranslationRateLimit::Hourly);
+        }
+        if self.translation_daily_limiter.check().is_err() {
+            self.translation_rate_limit_hits
+                .fetch_add(1, Ordering::Relaxed);
+            tracing::warn!("Daily rate limit exceeded for translation creation");
+            return Err(TranslationRateLimit::Daily);
         }
 
         Ok(())
@@ -136,6 +189,24 @@ mod tests {
         }
         assert!(
             state.daily_limiter.check().is_err(),
+            "should fail after max"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_translation_hourly_burst_allows_default_and_blocks_next() {
+        let state = RateLimitState::new();
+        let max = RateLimitState::read_limit("MAX_TRANSLATIONS_PER_HOUR", 40);
+        let burst = RateLimitState::read_burst("MAX_TRANSLATIONS_BURST_PER_HOUR", max);
+        for i in 0..burst {
+            assert!(
+                state.translation_hourly_limiter.check().is_ok(),
+                "failed at {}",
+                i
+            );
+        }
+        assert!(
+            state.translation_hourly_limiter.check().is_err(),
             "should fail after max"
         );
     }

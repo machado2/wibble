@@ -38,6 +38,7 @@ pub fn read_runtime_limits() -> RuntimeLimits {
             "MAX_CONCURRENT_ARTICLE_GENERATIONS",
             1,
         ),
+        max_concurrent_translation_jobs: read_positive_usize("MAX_CONCURRENT_TRANSLATION_JOBS", 1),
         dead_link_recovery_max_per_day: read_positive_usize("DEAD_LINK_RECOVERY_MAX_PER_DAY", 5),
     }
 }
@@ -105,6 +106,10 @@ pub fn log_startup_configuration(
     println!(
         "MAX_CONCURRENT_ARTICLE_GENERATIONS={}",
         runtime_limits.max_concurrent_article_generations
+    );
+    println!(
+        "MAX_CONCURRENT_TRANSLATION_JOBS={}",
+        runtime_limits.max_concurrent_translation_jobs
     );
     println!(
         "DEAD_LINK_RECOVERY_MAX_PER_DAY={}",

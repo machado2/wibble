@@ -17,3 +17,4 @@ pub mod image_file;
 pub mod language;
 pub mod search_history;
 pub mod translation;
+pub mod translation_job;

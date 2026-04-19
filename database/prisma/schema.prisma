@@ -43,6 +43,7 @@ model content {
   author_email            String?         @db.VarChar(350)
   published               Boolean         @default(true)
   recovered_from_dead_link Boolean        @default(false)
+  translation_jobs        translation_job[]
   content_comment         content_comment[]
   content_image           content_image[]
   content_vote            content_vote[]
@@ -194,6 +195,26 @@ model translation {
   lang_id      String   @db.VarChar(100)
   translation  String
   language     language @relation(fields: [lang_id], references: [id], onUpdate: NoAction)
+}
+
+model translation_job {
+  id             String   @id @db.VarChar(100)
+  article_id     String   @db.VarChar(36)
+  language_code  String   @db.VarChar(16)
+  request_source String   @db.VarChar(32)
+  priority       Int      @default(0)
+  status         String   @default("queued") @db.VarChar(32)
+  fail_count     Int      @default(0)
+  last_error     String?
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+  started_at     DateTime? @db.Timestamp(6)
+  finished_at    DateTime? @db.Timestamp(6)
+  next_retry_at  DateTime? @db.Timestamp(6)
+  content        content  @relation(fields: [article_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([article_id], map: "idx_translation_job_article_id")
+  @@index([status, priority, created_at], map: "idx_translation_job_status_priority_created_at")
 }
 
 model audit_log {

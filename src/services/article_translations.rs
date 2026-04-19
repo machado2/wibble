@@ -1,17 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::DatabaseConnection;
-use tracing::warn;
 
-use crate::app_state::AppState;
+use crate::entities::content;
 use crate::error::Error;
 use crate::llm::prompt_registry::{
     supported_translation_languages, translation_prompt, SupportedTranslationLanguage,
 };
 use crate::llm::translate::Translate;
 use crate::repositories::translations::{
-    find_translations_for_keys, save_translations, translation_cache_key, StoredTranslation,
-    TranslationField, TranslationWrite,
+    delete_translations_for_keys, find_translations_for_keys, save_translations,
+    translation_cache_key, StoredTranslation, TranslationField, TranslationWrite,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -63,40 +62,20 @@ impl OwnedArticleSourceText {
     }
 }
 
+pub fn owned_article_source_text(article: &content::Model) -> Option<OwnedArticleSourceText> {
+    Some(OwnedArticleSourceText {
+        article_id: article.id.clone(),
+        title: article.title.clone(),
+        description: article.description.clone(),
+        markdown: article.markdown.clone()?,
+    })
+}
+
 pub fn article_translation_job_key(
     article_id: &str,
     language: SupportedTranslationLanguage,
 ) -> String {
     format!("{}:{}", article_id, language.code)
-}
-
-pub async fn spawn_missing_article_translation(
-    state: AppState,
-    source: OwnedArticleSourceText,
-    language: SupportedTranslationLanguage,
-) {
-    let job_key = article_translation_job_key(&source.article_id, language);
-    if !state
-        .try_mark_translation_generation_started(&job_key)
-        .await
-    {
-        return;
-    }
-
-    tokio::spawn(async move {
-        if let Err(err) =
-            ensure_cached_article_translation(&state.llm, &state.db, source.as_ref(), language)
-                .await
-        {
-            warn!(
-                article_id = %source.article_id,
-                language = language.code,
-                error = %err,
-                "Failed to generate cached article translation"
-            );
-        }
-        state.mark_translation_generation_finished(&job_key).await;
-    });
 }
 
 pub async fn cached_translation_languages(
@@ -165,6 +144,13 @@ pub async fn ensure_cached_article_translation<T: Translate>(
         description,
         markdown,
     })
+}
+
+pub async fn invalidate_cached_article_translations(
+    db: &DatabaseConnection,
+    source: ArticleSourceText<'_>,
+) -> Result<u64, Error> {
+    delete_translations_for_keys(db, &cache_keys(source)).await
 }
 
 fn translation_prompt_version() -> i32 {

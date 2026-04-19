@@ -4,12 +4,14 @@ use sea_orm::{ConnectionTrait, DatabaseConnection};
 
 use crate::hot_score::update_hot_score_statement;
 use crate::image_jobs;
+use crate::translation_jobs;
 
 use super::AppState;
 
 pub fn bootstrap_background_jobs(state: AppState) {
     spawn_hot_score_update_loop(state.db.clone());
-    image_jobs::spawn_resume_loop(state);
+    image_jobs::spawn_resume_loop(state.clone());
+    translation_jobs::spawn_resume_loop(state);
 }
 
 fn spawn_hot_score_update_loop(db: DatabaseConnection) {

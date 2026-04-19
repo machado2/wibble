@@ -82,6 +82,28 @@ const COMMENT_TABLE_COMPATIBILITY: &[&str] = &[
     END $$"#,
 ];
 
+const TRANSLATION_JOB_COMPATIBILITY: &[&str] = &[
+    r#"CREATE TABLE IF NOT EXISTS "public"."translation_job" (
+        "id" VARCHAR(100) PRIMARY KEY,
+        "article_id" VARCHAR(36) NOT NULL REFERENCES "public"."content"("id") ON DELETE CASCADE ON UPDATE NO ACTION,
+        "language_code" VARCHAR(16) NOT NULL,
+        "request_source" VARCHAR(32) NOT NULL,
+        "priority" INTEGER NOT NULL DEFAULT 0,
+        "status" VARCHAR(32) NOT NULL DEFAULT 'queued',
+        "fail_count" INTEGER NOT NULL DEFAULT 0,
+        "last_error" TEXT,
+        "created_at" TIMESTAMP(6) NOT NULL DEFAULT NOW(),
+        "updated_at" TIMESTAMP(6) NOT NULL DEFAULT NOW(),
+        "started_at" TIMESTAMP(6),
+        "finished_at" TIMESTAMP(6),
+        "next_retry_at" TIMESTAMP(6)
+    )"#,
+    r#"CREATE INDEX IF NOT EXISTS "idx_translation_job_article_id"
+       ON "public"."translation_job"("article_id")"#,
+    r#"CREATE INDEX IF NOT EXISTS "idx_translation_job_status_priority_created_at"
+       ON "public"."translation_job"("status", "priority", "created_at")"#,
+];
+
 pub fn startup_schema_compatibility_mode() -> &'static str {
     STARTUP_SCHEMA_COMPATIBILITY_MODE
 }
@@ -98,6 +120,12 @@ pub async fn apply_startup_schema_compatibility(db: &DatabaseConnection) {
         db,
         COMMENT_TABLE_COMPATIBILITY,
         "comment schema compatibility",
+    )
+    .await;
+    apply_compatibility_statements(
+        db,
+        TRANSLATION_JOB_COMPATIBILITY,
+        "translation job schema compatibility",
     )
     .await;
 }
@@ -123,6 +151,11 @@ pub async fn validate_required_schema(db: &DatabaseConnection) -> Result<(), Err
         .all(db)
         .await
         .map_err(|e| Error::Database(format!("AuditLog schema validation failed: {}", e)))?;
+    TranslationJob::find()
+        .limit(1)
+        .all(db)
+        .await
+        .map_err(|e| Error::Database(format!("TranslationJob schema validation failed: {}", e)))?;
     Ok(())
 }
 

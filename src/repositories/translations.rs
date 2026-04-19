@@ -1,6 +1,6 @@
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, TransactionTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, DeleteResult,
+    EntityTrait, QueryFilter, TransactionTrait,
 };
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -165,6 +165,23 @@ pub async fn save_translations(
         }
         sea_orm::TransactionError::Transaction(err) => err,
     })
+}
+
+pub async fn delete_translations_for_keys(
+    db: &DatabaseConnection,
+    cache_keys: &[String],
+) -> Result<u64, Error> {
+    if cache_keys.is_empty() {
+        return Ok(0);
+    }
+
+    let DeleteResult { rows_affected } = Translation::delete_many()
+        .filter(translation::Column::EnglishHash.is_in(cache_keys.iter().cloned()))
+        .exec(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error deleting cached translations: {}", e)))?;
+
+    Ok(rows_affected)
 }
 
 async fn ensure_language_row<C: ConnectionTrait>(
