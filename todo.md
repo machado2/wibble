@@ -279,7 +279,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - research-enabled generation
   - edit-agent rewriting
 - [x] Move prompt assembly rules out of scattered string constants into a prompt module.
-- [ ] Add tests or fixtures that validate prompt structure and output parsers.
+- [x] Add tests or fixtures that validate prompt structure and output parsers.
 - [x] Store the prompt version used on each generated article.
 
 ## Phase 8: Automatic Translation

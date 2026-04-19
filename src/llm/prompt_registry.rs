@@ -107,13 +107,50 @@ pub fn find_supported_translation_language(value: &str) -> Option<SupportedTrans
 #[cfg(test)]
 mod tests {
     use super::{
-        article_generation_prompt, find_supported_translation_language, translation_prompt,
+        article_generation_prompt, find_supported_translation_language,
+        image_brief_generation_prompt, placeholder_generation_prompt, translation_prompt,
     };
 
     #[test]
     fn prompt_definitions_expose_stable_versions() {
         assert_eq!(article_generation_prompt().version, 1);
         assert_eq!(translation_prompt().version, 1);
+    }
+
+    #[test]
+    fn article_generation_prompt_contains_core_article_contract() {
+        let prompt = article_generation_prompt().body;
+
+        assert!(prompt.contains("The first line must be the headline"));
+        assert!(prompt.contains("Reply with the article only, in Markdown."));
+        assert!(prompt.contains("Do not add disclaimers"));
+    }
+
+    #[test]
+    fn placeholder_prompt_contains_generated_image_contract() {
+        let prompt = placeholder_generation_prompt().body;
+
+        assert!(prompt.contains("The only XML tag allowed is <GeneratedImage>."));
+        assert!(prompt.contains("Include 3 to 4 <GeneratedImage> tags"));
+        assert!(prompt.contains("Do not use Markdown image syntax."));
+    }
+
+    #[test]
+    fn image_brief_prompt_contains_line_format_contract() {
+        let prompt = image_brief_generation_prompt().body;
+
+        assert!(prompt.contains("Each line must be: caption; detailed description"));
+        assert!(prompt.contains("One image per line."));
+        assert!(prompt.contains("Do not add bullets, numbering, commentary"));
+    }
+
+    #[test]
+    fn translation_prompt_contains_markdown_preservation_contract() {
+        let prompt = translation_prompt().body;
+
+        assert!(prompt.contains("Keep markdown structure intact."));
+        assert!(prompt.contains("Translate only the user-provided text."));
+        assert!(prompt.contains("Return only the translated text through the tool."));
     }
 
     #[test]

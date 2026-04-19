@@ -36,3 +36,62 @@ fn build_messages(
     messages.push(Message::User(instructions.to_string()));
     messages
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::llm::prompt_registry::{
+        article_generation_prompt, image_brief_generation_prompt, placeholder_generation_prompt,
+    };
+    use crate::llm::Message;
+
+    use super::{build_article_messages, build_illustrator_messages, build_placeholder_messages};
+
+    #[test]
+    fn build_article_messages_uses_registered_prompt_and_user_input() {
+        let messages = build_article_messages("Write about the audit");
+
+        assert!(matches!(
+            &messages[0],
+            Message::System(body) if body == article_generation_prompt().body
+        ));
+        assert!(matches!(
+            &messages[1],
+            Message::User(body) if body == "Write about the audit"
+        ));
+    }
+
+    #[test]
+    fn build_placeholder_messages_preserves_example_order_before_prompt() {
+        let messages = build_placeholder_messages(
+            Some(vec![
+                ("Prompt one".to_string(), "# Article one".to_string()),
+                ("Prompt two".to_string(), "# Article two".to_string()),
+            ]),
+            "Main request",
+        );
+
+        assert!(matches!(
+            &messages[0],
+            Message::System(body) if body == placeholder_generation_prompt().body
+        ));
+        assert!(matches!(&messages[1], Message::User(body) if body == "Prompt one"));
+        assert!(matches!(&messages[2], Message::Assistant(body) if body == "# Article one"));
+        assert!(matches!(&messages[3], Message::User(body) if body == "Prompt two"));
+        assert!(matches!(&messages[4], Message::Assistant(body) if body == "# Article two"));
+        assert!(matches!(&messages[5], Message::User(body) if body == "Main request"));
+    }
+
+    #[test]
+    fn build_illustrator_messages_uses_registered_prompt() {
+        let messages = build_illustrator_messages("Full article body");
+
+        assert!(matches!(
+            &messages[0],
+            Message::System(body) if body == image_brief_generation_prompt().body
+        ));
+        assert!(matches!(
+            &messages[1],
+            Message::User(body) if body == "Full article body"
+        ));
+    }
+}
