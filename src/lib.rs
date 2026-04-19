@@ -1,4 +1,5 @@
 pub mod app_state;
+pub mod audit;
 pub mod auth;
 pub mod content;
 pub mod create;
@@ -13,8 +14,10 @@ pub mod image_jobs;
 pub mod image_status;
 pub mod llm;
 pub mod newslist;
+pub mod permissions;
 pub mod rate_limit;
 pub mod repository;
+pub mod routes;
 pub mod s3;
 pub mod sitemap;
 pub mod tasklist;

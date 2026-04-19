@@ -67,15 +67,15 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 1.1 Route and handler decomposition
 
-- [ ] Split `src/main.rs` into focused route/handler modules:
+- [x] Split `src/main.rs` into focused route/handler modules:
   - `routes/public.rs`
   - `routes/create.rs`
   - `routes/content.rs`
   - `routes/edit.rs`
   - `routes/admin.rs`
   - `routes/auth.rs`
-- [ ] Move shared permission helpers and audit logging out of `main.rs`.
-- [ ] Keep `main.rs` as router composition + startup only.
+- [x] Move shared permission helpers and audit logging out of `main.rs`.
+- [x] Keep `main.rs` as router composition + startup only.
 
 ### 1.2 Service / repository decomposition
 
@@ -432,7 +432,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Refactor Map by File
 
-- [ ] `src/main.rs`
+- [x] `src/main.rs`
   - break apart into route modules and handler modules
   - move permission helpers and audit logging out
   - keep route table + startup only

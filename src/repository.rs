@@ -198,6 +198,7 @@ pub struct PendingArticle {
     pub author_email: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_saved_content_model(
     id: String,
     slug: String,
