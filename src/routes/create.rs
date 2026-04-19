@@ -46,7 +46,15 @@ async fn create_article(
         Err(e) => return e.into_response(),
     };
 
-    match create_page::start_create_article(wr.state, prompt, author_email).await {
+    match create_page::start_create_article(
+        wr.state,
+        prompt,
+        author_email,
+        wr.requester_tier,
+        wr.rate_limit_key,
+    )
+    .await
+    {
         Ok(id) => Redirect::to(&format!("/wait/{}", id)).into_response(),
         Err(e) => e.into_response(),
     }

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::error::Error;
-use crate::rate_limit::ArticleRateLimit;
+use crate::rate_limit::{ArticleRateLimit, RequesterTier};
 use crate::tasklist::TaskResult;
 
 #[derive(Clone)]
@@ -64,10 +64,14 @@ impl ArticleJobService {
             })
     }
 
-    pub fn check_create_rate_limit(&self) -> Result<(), Error> {
+    pub fn check_create_rate_limit(
+        &self,
+        requester_tier: RequesterTier,
+        rate_limit_key: &str,
+    ) -> Result<(), Error> {
         self.state
             .rate_limit_state
-            .check_article_generation_limit()
+            .check_article_generation_limit(requester_tier, rate_limit_key)
             .map_err(|limit| {
                 let limit_name = match limit {
                     ArticleRateLimit::Hourly => "hourly",
@@ -76,6 +80,7 @@ impl ArticleJobService {
                 event!(
                     Level::WARN,
                     limit = limit_name,
+                    tier = ?requester_tier,
                     "Rejected article creation due to article generation rate limit",
                 );
                 Error::RateLimited

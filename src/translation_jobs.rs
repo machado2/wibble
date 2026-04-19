@@ -15,7 +15,7 @@ use crate::error::Error;
 use crate::llm::prompt_registry::{
     find_supported_translation_language, SupportedTranslationLanguage,
 };
-use crate::rate_limit::TranslationRateLimit;
+use crate::rate_limit::{RequesterTier, TranslationRateLimit};
 use crate::services::article_language::{article_source_language, PreferredLanguageSource};
 use crate::services::article_translations::{
     article_translation_job_key, cached_translation_languages, ensure_cached_article_translation,
@@ -138,6 +138,8 @@ async fn persist_translation_job_request(
     article_id: &str,
     language: SupportedTranslationLanguage,
     request_source: TranslationJobRequestSource,
+    requester_tier: RequesterTier,
+    rate_limit_key: &str,
     enforce_rate_limit: bool,
 ) -> Result<(), Error> {
     let job_id = article_translation_job_key(article_id, language);
@@ -150,7 +152,7 @@ async fn persist_translation_job_request(
     if needs_requeue && enforce_rate_limit {
         state
             .rate_limit_state
-            .check_translation_generation_limit()
+            .check_translation_generation_limit(requester_tier, rate_limit_key)
             .map_err(|limit| {
                 let limit_name = match limit {
                     TranslationRateLimit::Hourly => "hourly",
@@ -161,6 +163,7 @@ async fn persist_translation_job_request(
                     article_id,
                     language = language.code,
                     limit = limit_name,
+                    tier = ?requester_tier,
                     "Rejected translation creation due to translation rate limit"
                 );
                 Error::RateLimited
@@ -170,8 +173,10 @@ async fn persist_translation_job_request(
     match existing {
         Some(existing) => {
             let previous_status = existing.status.clone();
-            let merged_priority = existing.priority.max(request_source.priority());
-            let merged_request_source = if request_source.priority() >= existing.priority {
+            let requested_priority =
+                request_source.priority() + requester_tier.queue_priority_boost();
+            let merged_priority = existing.priority.max(requested_priority);
+            let merged_request_source = if requested_priority >= existing.priority {
                 request_source.as_str().to_string()
             } else {
                 existing.request_source.clone()
@@ -201,7 +206,9 @@ async fn persist_translation_job_request(
                 article_id: ActiveValue::set(article_id.to_string()),
                 language_code: ActiveValue::set(language.code.to_string()),
                 request_source: ActiveValue::set(request_source.as_str().to_string()),
-                priority: ActiveValue::set(request_source.priority()),
+                priority: ActiveValue::set(
+                    request_source.priority() + requester_tier.queue_priority_boost(),
+                ),
                 status: ActiveValue::set(TRANSLATION_JOB_STATUS_QUEUED.to_string()),
                 fail_count: ActiveValue::set(0),
                 last_error: ActiveValue::set(None),
@@ -466,9 +473,19 @@ pub async fn request_article_translation(
     article_id: String,
     language: SupportedTranslationLanguage,
     request_source: TranslationJobRequestSource,
+    requester_tier: RequesterTier,
+    rate_limit_key: String,
 ) {
-    if let Err(err) =
-        persist_translation_job_request(&state, &article_id, language, request_source, true).await
+    if let Err(err) = persist_translation_job_request(
+        &state,
+        &article_id,
+        language,
+        request_source,
+        requester_tier,
+        &rate_limit_key,
+        true,
+    )
+    .await
     {
         event!(
             Level::WARN,
@@ -486,12 +503,16 @@ async fn queue_translation_refresh(
     state: &AppState,
     article_id: &str,
     language: SupportedTranslationLanguage,
+    requester_tier: RequesterTier,
+    rate_limit_key: &str,
 ) -> Result<(), Error> {
     persist_translation_job_request(
         state,
         article_id,
         language,
         TranslationJobRequestSource::EditRefresh,
+        requester_tier,
+        rate_limit_key,
         false,
     )
     .await
@@ -544,7 +565,20 @@ pub async fn refresh_article_translations_after_edit(
     .await?;
 
     for language in stale_languages {
-        queue_translation_refresh(&state, &current_source.article_id, language).await?;
+        let requester_tier = if auth_user.is_admin() {
+            RequesterTier::Admin
+        } else {
+            RequesterTier::Authenticated
+        };
+        let rate_limit_key = format!("user:{}", auth_user.email);
+        queue_translation_refresh(
+            &state,
+            &current_source.article_id,
+            language,
+            requester_tier,
+            &rate_limit_key,
+        )
+        .await?;
     }
     spawn_due_translation_jobs(state).await;
     Ok(())

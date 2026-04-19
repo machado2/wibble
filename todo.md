@@ -149,17 +149,17 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 3.2 Rate limits and anti-abuse
 
-- [ ] Replace global generation limits with keyed limits:
+- [x] Replace global generation limits with keyed limits:
   - per-user for authenticated users
-  - per-IP / fingerprint / session key for anonymous users
-- [ ] Separate quotas by capability:
+  - per-IP / fingerprint key for anonymous users
+- [x] Separate quotas by capability:
   - plain article generation
   - research-enabled generation
   - edit-agent requests
   - background translation requests
   - image regeneration
   - clarifying-question loops
-- [ ] Add queue priority tiers:
+- [x] Add queue priority tiers:
   - anonymous: lowest
   - logged-in: normal
   - admin: elevated
@@ -454,7 +454,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - separate startup concerns
   - isolate provider factory and schema compatibility code
 
-- [ ] `src/rate_limit.rs`
+- [x] `src/rate_limit.rs`
   - replace global counters with keyed quota service
   - add tier-aware policies
 
@@ -485,8 +485,8 @@ No release until every phase below is complete or explicitly removed from scope.
 
 - [ ] Core refactor completed
 - [ ] Persisted job system completed
-- [ ] Keyed quotas completed
-- [ ] Ownership + author editing completed
+- [x] Keyed quotas completed
+- [x] Ownership + author editing completed
 - [ ] Agent generation completed
 - [ ] Agent editing completed
 - [ ] Translation decision completed

@@ -219,6 +219,8 @@ impl GetContent for WibbleRequest {
                 request_source_from_preferred_language(
                     language_selection.preferred_language_source,
                 ),
+                self.requester_tier,
+                self.rate_limit_key.clone(),
             )
             .await;
         }

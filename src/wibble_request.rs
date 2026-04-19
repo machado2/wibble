@@ -6,9 +6,10 @@ use std::sync::RwLock;
 
 use axum::extract::{FromRef, FromRequestParts, Query};
 use axum::response::Html;
-use http::header::ACCEPT_LANGUAGE;
+use http::header::{ACCEPT_LANGUAGE, USER_AGENT};
 use http::request::Parts;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use tera::{Context, Tera};
 use tracing::log;
 
@@ -17,6 +18,7 @@ use crate::auth::{extract_auth_token, AuthUser};
 use crate::error::Error;
 use crate::llm::prompt_registry::SupportedTranslationLanguage;
 use crate::llm::translate::detect_browser_translation_language;
+use crate::rate_limit::RequesterTier;
 use crate::services::article_language::resolve_supported_language_preference;
 
 const ARTICLE_LANGUAGE_COOKIE_NAME: &str = "__article_lang";
@@ -30,6 +32,8 @@ where
     pub style: String,
     pub request_path: String,
     pub auth_user: Option<AuthUser>,
+    pub requester_tier: RequesterTier,
+    pub rate_limit_key: String,
     pub browser_translation_language: Option<SupportedTranslationLanguage>,
     pub saved_article_language: Option<SupportedTranslationLanguage>,
 }
@@ -134,6 +138,47 @@ impl WibbleRequest {
                 .and_then(resolve_supported_language_preference)
         })
     }
+
+    fn client_ip_from_headers(headers: &http::HeaderMap) -> Option<String> {
+        ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"]
+            .into_iter()
+            .find_map(|header_name| {
+                headers
+                    .get(header_name)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(|value| {
+                        if header_name == "x-forwarded-for" {
+                            value.split(',').next().unwrap_or(value).trim().to_string()
+                        } else {
+                            value.to_string()
+                        }
+                    })
+            })
+    }
+
+    fn anonymous_rate_limit_key_from_headers(headers: &http::HeaderMap) -> String {
+        let ip = Self::client_ip_from_headers(headers).unwrap_or_else(|| "unknown-ip".to_string());
+        let user_agent = headers
+            .get(USER_AGENT)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown-agent");
+        let accept_language = headers
+            .get(ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown-language");
+        let fingerprint = format!("{}|{}|{}", ip, user_agent, accept_language);
+        format!("anon:{:x}", Sha256::digest(fingerprint.as_bytes()))
+    }
+
+    fn requester_tier_for(auth_user: Option<&AuthUser>) -> RequesterTier {
+        match auth_user {
+            Some(user) if user.is_admin() => RequesterTier::Admin,
+            Some(_) => RequesterTier::Authenticated,
+            None => RequesterTier::Anonymous,
+        }
+    }
 }
 
 impl<S> FromRequestParts<S> for WibbleRequest
@@ -160,11 +205,18 @@ where
         } else {
             None
         };
+        let requester_tier = WibbleRequest::requester_tier_for(auth_user.as_ref());
+        let rate_limit_key = auth_user.as_ref().map_or_else(
+            || WibbleRequest::anonymous_rate_limit_key_from_headers(&parts.headers),
+            |user| format!("user:{}", user.email),
+        );
         Ok(WibbleRequest {
             state,
             style,
             request_path,
             auth_user,
+            requester_tier,
+            rate_limit_key,
             browser_translation_language,
             saved_article_language,
         })
@@ -173,7 +225,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use http::{header::ACCEPT_LANGUAGE, HeaderMap, HeaderValue};
+    use http::{
+        header::{ACCEPT_LANGUAGE, USER_AGENT},
+        HeaderMap, HeaderValue,
+    };
 
     use super::WibbleRequest;
 
@@ -227,5 +282,35 @@ mod tests {
         let language = WibbleRequest::saved_article_language_from_headers(&headers);
 
         assert!(language.is_none());
+    }
+
+    #[test]
+    fn anonymous_rate_limit_key_from_headers_is_stable_for_same_fingerprint() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-real-ip", HeaderValue::from_static("203.0.113.5"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("TestBrowser/1.0"));
+        headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
+
+        let first = WibbleRequest::anonymous_rate_limit_key_from_headers(&headers);
+        let second = WibbleRequest::anonymous_rate_limit_key_from_headers(&headers);
+
+        assert_eq!(first, second);
+        assert!(first.starts_with("anon:"));
+    }
+
+    #[test]
+    fn anonymous_rate_limit_key_changes_when_ip_changes() {
+        let mut headers_a = HeaderMap::new();
+        headers_a.insert("x-real-ip", HeaderValue::from_static("203.0.113.5"));
+        headers_a.insert(USER_AGENT, HeaderValue::from_static("TestBrowser/1.0"));
+
+        let mut headers_b = HeaderMap::new();
+        headers_b.insert("x-real-ip", HeaderValue::from_static("203.0.113.9"));
+        headers_b.insert(USER_AGENT, HeaderValue::from_static("TestBrowser/1.0"));
+
+        let first = WibbleRequest::anonymous_rate_limit_key_from_headers(&headers_a);
+        let second = WibbleRequest::anonymous_rate_limit_key_from_headers(&headers_b);
+
+        assert_ne!(first, second);
     }
 }
