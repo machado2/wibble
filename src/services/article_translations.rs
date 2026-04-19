@@ -10,8 +10,8 @@ use crate::llm::prompt_registry::{
 };
 use crate::llm::translate::Translate;
 use crate::repositories::translations::{
-    find_translations_for_keys, save_translation, translation_cache_key, StoredTranslation,
-    TranslationField,
+    find_translations_for_keys, save_translations, translation_cache_key, StoredTranslation,
+    TranslationField, TranslationWrite,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,6 +43,13 @@ struct CachedArticleTranslationFields {
     title: Option<String>,
     description: Option<String>,
     markdown: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct MissingArticleTranslationFields {
+    title: bool,
+    description: bool,
+    markdown: bool,
 }
 
 impl OwnedArticleSourceText {
@@ -126,31 +133,31 @@ pub async fn ensure_cached_article_translation<T: Translate>(
     let cache_keys = cache_keys(source);
     let translations = find_translations_for_keys(db, &cache_keys).await?;
     let cached_fields = cached_translation_fields(&cache_keys, &translations, language);
+    let missing_fields = MissingArticleTranslationFields {
+        title: cached_fields.title.is_none(),
+        description: cached_fields.description.is_none(),
+        markdown: cached_fields.markdown.is_none(),
+    };
 
     let title = match cached_fields.title {
         Some(title) => title,
-        None => {
-            let title = translator.translate(source.title, language).await?;
-            save_translation(db, &cache_keys[0], language, &title).await?;
-            title
-        }
+        None => translator.translate(source.title, language).await?,
     };
     let description = match cached_fields.description {
         Some(description) => description,
-        None => {
-            let description = translator.translate(source.description, language).await?;
-            save_translation(db, &cache_keys[1], language, &description).await?;
-            description
-        }
+        None => translator.translate(source.description, language).await?,
     };
     let markdown = match cached_fields.markdown {
         Some(markdown) => markdown,
-        None => {
-            let markdown = translator.translate(source.markdown, language).await?;
-            save_translation(db, &cache_keys[2], language, &markdown).await?;
-            markdown
-        }
+        None => translator.translate(source.markdown, language).await?,
     };
+    let writes = missing_translation_writes(
+        &cache_keys,
+        language,
+        &missing_fields,
+        [&title, &description, &markdown],
+    );
+    save_translations(db, &writes).await?;
 
     Ok(CachedArticleTranslation {
         language,
@@ -234,6 +241,30 @@ fn cached_translation_fields(
     }
 }
 
+fn missing_translation_writes(
+    cache_keys: &[String],
+    language: SupportedTranslationLanguage,
+    missing_fields: &MissingArticleTranslationFields,
+    translated_texts: [&str; 3],
+) -> Vec<TranslationWrite> {
+    let missing = [
+        missing_fields.title,
+        missing_fields.description,
+        missing_fields.markdown,
+    ];
+    cache_keys
+        .iter()
+        .zip(translated_texts)
+        .zip(missing)
+        .filter(|((_, _), missing)| *missing)
+        .map(|((cache_key, text), _)| TranslationWrite {
+            cache_key: cache_key.clone(),
+            language,
+            text: text.to_string(),
+        })
+        .collect()
+}
+
 fn assemble_cached_article_translation(
     cache_keys: &[String],
     translations: &[StoredTranslation],
@@ -259,7 +290,8 @@ mod tests {
 
     use super::{
         article_translation_job_key, assemble_cached_article_translation, cache_keys,
-        cached_translation_fields, complete_cached_languages, ArticleSourceText,
+        cached_translation_fields, complete_cached_languages, missing_translation_writes,
+        ArticleSourceText, MissingArticleTranslationFields,
     };
 
     fn source_text() -> ArticleSourceText<'static> {
@@ -388,5 +420,28 @@ mod tests {
         assert_ne!(cache_keys[0], cache_keys[1]);
         assert_ne!(cache_keys[1], cache_keys[2]);
         assert_ne!(cache_keys[0], cache_keys[2]);
+    }
+
+    #[test]
+    fn missing_translation_writes_only_stage_uncached_fields() {
+        let source = source_text();
+        let cache_keys = cache_keys(source);
+        let portuguese = find_supported_translation_language("pt").unwrap();
+        let writes = missing_translation_writes(
+            &cache_keys,
+            portuguese,
+            &MissingArticleTranslationFields {
+                title: true,
+                description: false,
+                markdown: true,
+            },
+            ["Titulo", "Resumo", "Corpo"],
+        );
+
+        assert_eq!(writes.len(), 2);
+        assert_eq!(writes[0].cache_key, cache_keys[0]);
+        assert_eq!(writes[0].text, "Titulo");
+        assert_eq!(writes[1].cache_key, cache_keys[2]);
+        assert_eq!(writes[1].text, "Corpo");
     }
 }

@@ -317,7 +317,7 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Translation must happen asynchronously in the background when a requested language variant is missing.
 - [ ] Add translation jobs with dedicated quotas and queue priority.
 - [ ] Add resume-safe translation jobs so work can continue gracefully after server crash or stop.
-- [ ] Ensure half-finished translations do not corrupt the cache or block reads.
+- [x] Ensure half-finished translations do not corrupt the cache or block reads.
 - [ ] Add idempotent retry rules for failed translations.
 - [ ] Keep translation state persisted so the server can recover mid-flight work after restart.
 

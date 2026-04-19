@@ -1,7 +1,9 @@
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait,
+    QueryFilter, TransactionTrait,
 };
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 use crate::entities::{language, prelude::*, translation};
 use crate::error::Error;
@@ -28,6 +30,13 @@ impl TranslationField {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StoredTranslation {
+    pub cache_key: String,
+    pub language: SupportedTranslationLanguage,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslationWrite {
     pub cache_key: String,
     pub language: SupportedTranslationLanguage,
     pub text: String,
@@ -116,17 +125,61 @@ pub async fn save_translation(
     language: SupportedTranslationLanguage,
     translated_text: &str,
 ) -> Result<(), Error> {
-    let language_id = language_row_id(language);
-    let translation_id = translation_row_id(cache_key, language);
+    save_translations(
+        db,
+        &[TranslationWrite {
+            cache_key: cache_key.to_string(),
+            language,
+            text: translated_text.to_string(),
+        }],
+    )
+    .await
+}
 
-    if Language::find_by_id(language_id.clone())
+pub async fn save_translations(
+    db: &DatabaseConnection,
+    writes: &[TranslationWrite],
+) -> Result<(), Error> {
+    if writes.is_empty() {
+        return Ok(());
+    }
+
+    let writes = writes.to_vec();
+    db.transaction::<_, (), Error>(move |tx| {
+        Box::pin(async move {
+            let mut ensured_languages = HashSet::new();
+            for write in &writes {
+                let language_id = language_row_id(write.language);
+                if ensured_languages.insert(language_id.clone()) {
+                    ensure_language_row(tx, &language_id, write.language).await?;
+                }
+                upsert_translation(tx, &language_id, write).await?;
+            }
+            Ok(())
+        })
+    })
+    .await
+    .map_err(|e| match e {
+        sea_orm::TransactionError::Connection(err) => {
+            Error::Database(format!("Error saving cached translations: {}", err))
+        }
+        sea_orm::TransactionError::Transaction(err) => err,
+    })
+}
+
+async fn ensure_language_row<C: ConnectionTrait>(
+    db: &C,
+    language_id: &str,
+    language: SupportedTranslationLanguage,
+) -> Result<(), Error> {
+    if Language::find_by_id(language_id.to_string())
         .one(db)
         .await
         .map_err(|e| Error::Database(format!("Error checking language cache row: {}", e)))?
         .is_none()
     {
         let language_row = language::ActiveModel {
-            id: ActiveValue::set(language_id.clone()),
+            id: ActiveValue::set(language_id.to_string()),
             name: ActiveValue::set(language.name.to_string()),
         };
         Language::insert(language_row)
@@ -135,15 +188,25 @@ pub async fn save_translation(
             .map_err(|e| Error::Database(format!("Error inserting language cache row: {}", e)))?;
     }
 
+    Ok(())
+}
+
+async fn upsert_translation<C: ConnectionTrait>(
+    db: &C,
+    language_id: &str,
+    write: &TranslationWrite,
+) -> Result<(), Error> {
+    let translation_id = translation_row_id(&write.cache_key, write.language);
+
     if let Some(existing) = Translation::find_by_id(translation_id.clone())
         .one(db)
         .await
         .map_err(|e| Error::Database(format!("Error checking cached translation row: {}", e)))?
     {
         let mut active: translation::ActiveModel = existing.into();
-        active.english_hash = ActiveValue::set(cache_key.to_string());
-        active.lang_id = ActiveValue::set(language_id);
-        active.translation = ActiveValue::set(translated_text.to_string());
+        active.english_hash = ActiveValue::set(write.cache_key.clone());
+        active.lang_id = ActiveValue::set(language_id.to_string());
+        active.translation = ActiveValue::set(write.text.clone());
         active
             .update(db)
             .await
@@ -151,9 +214,9 @@ pub async fn save_translation(
     } else {
         Translation::insert(translation::ActiveModel {
             id: ActiveValue::set(translation_id),
-            english_hash: ActiveValue::set(cache_key.to_string()),
-            lang_id: ActiveValue::set(language_id),
-            translation: ActiveValue::set(translated_text.to_string()),
+            english_hash: ActiveValue::set(write.cache_key.clone()),
+            lang_id: ActiveValue::set(language_id.to_string()),
+            translation: ActiveValue::set(write.text.clone()),
         })
         .exec(db)
         .await
