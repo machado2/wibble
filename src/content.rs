@@ -44,7 +44,7 @@ impl GetContent for WibbleRequest {
         comments_page: Option<u64>,
     ) -> Result<Html<String>, Error> {
         let article = match query::load_content_page_article(self, slug).await? {
-            query::ContentPageArticle::Ready(article) => article,
+            query::ContentPageArticle::Ready(article) => *article,
             query::ContentPageArticle::Wait(wait_page) => return Ok(wait_page),
         };
 

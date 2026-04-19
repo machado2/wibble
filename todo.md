@@ -89,12 +89,12 @@ No release until every phase below is complete or explicitly removed from scope.
   - rendering helpers
   - comment query / pagination
   - public interaction policy
-- [ ] Split `src/repository.rs` into:
+- [x] Split `src/repository.rs` into:
   - `repositories/articles.rs`
   - `repositories/images.rs`
   - `repositories/examples.rs`
   - `repositories/translations.rs` if translation ships
-- [ ] Move slug generation into a dedicated article persistence service.
+- [x] Move slug generation into a dedicated article persistence service.
 
 ### 1.3 Startup and runtime state cleanup
 
@@ -445,7 +445,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - separate article loading, rendering, comments, and interaction policy
   - prepare for richer article/job metadata
 
-- [ ] `src/repository.rs`
+- [x] `src/repository.rs`
   - split by aggregate / concern
   - remove mixed storage + examples + article persistence responsibilities
 

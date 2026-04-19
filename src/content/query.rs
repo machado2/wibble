@@ -13,7 +13,7 @@ use crate::wibble_request::WibbleRequest;
 use super::policy::can_view_article;
 
 pub enum ContentPageArticle {
-    Ready(content::Model),
+    Ready(Box<content::Model>),
     Wait(Html<String>),
 }
 
@@ -160,7 +160,7 @@ pub async fn load_content_page_article(
     }
 
     if !article.generating {
-        return Ok(ContentPageArticle::Ready(article));
+        return Ok(ContentPageArticle::Ready(Box::new(article)));
     }
 
     let task_processing = matches!(
@@ -213,5 +213,5 @@ pub async fn load_content_page_article(
         ));
     }
 
-    Ok(ContentPageArticle::Ready(article))
+    Ok(ContentPageArticle::Ready(Box::new(article)))
 }

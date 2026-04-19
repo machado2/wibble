@@ -7,8 +7,9 @@ use crate::error::Error;
 use crate::image_generator::{generate_images, ImageGenerated, ImageToCreate};
 use crate::image_jobs::enqueue_pending_images;
 use crate::llm::{Llm, Message};
-use crate::repository::{
-    get_examples, save_article, save_pending_article, Article, PendingArticle,
+use crate::repositories::{
+    articles::{save_article, save_pending_article, Article, PendingArticle},
+    examples::get_examples,
 };
 
 static SYSTEM_MESSAGE_ARTICLE: &str = include_str!("../../prompts/system_article.txt");

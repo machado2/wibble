@@ -10,7 +10,7 @@ use crate::audit::log_audit;
 use crate::entities::{content as content_entity, content_image, prelude::*};
 use crate::error::Error;
 use crate::permissions::{can_edit_article, can_toggle_publish};
-use crate::repository::store_image_file;
+use crate::repositories::images::store_image_file;
 use crate::wibble_request::WibbleRequest;
 
 pub fn router() -> Router<AppState> {

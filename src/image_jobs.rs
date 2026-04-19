@@ -14,7 +14,7 @@ use crate::image_status::{
     is_pending_status, IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED, IMAGE_STATUS_PENDING,
     IMAGE_STATUS_PROCESSING,
 };
-use crate::repository::store_image_file;
+use crate::repositories::images::store_image_file;
 
 fn pending_resume_interval_seconds() -> u64 {
     env::var("IMAGE_RESUME_INTERVAL_SECONDS")
