@@ -154,6 +154,7 @@ fn content_template_renders_research_and_language_metadata() {
                 }
             ],
             "article_language_menu_open": false,
+            "article_research_metadata_present": true,
             "article_research_metadata": {
                 "mode_label": "Requested research desk",
                 "source_count": 3

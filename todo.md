@@ -23,9 +23,9 @@ No release until every phase below is complete or explicitly removed from scope.
   - `src/rate_limit.rs` uses keyed, tiered quotas by capability, the admin job monitor exposes audit/queue/rate-limit summaries, and generation/edit flows enforce editorial policy guardrails.
   - Research mode now fails closed on source leakage by forbidding citation scaffolding, rejecting internal source-domain mentions, and storing bounded source traces for review.
 
-- [ ] **Key refactor hotspots**
-  - The remaining shared-pattern cleanup is concentrated in `templates/*` and `static/style.css`.
-  - The runtime/service refactors are largely done; the last pass is about extracting repeated UI presentation patterns.
+- [x] **Key refactor hotspots**
+  - Shared workflow presentation patterns are now extracted across `templates/*` and `static/style.css`.
+  - The remaining runtime/service cleanup was resolved by normalizing article identifiers at the cross-table boundaries used by jobs, translations, and wait/content rendering.
 
 ## Release Principles
 
@@ -391,7 +391,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - translation caching and invalidation
   - browser-language selection with whitelist fallback
   - preference cookie behavior
-- [ ] Add integration tests for:
+- [x] Add integration tests for:
   - anonymous generation limits
   - logged-in quota differences
   - research-mode job lifecycle
@@ -400,15 +400,15 @@ No release until every phase below is complete or explicitly removed from scope.
   - publish/unpublish after edits
   - translation request -> source fallback -> background completion -> translated serve
   - server restart during translation job
-- [ ] Add template parse coverage and browser smoke coverage for new flows.
+- [x] Add template parse coverage and browser smoke coverage for new flows.
 
 ### 11.2 Manual verification
 
-- [ ] Verify recovery behavior after process restart while jobs are mid-flight.
-- [ ] Verify stale DB rows do not strand users on wait pages.
-- [ ] Verify article ownership and author editing.
-- [ ] Verify rate-limit messaging and login incentives.
-- [ ] Verify translation fallback, toggle, cookie persistence, and crash recovery.
+- [x] Verify recovery behavior after process restart while jobs are mid-flight.
+- [x] Verify stale DB rows do not strand users on wait pages.
+- [x] Verify article ownership and author editing.
+- [x] Verify rate-limit messaging and login incentives.
+- [x] Verify translation fallback, toggle, cookie persistence, and crash recovery.
 
 ## Phase 12: Release Hardening
 
@@ -425,7 +425,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - provider outages
   - search outages
   - abusive traffic spikes
-- [ ] Re-run design pass once new agent surfaces are in place.
+- [x] Re-run design pass once new agent surfaces are in place.
 
 ## Refactor Map by File
 
@@ -470,7 +470,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - introduce versioning and a prompt registry
   - stop relying on scattered include_str files without metadata
 
-- [ ] `templates/*` and `static/style.css`
+- [x] `templates/*` and `static/style.css`
   - once the new agent flows exist, extract repeating UI patterns for:
     - job status
     - agent question prompts
@@ -479,7 +479,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Release Checklist
 
-- [ ] Core refactor completed
+- [x] Core refactor completed
 - [x] Persisted job system completed
 - [x] Keyed quotas completed
 - [x] Ownership + author editing completed
@@ -488,6 +488,6 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Translation decision completed
 - [x] Automatic translation implementation completed
 - [x] Safety / moderation completed
-- [ ] Test coverage completed
+- [x] Test coverage completed
 - [x] Operational controls completed
-- [ ] Final browser QA completed
+- [x] Final browser QA completed
