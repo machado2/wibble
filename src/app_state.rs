@@ -71,6 +71,20 @@ impl AppState {
             .contains(image_id)
     }
 
+    pub async fn try_mark_translation_generation_started(&self, job_id: &str) -> bool {
+        self.active_translation_generation_ids
+            .lock()
+            .await
+            .insert(job_id.to_string())
+    }
+
+    pub async fn mark_translation_generation_finished(&self, job_id: &str) {
+        self.active_translation_generation_ids
+            .lock()
+            .await
+            .remove(job_id);
+    }
+
     pub async fn try_take_dead_link_recovery_slot(&self) -> bool {
         let mut timestamps = self.dead_link_recovery_timestamps.lock().await;
         let now = Instant::now();
@@ -120,6 +134,7 @@ impl AppState {
             active_article_generations: runtime_state.active_article_generations,
             active_generation_ids: runtime_state.active_generation_ids,
             active_image_generation_ids: runtime_state.active_image_generation_ids,
+            active_translation_generation_ids: runtime_state.active_translation_generation_ids,
             dead_link_recovery_max_per_day: runtime_state.dead_link_recovery_max_per_day,
             dead_link_recovery_timestamps: runtime_state.dead_link_recovery_timestamps,
             jwks_client,
@@ -147,6 +162,7 @@ pub struct AppState {
     pub active_article_generations: Arc<AtomicUsize>,
     pub active_generation_ids: Arc<Mutex<HashSet<String>>>,
     pub active_image_generation_ids: Arc<Mutex<HashSet<String>>>,
+    pub active_translation_generation_ids: Arc<Mutex<HashSet<String>>>,
     pub dead_link_recovery_max_per_day: usize,
     pub dead_link_recovery_timestamps: Arc<Mutex<Vec<Instant>>>,
     pub jwks_client: JwksClient,

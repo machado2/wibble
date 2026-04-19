@@ -299,8 +299,8 @@ No release until every phase below is complete or explicitly removed from scope.
 ### 8.2 Translation persistence and cache model
 
 - [x] Use `language` / `translation` tables for actual runtime persistence.
-- [ ] Add a translation service instead of leaving `src/llm/translate.rs` orphaned.
-- [ ] Persist translations so repeat reads do not re-run the model.
+- [x] Add a translation service instead of leaving `src/llm/translate.rs` orphaned.
+- [x] Persist translations so repeat reads do not re-run the model.
 - [ ] Cache by:
   - article id
   - source content revision / hash
@@ -314,7 +314,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 8.3 Background generation and resume behavior
 
-- [ ] Translation must happen asynchronously in the background when a requested language variant is missing.
+- [x] Translation must happen asynchronously in the background when a requested language variant is missing.
 - [ ] Add translation jobs with dedicated quotas and queue priority.
 - [ ] Add resume-safe translation jobs so work can continue gracefully after server crash or stop.
 - [ ] Ensure half-finished translations do not corrupt the cache or block reads.
@@ -351,7 +351,7 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Restrict automatic translation to the supported language whitelist.
 - [x] Do not allow user-supplied arbitrary target language strings.
 - [ ] Rate-limit translation creation separately from article generation.
-- [ ] Prevent translation spam from anonymous traffic by deduplicating in-flight translation jobs per article/language.
+- [x] Prevent translation spam from anonymous traffic by deduplicating in-flight translation jobs per article/language.
 
 ### 8.7 Editing and translation coherence
 

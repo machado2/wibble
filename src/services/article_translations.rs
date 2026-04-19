@@ -1,11 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
 use sea_orm::DatabaseConnection;
+use tracing::warn;
 
+use crate::app_state::AppState;
 use crate::error::Error;
 use crate::llm::prompt_registry::{supported_translation_languages, SupportedTranslationLanguage};
+use crate::llm::translate::Translate;
 use crate::repositories::translations::{
-    find_translations_for_hashes, translation_source_hash, StoredTranslation,
+    find_translations_for_hashes, save_translation, translation_source_hash, StoredTranslation,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,11 +19,72 @@ pub struct ArticleSourceText<'a> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OwnedArticleSourceText {
+    pub title: String,
+    pub description: String,
+    pub markdown: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CachedArticleTranslation {
     pub language: SupportedTranslationLanguage,
     pub title: String,
     pub description: String,
     pub markdown: String,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CachedArticleTranslationFields {
+    title: Option<String>,
+    description: Option<String>,
+    markdown: Option<String>,
+}
+
+impl OwnedArticleSourceText {
+    pub fn as_ref(&self) -> ArticleSourceText<'_> {
+        ArticleSourceText {
+            title: &self.title,
+            description: &self.description,
+            markdown: &self.markdown,
+        }
+    }
+}
+
+pub fn article_translation_job_key(
+    article_id: &str,
+    language: SupportedTranslationLanguage,
+) -> String {
+    format!("{}:{}", article_id, language.code)
+}
+
+pub async fn spawn_missing_article_translation(
+    state: AppState,
+    article_id: String,
+    source: OwnedArticleSourceText,
+    language: SupportedTranslationLanguage,
+) {
+    let job_key = article_translation_job_key(&article_id, language);
+    if !state
+        .try_mark_translation_generation_started(&job_key)
+        .await
+    {
+        return;
+    }
+
+    tokio::spawn(async move {
+        if let Err(err) =
+            ensure_cached_article_translation(&state.llm, &state.db, source.as_ref(), language)
+                .await
+        {
+            warn!(
+                article_id = %article_id,
+                language = language.code,
+                error = %err,
+                "Failed to generate cached article translation"
+            );
+        }
+        state.mark_translation_generation_finished(&job_key).await;
+    });
 }
 
 pub async fn cached_translation_languages(
@@ -46,6 +110,49 @@ pub async fn load_cached_article_translation(
         &translations,
         language,
     ))
+}
+
+pub async fn ensure_cached_article_translation<T: Translate>(
+    translator: &T,
+    db: &DatabaseConnection,
+    source: ArticleSourceText<'_>,
+    language: SupportedTranslationLanguage,
+) -> Result<CachedArticleTranslation, Error> {
+    let hashes = source_hashes(source);
+    let translations = find_translations_for_hashes(db, &hashes).await?;
+    let cached_fields = cached_translation_fields(&hashes, &translations, language);
+
+    let title = match cached_fields.title {
+        Some(title) => title,
+        None => {
+            let title = translator.translate(source.title, language).await?;
+            save_translation(db, source.title, language, &title).await?;
+            title
+        }
+    };
+    let description = match cached_fields.description {
+        Some(description) => description,
+        None => {
+            let description = translator.translate(source.description, language).await?;
+            save_translation(db, source.description, language, &description).await?;
+            description
+        }
+    };
+    let markdown = match cached_fields.markdown {
+        Some(markdown) => markdown,
+        None => {
+            let markdown = translator.translate(source.markdown, language).await?;
+            save_translation(db, source.markdown, language, &markdown).await?;
+            markdown
+        }
+    };
+
+    Ok(CachedArticleTranslation {
+        language,
+        title,
+        description,
+        markdown,
+    })
 }
 
 fn source_hashes(source: ArticleSourceText<'_>) -> Vec<String> {
@@ -81,26 +188,45 @@ fn complete_cached_languages(
         .collect()
 }
 
-fn assemble_cached_article_translation(
+fn cached_translation_fields(
     source_hashes: &[String],
     translations: &[StoredTranslation],
     language: SupportedTranslationLanguage,
-) -> Option<CachedArticleTranslation> {
+) -> CachedArticleTranslationFields {
     let translation_map = translations
         .iter()
         .filter(|translation| translation.language.code == language.code)
         .map(|translation| (translation.source_hash.as_str(), translation.text.as_str()))
         .collect::<HashMap<_, _>>();
 
-    let title = translation_map.get(source_hashes[0].as_str())?;
-    let description = translation_map.get(source_hashes[1].as_str())?;
-    let markdown = translation_map.get(source_hashes[2].as_str())?;
+    CachedArticleTranslationFields {
+        title: translation_map
+            .get(source_hashes[0].as_str())
+            .map(|text| (*text).to_string()),
+        description: translation_map
+            .get(source_hashes[1].as_str())
+            .map(|text| (*text).to_string()),
+        markdown: translation_map
+            .get(source_hashes[2].as_str())
+            .map(|text| (*text).to_string()),
+    }
+}
+
+fn assemble_cached_article_translation(
+    source_hashes: &[String],
+    translations: &[StoredTranslation],
+    language: SupportedTranslationLanguage,
+) -> Option<CachedArticleTranslation> {
+    let cached_fields = cached_translation_fields(source_hashes, translations, language);
+    let title = cached_fields.title?;
+    let description = cached_fields.description?;
+    let markdown = cached_fields.markdown?;
 
     Some(CachedArticleTranslation {
         language,
-        title: (*title).to_string(),
-        description: (*description).to_string(),
-        markdown: (*markdown).to_string(),
+        title,
+        description,
+        markdown,
     })
 }
 
@@ -110,8 +236,8 @@ mod tests {
     use crate::repositories::translations::StoredTranslation;
 
     use super::{
-        assemble_cached_article_translation, complete_cached_languages, source_hashes,
-        ArticleSourceText,
+        article_translation_job_key, assemble_cached_article_translation,
+        cached_translation_fields, complete_cached_languages, source_hashes, ArticleSourceText,
     };
 
     fn source_text() -> ArticleSourceText<'static> {
@@ -194,5 +320,34 @@ mod tests {
         assert_eq!(cached.title, "Relatorio");
         assert_eq!(cached.description, "Resumo");
         assert_eq!(cached.markdown, "Resumo\n\nCorpo");
+    }
+
+    #[test]
+    fn cached_translation_fields_preserve_partial_rows() {
+        let source = source_text();
+        let hashes = source_hashes(source);
+        let portuguese = find_supported_translation_language("pt").unwrap();
+
+        let translations = vec![StoredTranslation {
+            source_hash: hashes[0].clone(),
+            language: portuguese,
+            text: "Relatorio".to_string(),
+        }];
+
+        let cached_fields = cached_translation_fields(&hashes, &translations, portuguese);
+
+        assert_eq!(cached_fields.title.as_deref(), Some("Relatorio"));
+        assert!(cached_fields.description.is_none());
+        assert!(cached_fields.markdown.is_none());
+    }
+
+    #[test]
+    fn article_translation_job_key_is_per_article_and_language() {
+        let portuguese = find_supported_translation_language("pt").unwrap();
+
+        assert_eq!(
+            article_translation_job_key("article-1", portuguese),
+            "article-1:pt"
+        );
     }
 }

@@ -6,7 +6,8 @@ use crate::services::article_language::{
     ServedLanguageSource,
 };
 use crate::services::article_translations::{
-    cached_translation_languages, load_cached_article_translation, ArticleSourceText,
+    cached_translation_languages, load_cached_article_translation,
+    spawn_missing_article_translation, ArticleSourceText, OwnedArticleSourceText,
 };
 use crate::wibble_request::WibbleRequest;
 use axum::response::Html;
@@ -176,6 +177,11 @@ impl GetContent for WibbleRequest {
             description: &article.description,
             markdown,
         };
+        let owned_source_article = OwnedArticleSourceText {
+            title: article.title.clone(),
+            description: article.description.clone(),
+            markdown: markdown.to_string(),
+        };
         let mut available_translations =
             cached_translation_languages(&self.state.db, source_article).await?;
         let mut language_selection = resolve_article_language(
@@ -206,6 +212,15 @@ impl GetContent for WibbleRequest {
                 self.browser_translation_language,
                 &available_translations,
             );
+        }
+        if language_selection.translation_requested && !language_selection.translation_available {
+            spawn_missing_article_translation(
+                self.state.clone(),
+                article.id.clone(),
+                owned_source_article,
+                language_selection.preferred_language,
+            )
+            .await;
         }
         let rendered_title = translated_article
             .as_ref()
