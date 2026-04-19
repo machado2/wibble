@@ -18,6 +18,9 @@ use crate::llm::edit_agent::generate_edit_proposal;
 use crate::permissions::{can_edit_article, can_toggle_publish};
 use crate::repositories::images::store_image_file;
 use crate::services::article_translations::owned_article_source_text;
+use crate::services::editorial_policy::{
+    enforce_article_output_policy, enforce_edit_request_policy,
+};
 use crate::translation_jobs::refresh_article_translations_after_edit;
 use crate::wibble_request::WibbleRequest;
 
@@ -76,6 +79,7 @@ fn normalize_agent_edit_request(raw: &str) -> Result<String, Error> {
             MAX_AGENT_EDIT_REQUEST_CHARS
         )));
     }
+    enforce_edit_request_policy(request)?;
     Ok(request.to_string())
 }
 
@@ -133,6 +137,7 @@ async fn apply_article_edit(
     audit_details: Option<String>,
 ) -> Result<Redirect, Error> {
     let db = &wr.state.db;
+    enforce_article_output_policy(&data.title, &data.description, &data.markdown)?;
     let previous_source = owned_article_source_text(&article);
     let translatable_content_changed = article.title != data.title
         || article.description != data.description

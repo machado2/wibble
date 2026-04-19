@@ -243,7 +243,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - image tag count or image brief count
   - no forbidden markup
   - no direct prompt leakage
-- [ ] Add policy checks for real-person / defamation / high-risk content.
+- [x] Add policy checks for real-person / defamation / high-risk content.
 
 ## Phase 6: Agent-Based Editing
 
@@ -370,11 +370,11 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Phase 10: Safety, Moderation, and Editorial Policy
 
-- [ ] Define stricter rules for real people and real allegations.
+- [x] Define stricter rules for real people and real allegations.
 - [ ] Prevent the research agent from confidently fabricating citations or facts.
-- [ ] Add moderation rules for user prompts that target private individuals.
-- [ ] Add policy handling for risky contemporary events.
-- [ ] Add internal guidance for “deadpan but not defamatory”.
+- [x] Add moderation rules for user prompts that target private individuals.
+- [x] Add policy handling for risky contemporary events.
+- [x] Add internal guidance for “deadpan but not defamatory”.
 
 ## Phase 11: Testing and Verification
 

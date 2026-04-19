@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::image_generator::{ImageGenerated, ImageToCreate};
+use crate::services::editorial_policy::enforce_article_output_policy;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedArticleDraft {
@@ -151,6 +152,7 @@ pub fn validate_article_output(
     ensure_deadpan_tone(title, markdown)?;
     ensure_no_forbidden_markup(markdown)?;
     ensure_image_markdown_count(markdown, expected_images)?;
+    enforce_article_output_policy(title, "", markdown)?;
     Ok(())
 }
 
