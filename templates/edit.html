@@ -2,19 +2,22 @@
 
 {% block content %}
 <div class="edit-layout">
-  <div class="edit-header">
-    <h1>Edit article</h1>
-    <div class="edit-actions">
+  <div class="workflow-header edit-header">
+    <div class="workflow-header-copy">
+      <p class="home-eyebrow">Editorial desk</p>
+      <h1>Edit article</h1>
+    </div>
+    <div class="workflow-actions edit-actions">
       <a href="/content/{{ slug }}" class="btn btn-outline-secondary">View article</a>
     </div>
   </div>
 
-  <div class="card border-0">
+  <div class="card border-0 workflow-card">
     <div class="card-body">
-      <div class="alert alert-light border mb-4" role="status">
+      <div class="workflow-note workflow-note-muted mb-4" role="status">
         This workspace is available to the article owner and admins. Signed-in authors can revise draft copy, replace images, and publish when ready.
       </div>
-      <div class="card border mb-4">
+      <div class="card border mb-4 workflow-card workflow-card-inset">
         <div class="card-body">
           <h2 class="h4 mb-2">Agent edit</h2>
           <p class="text-muted mb-3">

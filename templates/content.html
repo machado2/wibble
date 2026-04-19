@@ -123,8 +123,8 @@
             </div>
           </dl>
 
-          {% if article_research_metadata %}
-          <div class="alert alert-light border mb-3" role="note">
+          {% if article_research_metadata_present %}
+          <div class="workflow-note workflow-note-compact mb-3" role="note">
             <strong>{{ article_research_metadata.mode_label }}.</strong>
             This filing was grounded against {{ article_research_metadata.source_count }} public-source brief{% if article_research_metadata.source_count != 1 %}s{% endif %} before drafting. The source trace is kept off-page so the article body stays deadpan.
           </div>

@@ -373,6 +373,8 @@ impl GetContent for WibbleRequest {
                 &(interactions_open && self.auth_user.is_some()),
             )
             .insert("comment_pager", &comment_page.pager);
+        let has_research_metadata = research_metadata.is_some();
+        template.insert("article_research_metadata_present", &has_research_metadata);
         if let Some(research_metadata) = research_metadata {
             template.insert("article_research_metadata", &research_metadata);
         }
@@ -391,12 +393,74 @@ impl GetContent for WibbleRequest {
 
 #[cfg(test)]
 mod tests {
+    use axum::response::Html;
+    use sea_orm::{ActiveModelTrait, ActiveValue, EntityTrait};
+
+    use crate::entities::{
+        article_job, content, prelude::ArticleJob, prelude::Content, prelude::TranslationJob,
+    };
     use crate::llm::prompt_registry::find_supported_translation_language;
+    use crate::rate_limit::RequesterTier;
+    use crate::services::article_jobs::{
+        ArticleJobService, ARTICLE_JOB_PHASE_COMPLETED, ARTICLE_JOB_STATUS_COMPLETED,
+    };
     use crate::services::article_language::resolve_article_language;
+    use crate::test_support::{preferred_language, TestContext};
+    use crate::wibble_request::WibbleRequest;
 
     use super::{
         article_language_href, build_article_language_options, parse_article_research_metadata,
+        GetContent,
     };
+
+    fn sample_article(id: &str, slug: &str, title: &str, generating: bool) -> content::ActiveModel {
+        content::ActiveModel {
+            id: ActiveValue::set(id.to_string()),
+            slug: ActiveValue::set(slug.to_string()),
+            content: ActiveValue::set(None),
+            created_at: ActiveValue::set(chrono::Utc::now().naive_utc()),
+            generating: ActiveValue::set(generating),
+            generation_started_at: ActiveValue::set(None),
+            generation_finished_at: ActiveValue::set(None),
+            flagged: ActiveValue::set(false),
+            model: ActiveValue::set("test-model".to_string()),
+            prompt_version: ActiveValue::set(1),
+            fail_count: ActiveValue::set(0),
+            description: ActiveValue::set("Officials said the bulletin remained strictly procedural.".to_string()),
+            image_id: ActiveValue::set(None),
+            title: ActiveValue::set(title.to_string()),
+            user_input: ActiveValue::set("Briefing request".to_string()),
+            image_prompt: ActiveValue::set(None),
+            user_email: ActiveValue::set(None),
+            votes: ActiveValue::set(7),
+            hot_score: ActiveValue::set(0.0),
+            generation_time_ms: ActiveValue::set(None),
+            flarum_id: ActiveValue::set(None),
+            markdown: ActiveValue::set(Some(
+                "## Committee Response\n\nThe standing committee accepted the memo without visible alarm.".to_string(),
+            )),
+            converted: ActiveValue::set(true),
+            longview_count: ActiveValue::set(0),
+            impression_count: ActiveValue::set(0),
+            click_count: ActiveValue::set(0),
+            author_email: ActiveValue::set(None),
+            published: ActiveValue::set(true),
+            recovered_from_dead_link: ActiveValue::set(false),
+        }
+    }
+
+    fn sample_request(state: crate::app_state::AppState, request_path: &str) -> WibbleRequest {
+        WibbleRequest {
+            state,
+            style: "style".to_string(),
+            request_path: request_path.to_string(),
+            auth_user: None,
+            requester_tier: RequesterTier::Anonymous,
+            rate_limit_key: "anon:test".to_string(),
+            browser_translation_language: None,
+            saved_article_language: None,
+        }
+    }
 
     #[test]
     fn article_language_href_uses_query_param_when_override_exists() {
@@ -499,5 +563,93 @@ mod tests {
             r#"{"research":{"mode":"auto","source_count":0}}"#,
         ))
         .is_none());
+    }
+
+    #[tokio::test]
+    async fn get_content_renders_research_metadata_and_translation_fallback() {
+        let ctx = TestContext::new().await;
+        sample_article("story-1", "research-bulletin", "Research Bulletin", false)
+            .insert(&ctx.state.db)
+            .await
+            .unwrap();
+        ArticleJob::insert(article_job::ActiveModel {
+            id: ActiveValue::set("job-story-1".to_string()),
+            article_id: ActiveValue::set(Some("story-1".to_string())),
+            requester_key: ActiveValue::set("anon:test".to_string()),
+            requester_tier: ActiveValue::set("ANONYMOUS".to_string()),
+            author_email: ActiveValue::set(None),
+            prompt: ActiveValue::set("Research prompt".to_string()),
+            feature_type: ActiveValue::set("create_research_manual".to_string()),
+            phase: ActiveValue::set(ARTICLE_JOB_PHASE_COMPLETED.to_string()),
+            status: ActiveValue::set(ARTICLE_JOB_STATUS_COMPLETED.to_string()),
+            usage_counters: ActiveValue::set(None),
+            preview_payload: ActiveValue::set(Some(
+                r#"{"research":{"mode":"manual","source_count":3}}"#.to_string(),
+            )),
+            error_summary: ActiveValue::set(None),
+            fail_count: ActiveValue::set(0),
+            created_at: ActiveValue::set(chrono::Utc::now().naive_utc()),
+            updated_at: ActiveValue::set(chrono::Utc::now().naive_utc()),
+            started_at: ActiveValue::set(None),
+            finished_at: ActiveValue::set(None),
+        })
+        .exec(&ctx.state.db)
+        .await
+        .unwrap();
+
+        let job = ArticleJobService::new(ctx.state.clone())
+            .finalize_job_state_for_article("story-1")
+            .await
+            .unwrap()
+            .expect("article job should load");
+        assert_eq!(
+            job.preview_payload.as_deref(),
+            Some(r#"{"research":{"mode":"manual","source_count":3}}"#)
+        );
+
+        let Html(html) = sample_request(ctx.state.clone(), "/content/research-bulletin")
+            .get_content(
+                "research-bulletin",
+                None,
+                None,
+                Some(preferred_language("pt")),
+            )
+            .await
+            .unwrap();
+
+        assert!(html.contains("Requested research desk"), "{}", html);
+        assert!(html.contains("public-source briefs"));
+        assert!(html.contains("Portuguese was requested"));
+        assert!(TranslationJob::find_by_id("story-1:pt".to_string())
+            .one(&ctx.state.db)
+            .await
+            .unwrap()
+            .is_some());
+    }
+
+    #[tokio::test]
+    async fn stale_generating_row_with_markdown_serves_content_and_clears_flag() {
+        let ctx = TestContext::new().await;
+        sample_article("story-2", "stale-bulletin", "Stale Bulletin", true)
+            .insert(&ctx.state.db)
+            .await
+            .unwrap();
+
+        let Html(html) = sample_request(ctx.state.clone(), "/content/stale-bulletin")
+            .get_content("stale-bulletin", None, None, None)
+            .await
+            .unwrap();
+        let article = Content::find_by_id("story-2".to_string())
+            .one(&ctx.state.db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(html.contains("Stale Bulletin"));
+        assert!(!html.contains("Waiting for clarification"));
+        assert!(
+            !article.generating,
+            "expected generating flag to clear after serving content"
+        );
     }
 }

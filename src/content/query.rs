@@ -3,6 +3,7 @@ use sea_orm::sea_query::Expr;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tracing::{event, warn, Level};
 
+use crate::article_id::{canonical_article_id, normalize_optional_content_model};
 use crate::auth::AuthUser;
 use crate::create::{render_wait_page, start_recover_article_for_slug};
 use crate::entities::{content, content_image, prelude::*};
@@ -33,6 +34,7 @@ async fn find_content_by_slug(
         .filter(content::Column::Slug.eq(slug))
         .one(db)
         .await
+        .map(normalize_optional_content_model)
         .map_err(|e| Error::Database(format!("Database error reading content: {}", e)))
 }
 
@@ -41,7 +43,7 @@ async fn clear_stale_generating_flag(
     article_id: &str,
 ) -> Result<(), Error> {
     Content::update_many()
-        .filter(content::Column::Id.eq(article_id.to_string()))
+        .filter(content::Column::Id.eq(canonical_article_id(article_id)))
         .col_expr(content::Column::Generating, Expr::value(false))
         .exec(db)
         .await
@@ -51,11 +53,11 @@ async fn clear_stale_generating_flag(
 
 async fn delete_stale_article(db: &DatabaseConnection, article_id: &str) -> Result<(), Error> {
     ContentImage::delete_many()
-        .filter(content_image::Column::ContentId.eq(article_id.to_string()))
+        .filter(content_image::Column::ContentId.eq(canonical_article_id(article_id)))
         .exec(db)
         .await
         .map_err(|e| Error::Database(format!("Failed to delete stale content images: {}", e)))?;
-    Content::delete_by_id(article_id.to_string())
+    Content::delete_by_id(canonical_article_id(article_id))
         .exec(db)
         .await
         .map_err(|e| Error::Database(format!("Failed to delete stale content row: {}", e)))?;
@@ -70,6 +72,7 @@ pub async fn find_article_by_slug(
         .filter(content::Column::Slug.eq(slug))
         .one(db)
         .await
+        .map(normalize_optional_content_model)
         .map_err(|e| Error::Database(format!("Error finding article: {}", e)))
 }
 
@@ -92,13 +95,14 @@ pub async fn find_article_after_id(
         .filter(content::Column::Id.gt(after_id.unwrap_or_default()))
         .one(db)
         .await
+        .map(normalize_optional_content_model)
         .map_err(|e| Error::Database(format!("Database error reading content: {}", e)))?
         .ok_or_else(|| content_not_found(slug))
 }
 
 pub async fn increment_click_count(db: &DatabaseConnection, article_id: &str) -> Result<(), Error> {
     Content::update_many()
-        .filter(content::Column::Id.eq(article_id.to_string()))
+        .filter(content::Column::Id.eq(canonical_article_id(article_id)))
         .col_expr(
             content::Column::ClickCount,
             Expr::col(content::Column::ClickCount).add(1),

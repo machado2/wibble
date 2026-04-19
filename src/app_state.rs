@@ -33,6 +33,9 @@ use schema_compat::{
     apply_startup_schema_compatibility, startup_schema_compatibility_mode, validate_required_schema,
 };
 
+#[cfg(test)]
+pub(crate) use schema_compat::apply_startup_schema_compatibility as apply_test_schema_compatibility;
+
 impl AppState {
     pub async fn try_mark_generation_started(&self, article_id: &str) -> bool {
         self.active_generation_ids

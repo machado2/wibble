@@ -17,6 +17,10 @@ pub mod translate;
 
 const URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
+fn chat_completion_url() -> String {
+    env::var("OPENROUTER_API_URL").unwrap_or_else(|_| URL.to_string())
+}
+
 #[derive(Debug, Clone)]
 pub struct Llm {
     reqwest: reqwest::Client,
@@ -58,7 +62,7 @@ impl Llm {
         trace!(body = ?body, "Sending request");
         let resp = self
             .reqwest
-            .post(URL)
+            .post(chat_completion_url())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", &self.api_key))
             .json(body)

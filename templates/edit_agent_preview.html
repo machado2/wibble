@@ -2,17 +2,20 @@
 
 {% block content %}
 <section class="edit-layout">
-  <div class="edit-header">
-    <h1>Agent edit preview</h1>
-    <div class="edit-actions">
+  <div class="workflow-header edit-header">
+    <div class="workflow-header-copy">
+      <p class="home-eyebrow">Editorial desk</p>
+      <h1>Agent edit preview</h1>
+    </div>
+    <div class="workflow-actions edit-actions">
       <a href="/content/{{ slug }}/edit" class="btn btn-outline-secondary">Back to editor</a>
       <a href="/content/{{ slug }}" class="btn btn-outline-secondary">View article</a>
     </div>
   </div>
 
-  <div class="card border-0 mb-4">
+  <div class="card border-0 mb-4 workflow-card">
     <div class="card-body">
-      <div class="alert alert-light border mb-3" role="status">
+      <div class="workflow-note workflow-note-muted mb-3" role="status">
         <strong>Requested change:</strong> {{ change_request }}
       </div>
       <p class="mb-2"><strong>Agent summary:</strong> {{ summary }}</p>
@@ -20,7 +23,7 @@
     </div>
   </div>
 
-  <div class="card border-0 mb-4">
+  <div class="card border-0 mb-4 workflow-card">
     <div class="card-body">
       <h2 class="h4 mb-3">Field preview</h2>
       <div class="row g-4">
@@ -38,19 +41,27 @@
     </div>
   </div>
 
-  <div class="card border-0 mb-4">
+  <div class="card border-0 mb-4 workflow-card">
     <div class="card-body">
       <h2 class="h4 mb-3">Diff</h2>
-      <h3 class="h6 text-muted">Title</h3>
-      <pre class="mb-4">{{ title_diff }}</pre>
-      <h3 class="h6 text-muted">Description</h3>
-      <pre class="mb-4">{{ description_diff }}</pre>
-      <h3 class="h6 text-muted">Markdown</h3>
-      <pre class="mb-0">{{ markdown_diff }}</pre>
+      <div class="diff-stack">
+        <div class="diff-block">
+          <h3 class="h6 text-muted">Title</h3>
+          <pre class="mb-0">{{ title_diff }}</pre>
+        </div>
+        <div class="diff-block">
+          <h3 class="h6 text-muted">Description</h3>
+          <pre class="mb-0">{{ description_diff }}</pre>
+        </div>
+        <div class="diff-block">
+          <h3 class="h6 text-muted">Markdown</h3>
+          <pre class="mb-0">{{ markdown_diff }}</pre>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="card border-0">
+  <div class="card border-0 workflow-card">
     <div class="card-body">
       <h2 class="h4 mb-3">Apply revision</h2>
       <form method="post" action="/content/{{ slug }}/edit/agent/apply">

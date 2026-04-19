@@ -1269,14 +1269,95 @@ textarea.form-control {
     margin: 0 auto;
 }
 
+.workflow-layout,
 .create-layout,
 .wait-layout {
     display: grid;
     gap: 1.5rem;
 }
 
-.create-shell {
+.workflow-shell {
     overflow: hidden;
+}
+
+.workflow-note-stack {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.workflow-note {
+    padding: 0.95rem 1rem;
+    border: 1px solid rgba(24, 58, 89, 0.14);
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, rgba(232, 239, 244, 0.78), rgba(255, 255, 255, 0.96));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    font-family: var(--font-ui);
+    font-size: 0.94rem;
+    line-height: 1.55;
+}
+
+.workflow-note strong {
+    color: var(--color-text);
+}
+
+.workflow-note-muted {
+    border-left-color: rgba(24, 58, 89, 0.5);
+    background: linear-gradient(135deg, rgba(243, 239, 230, 0.94), rgba(255, 255, 255, 0.96));
+}
+
+.workflow-note-warning {
+    border-left-color: #bf8700;
+    background: linear-gradient(135deg, rgba(255, 243, 212, 0.96), rgba(255, 255, 255, 0.96));
+}
+
+.workflow-note-danger {
+    border-left-color: #a4493d;
+    background: linear-gradient(135deg, rgba(252, 233, 229, 0.98), rgba(255, 255, 255, 0.96));
+    color: #7c2f26;
+}
+
+.workflow-note-compact {
+    font-size: 0.88rem;
+}
+
+.workflow-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.workflow-header-copy {
+    display: grid;
+    gap: 0.25rem;
+    max-width: 42rem;
+}
+
+.workflow-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.workflow-card {
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.workflow-card-inset {
+    background: #fcfbf8;
+}
+
+.status-chip-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.75rem;
+}
+
+.create-shell {
     background:
         radial-gradient(circle at top left, rgba(31, 111, 235, 0.14), transparent 36%),
         linear-gradient(140deg, #fffdfa 0%, #f3ede4 100%);
@@ -1297,6 +1378,76 @@ textarea.form-control {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+}
+
+.mode-card-fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.mode-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+    gap: 0.85rem;
+}
+
+.mode-card {
+    display: block;
+    position: relative;
+    cursor: pointer;
+}
+
+.mode-card-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.mode-card-copy {
+    display: grid;
+    gap: 0.45rem;
+    min-height: 100%;
+    padding: 1rem 1.05rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.92);
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        border-color 0.18s ease,
+        background 0.18s ease;
+}
+
+.mode-card:hover .mode-card-copy {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-soft);
+    border-color: rgba(24, 58, 89, 0.28);
+}
+
+.mode-card-input:checked + .mode-card-copy {
+    border-color: rgba(24, 58, 89, 0.42);
+    background: linear-gradient(135deg, rgba(232, 239, 244, 0.94), rgba(255, 255, 255, 0.98));
+    box-shadow: inset 0 0 0 1px rgba(24, 58, 89, 0.08);
+}
+
+.mode-card-input:disabled + .mode-card-copy {
+    opacity: 0.72;
+}
+
+.mode-card-title {
+    font-family: var(--font-ui);
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+}
+
+.mode-card-note {
+    color: var(--color-muted);
+    font-size: 0.92rem;
+    line-height: 1.55;
 }
 
 .create-textarea {
@@ -1389,8 +1540,6 @@ textarea.form-control {
 
 .wait-metrics {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-    gap: 0.75rem;
 }
 
 .wait-actions {
@@ -1406,12 +1555,7 @@ textarea.form-control {
 }
 
 .edit-header {
-    display: flex;
     align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 1rem;
-    margin-bottom: 2rem;
 }
 
 .edit-header h1 {
@@ -1420,9 +1564,7 @@ textarea.form-control {
 }
 
 .edit-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .edit-form-group {
@@ -1449,6 +1591,23 @@ textarea.form-control {
     margin-top: 2.5rem;
     padding-top: 2rem;
     border-top: 1px solid var(--color-border);
+}
+
+.diff-stack {
+    display: grid;
+    gap: 1rem;
+}
+
+.diff-block {
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: #fcfbf8;
+}
+
+.diff-block pre {
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .edit-images-section h2 {

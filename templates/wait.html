@@ -7,8 +7,8 @@
 {% endblock headers %}
 
 {% block content %}
-<section class="wait-layout">
-  <div class="card wait-shell border-0">
+<section class="workflow-layout wait-layout">
+  <div class="card wait-shell workflow-shell border-0">
     <div class="card-body wait-shell-body">
       <div class="wait-shell-copy">
         <p class="home-eyebrow">Generation status</p>
@@ -21,7 +21,7 @@
 
       <div class="wait-spinner-wrap">
         {% if wait_summary.clarification_question %}
-        <div class="alert alert-warning border mb-0 text-start" role="status">
+        <div class="workflow-note workflow-note-warning text-start mb-0" role="status">
           <strong>Clarification needed.</strong>
           {{ wait_summary.clarification_question }}
           {% if wait_summary.clarification_deadline %}
@@ -37,7 +37,7 @@
         {% endif %}
       </div>
 
-      <div class="wait-metrics" aria-label="Generation progress">
+      <div class="wait-metrics status-chip-grid" aria-label="Generation progress">
         {% for item in wait_summary.phase_items %}
         <div class="image-meta-chip">
           <span class="image-meta-label">{{ item.label }}</span>
@@ -62,7 +62,7 @@
         </div>
       </div>
 
-      <div class="alert alert-light border mb-0" role="status">
+      <div class="workflow-note workflow-note-muted mb-0" role="status">
         <strong>{{ wait_summary.publication_title }}</strong>
         {{ wait_summary.publication_note }}
       </div>

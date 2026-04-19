@@ -1,4 +1,5 @@
 pub mod app_state;
+pub mod article_id;
 pub mod audit;
 pub mod auth;
 pub mod content;
@@ -23,3 +24,6 @@ pub mod services;
 pub mod sitemap;
 pub mod translation_jobs;
 pub mod wibble_request;
+
+#[cfg(test)]
+pub mod test_support;

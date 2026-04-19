@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="create-layout">
-  <div class="card create-shell">
+<section class="workflow-layout create-layout">
+  <div class="card create-shell workflow-shell">
     <div class="card-body create-shell-body">
       <div class="create-intro">
         <p class="home-eyebrow">Prompt studio</p>
@@ -10,23 +10,25 @@
         <p class="card-text">
           Submit a scene, policy failure, administrative memo, or civic incident. The model works best when the premise is specific, official-sounding, and treated as entirely routine.
         </p>
-        <div class="alert alert-light border mb-3" role="status">
-          {% if logged_in %}
-          Signed-in filings open as private drafts under your account. You can revise the copy, replace images, and publish when ready.
-          {% else %}
-          Anonymous filings publish immediately if they succeed. Log in if you want an editable draft and explicit publish control.
-          {% endif %}
-        </div>
-        <div class="alert alert-light border mb-3" role="note">
-          <strong>Desk quota:</strong>
-          {{ standard_quota.hourly }} filings per hour / {{ standard_quota.daily }} per day on your current tier.
-          {% if logged_in %}
-          Owner editing is capped separately at {{ authenticated_edit_quota.hourly }} edit-agent previews per hour.
-          Research-backed filings run on their own desk at {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
-          Background translation refreshes stay on their own lane at {{ authenticated_translation_quota.hourly }} per hour.
-          {% else %}
-          Login raises the standard desk to {{ authenticated_standard_quota.hourly }} per hour, opens a bounded research desk at {{ authenticated_research_quota.hourly }} per hour, keeps results private as drafts, and unlocks the edit desk.
-          {% endif %}
+        <div class="workflow-note-stack">
+          <div class="workflow-note workflow-note-muted" role="status">
+            {% if logged_in %}
+            Signed-in filings open as private drafts under your account. You can revise the copy, replace images, and publish when ready.
+            {% else %}
+            Anonymous filings publish immediately if they succeed. Log in if you want an editable draft and explicit publish control.
+            {% endif %}
+          </div>
+          <div class="workflow-note workflow-note-compact" role="note">
+            <strong>Desk quota:</strong>
+            {{ standard_quota.hourly }} filings per hour / {{ standard_quota.daily }} per day on your current tier.
+            {% if logged_in %}
+            Owner editing is capped separately at {{ authenticated_edit_quota.hourly }} edit-agent previews per hour.
+            Research-backed filings run on their own desk at {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
+            Background translation refreshes stay on their own lane at {{ authenticated_translation_quota.hourly }} per hour.
+            {% else %}
+            Login raises the standard desk to {{ authenticated_standard_quota.hourly }} per hour, opens a bounded research desk at {{ authenticated_research_quota.hourly }} per hour, keeps results private as drafts, and unlocks the edit desk.
+            {% endif %}
+          </div>
         </div>
         <div class="create-tips">
           <span class="badge badge-info">Write it like a memo, not a punchline</span>
@@ -36,38 +38,42 @@
       </div>
 
       {% if error_message %}
-      <div class="alert alert-danger mb-4" role="alert">
+      <div class="workflow-note workflow-note-danger mb-4" role="alert">
         {{ error_message }}
       </div>
       {% endif %}
 
       <form action="/create" method="post" class="create-form">
-        <fieldset class="mb-3">
+        <fieldset class="mode-card-fieldset">
           <legend class="form-label">Desk mode</legend>
-          <div class="form-check mb-2">
-            <input class="form-check-input" type="radio" name="mode" id="mode-auto" value="auto"{% if selected_create_mode == "auto" %} checked{% endif %}>
-            <label class="form-check-label" for="mode-auto">
-              <strong>Automatic</strong>:
-              use the cheap drafting path unless the brief clearly needs public-source grounding and you are signed in.
+          <div class="mode-card-grid">
+            <label class="mode-card" for="mode-auto">
+              <input class="mode-card-input" type="radio" name="mode" id="mode-auto" value="auto"{% if selected_create_mode == "auto" %} checked{% endif %}>
+              <span class="mode-card-copy">
+                <span class="mode-card-title">Automatic</span>
+                <span class="mode-card-note">Use the cheap drafting path unless the brief clearly needs public-source grounding and you are signed in.</span>
+              </span>
             </label>
-          </div>
-          <div class="form-check mb-2">
-            <input class="form-check-input" type="radio" name="mode" id="mode-standard" value="standard"{% if selected_create_mode == "standard" %} checked{% endif %}>
-            <label class="form-check-label" for="mode-standard">
-              <strong>Standard</strong>:
-              no browsing, fastest queue, best for invented institutions and generic bureaucratic collapse.
+            <label class="mode-card" for="mode-standard">
+              <input class="mode-card-input" type="radio" name="mode" id="mode-standard" value="standard"{% if selected_create_mode == "standard" %} checked{% endif %}>
+              <span class="mode-card-copy">
+                <span class="mode-card-title">Standard</span>
+                <span class="mode-card-note">No browsing, fastest queue, best for invented institutions and generic bureaucratic collapse.</span>
+              </span>
             </label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="radio" name="mode" id="mode-research" value="research"{% if selected_create_mode == "research" %} checked{% endif %}{% if not logged_in %} disabled{% endif %}>
-            <label class="form-check-label" for="mode-research">
-              <strong>Research desk</strong>:
-              bounded public-source lookup for real institutions, policies, organizations, and public figures.
-              {% if logged_in %}
-              Separate quota: {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
-              {% else %}
-              <a href="/login">Log in</a> to enable it.
-              {% endif %}
+            <label class="mode-card" for="mode-research">
+              <input class="mode-card-input" type="radio" name="mode" id="mode-research" value="research"{% if selected_create_mode == "research" %} checked{% endif %}{% if not logged_in %} disabled{% endif %}>
+              <span class="mode-card-copy">
+                <span class="mode-card-title">Research desk</span>
+                <span class="mode-card-note">
+                  Bounded public-source lookup for real institutions, policies, organizations, and public figures.
+                  {% if logged_in %}
+                  Separate quota: {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
+                  {% else %}
+                  <a href="/login">Log in</a> to enable it.
+                  {% endif %}
+                </span>
+              </span>
             </label>
           </div>
         </fieldset>

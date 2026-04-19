@@ -3,6 +3,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
 
 use crate::app_state::AppState;
+use crate::article_id::normalize_optional_content_model;
 use crate::create::clarify::parse_clarification_request;
 use crate::entities::prelude::*;
 use crate::entities::{content, content_image};
@@ -203,6 +204,7 @@ async fn build_wait_summary(
         .filter(content::Column::Id.eq(id))
         .one(&state.db)
         .await
+        .map(normalize_optional_content_model)
         .map_err(|e| Error::Database(format!("Error loading article wait state: {}", e)))?;
 
     if let Some(article) = article {

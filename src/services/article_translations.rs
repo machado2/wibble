@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use sea_orm::DatabaseConnection;
 
+use crate::article_id::canonical_article_id;
 use crate::entities::content;
 use crate::error::Error;
 use crate::llm::prompt_registry::{
@@ -64,7 +65,7 @@ impl OwnedArticleSourceText {
 
 pub fn owned_article_source_text(article: &content::Model) -> Option<OwnedArticleSourceText> {
     Some(OwnedArticleSourceText {
-        article_id: article.id.clone(),
+        article_id: canonical_article_id(&article.id),
         title: article.title.clone(),
         description: article.description.clone(),
         markdown: article.markdown.clone()?,
