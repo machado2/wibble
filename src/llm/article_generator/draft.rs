@@ -3,7 +3,9 @@ use crate::image_generator::ImageToCreate;
 use crate::llm::Llm;
 
 use super::image_briefs::generate_image_briefs;
-use super::prompt_builder::{build_article_messages, build_placeholder_messages};
+use super::prompt_builder::{
+    build_article_messages, build_placeholder_messages, build_research_article_messages,
+};
 use super::validation::{
     ensure_image_briefs_present, ensure_minimum_paragraph_count, parse_titled_markdown,
     split_paragraphs, ParsedArticleDraft,
@@ -56,6 +58,16 @@ pub async fn request_article_draft(
     model: &str,
 ) -> Result<String, Error> {
     llm.request_chat(build_article_messages(instructions), model)
+        .await
+        .map(|article| article.trim().to_string())
+}
+
+pub async fn request_researched_article_draft(
+    llm: &Llm,
+    instructions: &str,
+    model: &str,
+) -> Result<String, Error> {
+    llm.request_chat(build_research_article_messages(instructions), model)
         .await
         .map(|article| article.trim().to_string())
 }

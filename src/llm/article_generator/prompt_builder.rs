@@ -1,5 +1,6 @@
 use crate::llm::prompt_registry::{
     article_generation_prompt, image_brief_generation_prompt, placeholder_generation_prompt,
+    research_article_generation_prompt,
 };
 use crate::llm::Message;
 
@@ -12,6 +13,14 @@ pub fn build_placeholder_messages(
     instructions: &str,
 ) -> Vec<Message> {
     build_messages(placeholder_generation_prompt().body, examples, instructions)
+}
+
+pub fn build_research_article_messages(instructions: &str) -> Vec<Message> {
+    build_messages(
+        research_article_generation_prompt().body,
+        None,
+        instructions,
+    )
 }
 
 pub fn build_illustrator_messages(article: &str) -> Vec<Message> {
@@ -41,10 +50,14 @@ fn build_messages(
 mod tests {
     use crate::llm::prompt_registry::{
         article_generation_prompt, image_brief_generation_prompt, placeholder_generation_prompt,
+        research_article_generation_prompt,
     };
     use crate::llm::Message;
 
-    use super::{build_article_messages, build_illustrator_messages, build_placeholder_messages};
+    use super::{
+        build_article_messages, build_illustrator_messages, build_placeholder_messages,
+        build_research_article_messages,
+    };
 
     #[test]
     fn build_article_messages_uses_registered_prompt_and_user_input() {
@@ -92,6 +105,20 @@ mod tests {
         assert!(matches!(
             &messages[1],
             Message::User(body) if body == "Full article body"
+        ));
+    }
+
+    #[test]
+    fn build_research_article_messages_uses_research_prompt() {
+        let messages = build_research_article_messages("Research-backed request");
+
+        assert!(matches!(
+            &messages[0],
+            Message::System(body) if body == research_article_generation_prompt().body
+        ));
+        assert!(matches!(
+            &messages[1],
+            Message::User(body) if body == "Research-backed request"
         ));
     }
 }

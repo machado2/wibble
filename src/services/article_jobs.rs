@@ -23,6 +23,7 @@ use crate::entities::{article_job, content, content_image, prelude::*};
 use crate::error::Error;
 use crate::image_jobs::enqueue_pending_images;
 use crate::image_status::{is_pending_status, IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED};
+use crate::llm::article_generator::ResearchModeSource;
 use crate::rate_limit::{ArticleRateLimit, RequesterTier};
 
 pub const ARTICLE_JOB_STATUS_QUEUED: &str = "queued";
@@ -54,6 +55,8 @@ pub struct ArticleJobService {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArticleJobFeatureType {
     Create,
+    CreateResearchAuto,
+    CreateResearchManual,
     DeadLinkRecovery,
 }
 
@@ -61,6 +64,8 @@ impl ArticleJobFeatureType {
     fn as_str(self) -> &'static str {
         match self {
             Self::Create => "create",
+            Self::CreateResearchAuto => "create_research_auto",
+            Self::CreateResearchManual => "create_research_manual",
             Self::DeadLinkRecovery => "dead_link_recovery",
         }
     }
@@ -68,8 +73,27 @@ impl ArticleJobFeatureType {
     fn from_str(value: &str) -> Option<Self> {
         match value {
             "create" => Some(Self::Create),
+            "create_research_auto" => Some(Self::CreateResearchAuto),
+            "create_research_manual" => Some(Self::CreateResearchManual),
             "dead_link_recovery" => Some(Self::DeadLinkRecovery),
             _ => None,
+        }
+    }
+
+    fn from_research_mode(mode: Option<ResearchModeSource>) -> Self {
+        match mode {
+            Some(ResearchModeSource::Auto) => Self::CreateResearchAuto,
+            Some(ResearchModeSource::Manual) => Self::CreateResearchManual,
+            None => Self::Create,
+        }
+    }
+
+    fn research_mode(self) -> Option<ResearchModeSource> {
+        match self {
+            Self::Create => None,
+            Self::CreateResearchAuto => Some(ResearchModeSource::Auto),
+            Self::CreateResearchManual => Some(ResearchModeSource::Manual),
+            Self::DeadLinkRecovery => None,
         }
     }
 }
@@ -90,6 +114,7 @@ impl ArticleJobRequest {
         author_email: Option<String>,
         requester_tier: RequesterTier,
         rate_limit_key: String,
+        research_mode: Option<ResearchModeSource>,
     ) -> Self {
         Self {
             article_id: None,
@@ -97,7 +122,7 @@ impl ArticleJobRequest {
             requester_tier: requester_tier_label(requester_tier).to_string(),
             author_email,
             prompt,
-            feature_type: ArticleJobFeatureType::Create,
+            feature_type: ArticleJobFeatureType::from_research_mode(research_mode),
         }
     }
 
@@ -120,9 +145,10 @@ pub struct ArticleJobTrace {
 }
 
 impl ArticleJobTrace {
-    pub fn create() -> Self {
+    pub fn create(research_mode: Option<ResearchModeSource>) -> Self {
+        let feature_type = ArticleJobFeatureType::from_research_mode(research_mode);
         Self {
-            job_kind: ArticleJobFeatureType::Create.as_str(),
+            job_kind: feature_type.as_str(),
             recovery_slug: None,
         }
     }
@@ -140,7 +166,11 @@ impl ArticleJobTrace {
                 job_kind: ArticleJobFeatureType::DeadLinkRecovery.as_str(),
                 recovery_slug: None,
             },
-            _ => Self::create(),
+            Some(feature_type) => Self {
+                job_kind: feature_type.as_str(),
+                recovery_slug: None,
+            },
+            None => Self::create(None),
         }
     }
 }
@@ -205,6 +235,29 @@ impl ArticleJobService {
                     limit = limit_name,
                     tier = ?requester_tier,
                     "Rejected article creation due to article generation rate limit",
+                );
+                Error::RateLimited
+            })
+    }
+
+    pub fn check_research_rate_limit(
+        &self,
+        requester_tier: RequesterTier,
+        rate_limit_key: &str,
+    ) -> Result<(), Error> {
+        self.state
+            .rate_limit_state
+            .check_research_generation_limit(requester_tier, rate_limit_key)
+            .map_err(|limit| {
+                let limit_name = match limit {
+                    ArticleRateLimit::Hourly => "hourly",
+                    ArticleRateLimit::Daily => "daily",
+                };
+                event!(
+                    Level::WARN,
+                    limit = limit_name,
+                    tier = ?requester_tier,
+                    "Rejected article creation due to research generation rate limit",
                 );
                 Error::RateLimited
             })
@@ -353,6 +406,34 @@ impl ArticleJobService {
         )
         .await?;
         Ok(Some(updated))
+    }
+
+    pub async fn merge_preview_payload(&self, id: &str, payload: Value) -> Result<(), Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Err(Error::NotFound(Some(format!(
+                "Article job {} not found",
+                id
+            ))));
+        };
+        let mut object = job
+            .preview_payload
+            .as_deref()
+            .and_then(|value| serde_json::from_str::<Value>(value).ok())
+            .and_then(|value| value.as_object().cloned())
+            .unwrap_or_default();
+        if let Some(payload_object) = payload.as_object() {
+            for (key, value) in payload_object {
+                object.insert(key.clone(), value.clone());
+            }
+        }
+
+        let mut active: article_job::ActiveModel = job.into();
+        active.preview_payload = ActiveValue::set(Some(Value::Object(object).to_string()));
+        active.updated_at = ActiveValue::set(now());
+        active.update(&self.state.db).await.map_err(|e| {
+            Error::Database(format!("Error updating article job preview payload: {}", e))
+        })?;
+        Ok(())
     }
 
     pub async fn submit_clarification_answer(
@@ -706,8 +787,11 @@ impl ArticleJobService {
         active.article_id = ActiveValue::set(Some(article.id.clone()));
         active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_RENDERING_IMAGES.to_string());
         active.status = ActiveValue::set(ARTICLE_JOB_STATUS_PROCESSING.to_string());
-        active.preview_payload =
-            ActiveValue::set(Some(build_job_preview_payload(article, progress)));
+        active.preview_payload = ActiveValue::set(Some(build_job_preview_payload(
+            job.preview_payload.as_deref(),
+            article,
+            progress,
+        )));
         active.usage_counters = ActiveValue::set(Some(merge_job_usage_counters(
             job.usage_counters.as_deref(),
             &job.prompt,
@@ -739,8 +823,11 @@ impl ArticleJobService {
         active.article_id = ActiveValue::set(Some(article.id.clone()));
         active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_COMPLETED.to_string());
         active.status = ActiveValue::set(ARTICLE_JOB_STATUS_COMPLETED.to_string());
-        active.preview_payload =
-            ActiveValue::set(Some(build_job_preview_payload(article, progress)));
+        active.preview_payload = ActiveValue::set(Some(build_job_preview_payload(
+            job.preview_payload.as_deref(),
+            article,
+            progress,
+        )));
         active.usage_counters = ActiveValue::set(Some(merge_job_usage_counters(
             job.usage_counters.as_deref(),
             &job.prompt,
@@ -972,7 +1059,7 @@ fn build_generation_future(
     state: AppState,
     job: &article_job::Model,
 ) -> Result<BoxedArticleFuture, Error> {
-    let Some(_feature_type) = ArticleJobFeatureType::from_str(&job.feature_type) else {
+    let Some(feature_type) = ArticleJobFeatureType::from_str(&job.feature_type) else {
         return Err(Error::BadRequest(format!(
             "Unsupported article job feature type: {}",
             job.feature_type
@@ -981,8 +1068,9 @@ fn build_generation_future(
     let job_id = job.id.clone();
     let prompt = job.prompt.clone();
     let author_email = job.author_email.clone();
+    let research_mode = feature_type.research_mode();
     Ok(Box::pin(async move {
-        create_article(&state, job_id, prompt, author_email).await
+        create_article(&state, job_id, prompt, author_email, research_mode).await
     }))
 }
 
@@ -1047,18 +1135,36 @@ fn merge_job_usage_counters(
     value.to_string()
 }
 
-fn build_job_preview_payload(article: &content::Model, progress: &ImageProgress) -> String {
+fn build_job_preview_payload(
+    existing: Option<&str>,
+    article: &content::Model,
+    progress: &ImageProgress,
+) -> String {
+    let mut payload = existing
+        .and_then(|value| serde_json::from_str::<Value>(value).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
     let publication_state = if article.published { "public" } else { "draft" };
-    serde_json::json!({
-        "article_id": article.id,
-        "slug": article.slug,
-        "title": article.title,
-        "publication_state": publication_state,
-        "image_total": progress.total,
-        "image_completed": progress.completed,
-        "image_failed": progress.failed,
-    })
-    .to_string()
+    payload.insert("article_id".to_string(), Value::from(article.id.clone()));
+    payload.insert("slug".to_string(), Value::from(article.slug.clone()));
+    payload.insert("title".to_string(), Value::from(article.title.clone()));
+    payload.insert(
+        "publication_state".to_string(),
+        Value::from(publication_state),
+    );
+    payload.insert(
+        "image_total".to_string(),
+        Value::from(progress.total as u64),
+    );
+    payload.insert(
+        "image_completed".to_string(),
+        Value::from(progress.completed as u64),
+    );
+    payload.insert(
+        "image_failed".to_string(),
+        Value::from(progress.failed as u64),
+    );
+    Value::Object(payload).to_string()
 }
 
 fn article_job_resume_interval_seconds() -> u64 {

@@ -13,20 +13,19 @@ No release until every phase below is complete or explicitly removed from scope.
   - Translation jobs are now persisted and resume-safe, with queue priority, retry/backoff, and edit-triggered invalidation/refresh.
   - Remaining translation release work is about operational hardening and browser QA, not missing runtime plumbing.
 
-- [ ] **Research-mode and edit-agent orchestration are still missing**
-  - The default generation path now uses a bounded runtime with structured steps, usage accounting, validation, and policy limits.
+- [x] **Research-mode and edit-agent orchestration are implemented**
+  - The default generation path uses a bounded runtime with structured tool steps, usage accounting, validation, and policy limits.
   - Create and dead-link recovery jobs use persisted `article_job` rows instead of `src/tasklist.rs`.
-  - Preview/review editing and single-question pause/resume now use persisted job state.
-  - Remaining work in this area is bounded research mode and its source-handling contract.
+  - Preview/review editing and single-question pause/resume use persisted job state.
+  - Bounded research mode now runs through the same job model with restart-safe feature typing and source-trace metadata.
 
-- [ ] **Abuse controls still need agent-specific hardening**
+- [x] **Abuse controls include agent-specific hardening**
   - `src/rate_limit.rs` uses keyed, tiered quotas by capability, the admin job monitor exposes audit/queue/rate-limit summaries, and generation/edit flows enforce editorial policy guardrails.
-  - The remaining safety gap is fail-closed source handling for future research mode, especially fabricated-citation prevention.
+  - Research mode now fails closed on source leakage by forbidding citation scaffolding, rejecting internal source-domain mentions, and storing bounded source traces for review.
 
 - [ ] **Key refactor hotspots**
-  - `src/content.rs` still needs a final cleanup pass around richer article/job metadata.
-  - `src/llm/article_generator.rs` still needs research-mode and edit-agent reuse.
-  - `templates/*` and `static/style.css` still need shared patterns for job state, previews, and quota notices.
+  - The remaining shared-pattern cleanup is concentrated in `templates/*` and `static/style.css`.
+  - The runtime/service refactors are largely done; the last pass is about extracting repeated UI presentation patterns.
 
 ## Release Principles
 
@@ -178,13 +177,13 @@ No release until every phase below is complete or explicitly removed from scope.
 ## Phase 4: Agent Runtime Architecture
 
 - [x] Add a bounded agent orchestration layer instead of embedding logic directly in handlers.
-- [ ] Define structured tools available to the generation agent:
+- [x] Define structured tools available to the generation agent:
   - article planning
   - limited web search / fetch
   - draft writer
   - image brief planner
   - self-critique / policy check
-- [ ] Define structured tools available to the edit agent:
+- [x] Define structured tools available to the edit agent:
   - load article
   - apply requested change
   - summarize diff
@@ -212,21 +211,21 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 5.2 Research mode
 
-- [ ] Add a bounded research mode for prompts involving:
+- [x] Add a bounded research mode for prompts involving:
   - current events
   - named public institutions
   - public figures
   - real policies
   - real organizations
-- [ ] Define when research mode is:
+- [x] Define when research mode is:
   - auto-enabled
   - manually requested
   - login-gated
-- [ ] Add source handling rules:
+- [x] Add source handling rules:
   - prioritize primary or reputable sources
   - keep only brief extracted context
   - store citations for internal traceability
-- [ ] Add a “source-aware satire” prompt layer so tone remains deadpan instead of turning into summary prose.
+- [x] Add a “source-aware satire” prompt layer so tone remains deadpan instead of turning into summary prose.
 
 ### 5.3 Clarifying question flow
 
@@ -271,7 +270,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - placeholder generation
   - image brief generation
   - translation
-- [ ] Extend prompt versioning to:
+- [x] Extend prompt versioning to:
   - research-enabled generation
   - [x] edit-agent rewriting
 - [x] Move prompt assembly rules out of scattered string constants into a prompt module.
@@ -358,7 +357,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Phase 9: UI and Product Flow
 
-- [ ] Update create UI for mode selection:
+- [x] Update create UI for mode selection:
   - standard draft
   - research-enabled draft
   - maybe “requires login”
@@ -367,12 +366,12 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Add preview/diff UI for agent edits.
 - [x] Add quota messaging and login upsell copy.
 - [x] Add translation toggle UI and fallback messaging that does not interrupt reading.
-- [ ] Add article metadata display if research mode used internally and that becomes product-relevant.
+- [x] Add article metadata display if research mode used internally and that becomes product-relevant.
 
 ## Phase 10: Safety, Moderation, and Editorial Policy
 
 - [x] Define stricter rules for real people and real allegations.
-- [ ] Prevent the research agent from confidently fabricating citations or facts.
+- [x] Prevent the research agent from confidently fabricating citations or facts.
 - [x] Add moderation rules for user prompts that target private individuals.
 - [x] Add policy handling for risky contemporary events.
 - [x] Add internal guidance for “deadpan but not defamatory”.
@@ -439,7 +438,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - split orchestration, wait logic, recovery, and form rendering
 - [x] create flow job-oriented service layer
 
-- [ ] `src/content.rs`
+- [x] `src/content.rs`
   - separate article loading, rendering, comments, and interaction policy
   - prepare for richer article/job metadata
 
@@ -459,7 +458,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - replace with richer persisted job model
   - preserve in-memory active tracking as an optimization only
 
-- [ ] `src/llm/article_generator.rs`
+- [x] `src/llm/article_generator.rs`
   - [x] split planning, generation, parsing, validation, and image brief generation
   - add support for research mode and edit-agent reuse
 
@@ -484,11 +483,11 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Persisted job system completed
 - [x] Keyed quotas completed
 - [x] Ownership + author editing completed
-- [ ] Agent generation completed
+- [x] Agent generation completed
 - [x] Agent editing completed
 - [x] Translation decision completed
 - [x] Automatic translation implementation completed
-- [ ] Safety / moderation completed
+- [x] Safety / moderation completed
 - [ ] Test coverage completed
-- [ ] Operational controls completed
+- [x] Operational controls completed
 - [ ] Final browser QA completed

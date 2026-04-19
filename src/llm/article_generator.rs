@@ -2,6 +2,7 @@ mod draft;
 mod image_briefs;
 mod planning;
 mod prompt_builder;
+mod research;
 mod runtime;
 mod validation;
 
@@ -9,20 +10,27 @@ use crate::app_state::AppState;
 use crate::error::Error;
 use crate::image_generator::generate_images;
 use crate::image_jobs::enqueue_pending_images;
-use crate::llm::prompt_registry::{article_generation_prompt, placeholder_generation_prompt};
+use crate::llm::prompt_registry::{
+    article_generation_prompt, placeholder_generation_prompt, research_article_generation_prompt,
+};
 use crate::repositories::{
     articles::{save_article, save_pending_article, Article, PendingArticle},
     examples::get_examples,
 };
+use crate::services::article_jobs::ArticleJobService;
 
 pub use draft::{generate_article_parts, ArticleData};
-use draft::{generate_placeholder_article_draft, request_article_draft};
+use draft::{
+    generate_placeholder_article_draft, request_article_draft, request_researched_article_draft,
+};
 use image_briefs::{generate_image_briefs, replace_placeholder_tags_with_markdown};
 use planning::{compose_article_markdown, leading_paragraph};
+use research::gather_research_packet;
+pub use research::{prompt_requires_research, resolve_research_mode, ResearchModeSource};
 use runtime::{BoundedGenerationRuntime, GenerationTool};
 use validation::{
     ensure_generated_images_present, ensure_image_briefs_present,
-    ensure_placeholder_images_present, parse_titled_markdown,
+    ensure_placeholder_images_present, parse_titled_markdown, validate_researched_article_output,
 };
 pub use validation::{ensure_minimum_paragraph_count, split_paragraphs, validate_article_output};
 
@@ -139,6 +147,69 @@ pub async fn create_article_attempt(
             title: article.title,
             markdown,
             prompt_version: article_generation_prompt().version,
+            instructions,
+            start_time,
+            model: model.to_string(),
+            description,
+            images,
+            author_email,
+        },
+    )
+    .await?;
+    Ok(())
+}
+
+pub async fn create_researched_article_attempt(
+    state: &AppState,
+    id: String,
+    instructions: String,
+    model: &str,
+    author_email: Option<String>,
+    mode_source: ResearchModeSource,
+) -> Result<(), Error> {
+    let db = &state.db;
+    let start_time = chrono::Utc::now().naive_local();
+    let mut runtime =
+        BoundedGenerationRuntime::new_research(state.clone(), id.clone(), &instructions).await?;
+    runtime
+        .begin_tool(GenerationTool::ArticlePlanning, false)
+        .await?;
+    let research = gather_research_packet(state, &mut runtime, &instructions, mode_source).await?;
+    ArticleJobService::new(state.clone())
+        .merge_preview_payload(&id, research.preview_payload())
+        .await?;
+    runtime
+        .begin_tool(GenerationTool::DraftWriter, true)
+        .await?;
+    let researched_prompt = research.prompt_context(&instructions);
+    let article = request_researched_article_draft(&state.llm, &researched_prompt, model).await?;
+    let article = parse_titled_markdown(&article)?;
+    let paragraphs = split_paragraphs(&article.body);
+    ensure_minimum_paragraph_count(&paragraphs)?;
+    runtime
+        .begin_tool(GenerationTool::ImageBriefPlanner, true)
+        .await?;
+    let image_briefs = generate_image_briefs(&state.llm, &article.body, model).await?;
+    ensure_image_briefs_present(&image_briefs)?;
+    let images = generate_images(state, image_briefs).await?;
+    ensure_generated_images_present(&images)?;
+
+    let markdown = compose_article_markdown(paragraphs, &images);
+    runtime
+        .begin_tool(GenerationTool::PolicyCheck, false)
+        .await?;
+    validate_researched_article_output(&article.title, &markdown, images.len(), &research.sources)?;
+    runtime.mark_ready_for_review().await?;
+    runtime.ensure_not_cancelled().await?;
+    let description = leading_paragraph(&markdown);
+
+    save_article(
+        db,
+        Article {
+            id,
+            title: article.title,
+            markdown,
+            prompt_version: research_article_generation_prompt().version,
             instructions,
             start_time,
             model: model.to_string(),

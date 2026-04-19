@@ -405,6 +405,18 @@ impl RateLimitState {
             })
     }
 
+    pub fn check_research_generation_limit(
+        &self,
+        tier: RequesterTier,
+        key: &str,
+    ) -> Result<(), ArticleRateLimit> {
+        self.check_capability_limit(RateLimitCapability::ResearchGeneration, tier, key)
+            .map_err(|window| match window {
+                LimitWindow::Hourly => ArticleRateLimit::Hourly,
+                LimitWindow::Daily => ArticleRateLimit::Daily,
+            })
+    }
+
     pub fn check_translation_generation_limit(
         &self,
         tier: RequesterTier,

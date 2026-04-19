@@ -6,7 +6,7 @@ use crate::app_state::AppState;
 use crate::error::Error;
 use crate::services::article_jobs::{
     ArticleJobService, ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_QUEUED,
-    ARTICLE_JOB_PHASE_READY_FOR_REVIEW, ARTICLE_JOB_PHASE_WRITING,
+    ARTICLE_JOB_PHASE_READY_FOR_REVIEW, ARTICLE_JOB_PHASE_RESEARCHING, ARTICLE_JOB_PHASE_WRITING,
 };
 
 const DEFAULT_MAX_PROMPT_CHARS: usize = 600;
@@ -17,9 +17,18 @@ const DEFAULT_MAX_FETCHED_CONTENT_CHARS: usize = 0;
 const DEFAULT_MAX_SEARCHES: u32 = 0;
 const DEFAULT_MAX_SOURCES: u32 = 0;
 
+pub const GENERATION_TOOL_REGISTRY: [GenerationTool; 5] = [
+    GenerationTool::ArticlePlanning,
+    GenerationTool::LimitedWebResearch,
+    GenerationTool::DraftWriter,
+    GenerationTool::ImageBriefPlanner,
+    GenerationTool::PolicyCheck,
+];
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GenerationTool {
     ArticlePlanning,
+    LimitedWebResearch,
     DraftWriter,
     ImageBriefPlanner,
     PolicyCheck,
@@ -29,18 +38,36 @@ impl GenerationTool {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ArticlePlanning => "article_planning",
+            Self::LimitedWebResearch => "limited_web_research",
             Self::DraftWriter => "draft_writer",
             Self::ImageBriefPlanner => "image_brief_planner",
             Self::PolicyCheck => "policy_check",
         }
     }
 
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::ArticlePlanning => "Outline the article angle and structural plan",
+            Self::LimitedWebResearch => {
+                "Run the bounded public-web search and fetch flow for grounded briefs"
+            }
+            Self::DraftWriter => "Produce the article draft from the selected prompt layer",
+            Self::ImageBriefPlanner => "Generate illustration briefs for the article body",
+            Self::PolicyCheck => "Validate the output against formatting and safety constraints",
+        }
+    }
+
     fn phase(self) -> &'static str {
         match self {
             Self::ArticlePlanning => ARTICLE_JOB_PHASE_PLANNING,
+            Self::LimitedWebResearch => ARTICLE_JOB_PHASE_RESEARCHING,
             Self::PolicyCheck => ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
             Self::DraftWriter | Self::ImageBriefPlanner => ARTICLE_JOB_PHASE_WRITING,
         }
+    }
+
+    pub fn registry() -> &'static [GenerationTool] {
+        &GENERATION_TOOL_REGISTRY
     }
 }
 
@@ -67,6 +94,18 @@ impl GenerationExecutionPolicy {
             max_sources: DEFAULT_MAX_SOURCES,
         }
     }
+
+    pub fn research_mode() -> Self {
+        Self {
+            max_prompt_chars: DEFAULT_MAX_PROMPT_CHARS,
+            max_agent_steps: DEFAULT_MAX_AGENT_STEPS + 2,
+            max_model_calls: DEFAULT_MAX_MODEL_CALLS,
+            max_tool_calls: DEFAULT_MAX_TOOL_CALLS + 1,
+            max_fetched_content_chars: 12_000,
+            max_searches: 1,
+            max_sources: 3,
+        }
+    }
 }
 
 pub struct BoundedGenerationRuntime {
@@ -85,7 +124,35 @@ pub struct BoundedGenerationRuntime {
 
 impl BoundedGenerationRuntime {
     pub async fn new(state: AppState, job_id: String, prompt: &str) -> Result<Self, Error> {
-        let policy = GenerationExecutionPolicy::standard_non_research();
+        Self::new_with_policy(
+            state,
+            job_id,
+            prompt,
+            GenerationExecutionPolicy::standard_non_research(),
+        )
+        .await
+    }
+
+    pub async fn new_research(
+        state: AppState,
+        job_id: String,
+        prompt: &str,
+    ) -> Result<Self, Error> {
+        Self::new_with_policy(
+            state,
+            job_id,
+            prompt,
+            GenerationExecutionPolicy::research_mode(),
+        )
+        .await
+    }
+
+    async fn new_with_policy(
+        state: AppState,
+        job_id: String,
+        prompt: &str,
+        policy: GenerationExecutionPolicy,
+    ) -> Result<Self, Error> {
         let prompt_chars = prompt.chars().count();
         if prompt_chars > policy.max_prompt_chars {
             return Err(Error::BadRequest(format!(
@@ -241,7 +308,8 @@ impl BoundedGenerationRuntime {
 mod tests {
     use super::{GenerationExecutionPolicy, GenerationTool};
     use crate::services::article_jobs::{
-        ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_READY_FOR_REVIEW, ARTICLE_JOB_PHASE_WRITING,
+        ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
+        ARTICLE_JOB_PHASE_RESEARCHING, ARTICLE_JOB_PHASE_WRITING,
     };
 
     #[test]
@@ -260,6 +328,10 @@ mod tests {
             ARTICLE_JOB_PHASE_PLANNING
         );
         assert_eq!(
+            GenerationTool::LimitedWebResearch.phase(),
+            ARTICLE_JOB_PHASE_RESEARCHING
+        );
+        assert_eq!(
             GenerationTool::DraftWriter.phase(),
             ARTICLE_JOB_PHASE_WRITING
         );
@@ -271,5 +343,36 @@ mod tests {
             GenerationTool::PolicyCheck.phase(),
             ARTICLE_JOB_PHASE_READY_FOR_REVIEW
         );
+    }
+
+    #[test]
+    fn research_policy_enables_bounded_search_and_source_budgets() {
+        let policy = GenerationExecutionPolicy::research_mode();
+
+        assert_eq!(policy.max_searches, 1);
+        assert_eq!(policy.max_sources, 3);
+        assert!(policy.max_fetched_content_chars > 0);
+    }
+
+    #[test]
+    fn generation_tool_registry_covers_structured_runtime_steps() {
+        let names = GenerationTool::registry()
+            .iter()
+            .map(|tool| tool.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names,
+            vec![
+                "article_planning",
+                "limited_web_research",
+                "draft_writer",
+                "image_brief_planner",
+                "policy_check",
+            ]
+        );
+        assert!(GenerationTool::registry()
+            .iter()
+            .all(|tool| !tool.description().is_empty()));
     }
 }

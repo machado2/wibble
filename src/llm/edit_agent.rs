@@ -5,6 +5,13 @@ use crate::llm::function_definition::FunctionDefinition;
 use crate::llm::prompt_registry::edit_rewrite_prompt;
 use crate::llm::{function_definition, Llm, Message};
 
+pub const EDIT_TOOL_REGISTRY: [EditTool; 4] = [
+    EditTool::LoadArticle,
+    EditTool::ApplyRequestedChange,
+    EditTool::SummarizeDiff,
+    EditTool::SubmitEditProposal,
+];
+
 pub struct EditProposal {
     pub title: String,
     pub description: String,
@@ -13,10 +20,46 @@ pub struct EditProposal {
     pub prompt_version: i32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EditTool {
+    LoadArticle,
+    ApplyRequestedChange,
+    SummarizeDiff,
+    SubmitEditProposal,
+}
+
+impl EditTool {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::LoadArticle => "load_article",
+            Self::ApplyRequestedChange => "apply_requested_change",
+            Self::SummarizeDiff => "summarize_diff",
+            Self::SubmitEditProposal => "submit_edit_proposal",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::LoadArticle => "Load the current article title, description, and markdown",
+            Self::ApplyRequestedChange => {
+                "Rewrite the article according to the user's change request"
+            }
+            Self::SummarizeDiff => "Describe the key editorial changes in concise prose",
+            Self::SubmitEditProposal => {
+                "Return the final title, description, markdown, and editor summary"
+            }
+        }
+    }
+
+    pub fn registry() -> &'static [EditTool] {
+        &EDIT_TOOL_REGISTRY
+    }
+}
+
 fn submit_edit_proposal() -> FunctionDefinition {
     let mut f = function_definition::def_function(
-        "submit_edit_proposal",
-        "Return the revised article fields and a short editor summary",
+        EditTool::SubmitEditProposal.as_str(),
+        EditTool::SubmitEditProposal.description(),
     );
     f.parameters.add_str("title", true, "Revised article title");
     f.parameters
@@ -63,4 +106,30 @@ fn required_field<'a>(value: &'a Value, key: &str) -> Result<&'a str, Error> {
     value[key]
         .as_str()
         .ok_or_else(|| Error::Llm(format!("Edit proposal missing {}", key)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EditTool;
+
+    #[test]
+    fn edit_tool_registry_covers_structured_edit_steps() {
+        let names = EditTool::registry()
+            .iter()
+            .map(|tool| tool.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names,
+            vec![
+                "load_article",
+                "apply_requested_change",
+                "summarize_diff",
+                "submit_edit_proposal",
+            ]
+        );
+        assert!(EditTool::registry()
+            .iter()
+            .all(|tool| !tool.description().is_empty()));
+    }
 }

@@ -22,9 +22,10 @@
           {{ standard_quota.hourly }} filings per hour / {{ standard_quota.daily }} per day on your current tier.
           {% if logged_in %}
           Owner editing is capped separately at {{ authenticated_edit_quota.hourly }} edit-agent previews per hour.
+          Research-backed filings run on their own desk at {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
           Background translation refreshes stay on their own lane at {{ authenticated_translation_quota.hourly }} per hour.
           {% else %}
-          Login raises the standard desk to {{ authenticated_standard_quota.hourly }} per hour, keeps results private as drafts, and unlocks the edit desk.
+          Login raises the standard desk to {{ authenticated_standard_quota.hourly }} per hour, opens a bounded research desk at {{ authenticated_research_quota.hourly }} per hour, keeps results private as drafts, and unlocks the edit desk.
           {% endif %}
         </div>
         <div class="create-tips">
@@ -41,6 +42,35 @@
       {% endif %}
 
       <form action="/create" method="post" class="create-form">
+        <fieldset class="mb-3">
+          <legend class="form-label">Desk mode</legend>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="mode" id="mode-auto" value="auto"{% if selected_create_mode == "auto" %} checked{% endif %}>
+            <label class="form-check-label" for="mode-auto">
+              <strong>Automatic</strong>:
+              use the cheap drafting path unless the brief clearly needs public-source grounding and you are signed in.
+            </label>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="mode" id="mode-standard" value="standard"{% if selected_create_mode == "standard" %} checked{% endif %}>
+            <label class="form-check-label" for="mode-standard">
+              <strong>Standard</strong>:
+              no browsing, fastest queue, best for invented institutions and generic bureaucratic collapse.
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="mode" id="mode-research" value="research"{% if selected_create_mode == "research" %} checked{% endif %}{% if not logged_in %} disabled{% endif %}>
+            <label class="form-check-label" for="mode-research">
+              <strong>Research desk</strong>:
+              bounded public-source lookup for real institutions, policies, organizations, and public figures.
+              {% if logged_in %}
+              Separate quota: {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
+              {% else %}
+              <a href="/login">Log in</a> to enable it.
+              {% endif %}
+            </label>
+          </div>
+        </fieldset>
         <div class="mb-3">
           <label class="form-label" for="prompt">Case brief</label>
           <textarea id="prompt" class="form-control create-textarea" name="prompt" placeholder="Example: A metropolitan transit authority begins issuing formal emotional support updates alongside train delays, and commuters quickly start citing them in workplace absence forms." rows="9" maxlength="{{ prompt_max_length }}" required autofocus>{{ prompt }}</textarea>

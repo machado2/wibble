@@ -2,10 +2,14 @@ use tracing::{event, Level};
 
 use crate::app_state::AppState;
 use crate::error::Error;
+use crate::llm::article_generator::resolve_research_mode;
 use crate::rate_limit::RequesterTier;
 use crate::services::article_jobs::{ArticleJobRequest, ArticleJobService, ArticleJobTrace};
 
-use super::{clarify::build_clarification_request, create_article, normalize_create_prompt};
+use super::{
+    clarify::build_clarification_request, create_article, normalize_create_prompt,
+    CreateModeSelection,
+};
 
 pub async fn start_create_article(
     state: AppState,
@@ -13,10 +17,20 @@ pub async fn start_create_article(
     author_email: Option<String>,
     requester_tier: RequesterTier,
     rate_limit_key: String,
+    selected_mode: CreateModeSelection,
 ) -> Result<String, Error> {
     let job_service = ArticleJobService::new(state.clone());
     let prompt = normalize_create_prompt(&prompt)?;
-    job_service.check_create_rate_limit(requester_tier, &rate_limit_key)?;
+    let research_mode = match selected_mode {
+        CreateModeSelection::Auto => resolve_research_mode(&prompt, false, requester_tier)?,
+        CreateModeSelection::Standard => None,
+        CreateModeSelection::Research => resolve_research_mode(&prompt, true, requester_tier)?,
+    };
+    if research_mode.is_some() {
+        job_service.check_research_rate_limit(requester_tier, &rate_limit_key)?;
+    } else {
+        job_service.check_create_rate_limit(requester_tier, &rate_limit_key)?;
+    }
     let clarification = build_clarification_request(&prompt);
     let permit = if clarification.is_none() {
         Some(job_service.try_acquire_generation_slot("create")?)
@@ -35,6 +49,7 @@ pub async fn start_create_article(
                 author_email.clone(),
                 requester_tier,
                 rate_limit_key,
+                research_mode,
             ),
         )
         .await?;
@@ -48,8 +63,17 @@ pub async fn start_create_article(
         .spawn_generation_job(
             id.clone(),
             permit.unwrap(),
-            ArticleJobTrace::create(),
-            async move { create_article(&state, id.clone(), prompt.clone(), author_email).await },
+            ArticleJobTrace::create(research_mode),
+            async move {
+                create_article(
+                    &state,
+                    id.clone(),
+                    prompt.clone(),
+                    author_email,
+                    research_mode,
+                )
+                .await
+            },
         )
         .await;
     Ok(return_id)

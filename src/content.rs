@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::llm::prompt_registry::{supported_translation_languages, SupportedTranslationLanguage};
 use crate::permissions::{can_edit_article, can_toggle_publish};
+use crate::services::article_jobs::ArticleJobService;
 use crate::services::article_language::{
     resolve_article_language, ArticleLanguageSelection, PreferredLanguageSource,
     ServedLanguageSource,
@@ -14,6 +15,7 @@ use crate::translation_jobs::{
 use crate::wibble_request::WibbleRequest;
 use axum::response::Html;
 use serde::Serialize;
+use serde_json::Value;
 
 mod comments;
 mod policy;
@@ -30,6 +32,12 @@ struct ArticleLanguageOption {
     label: String,
     note: String,
     active: bool,
+}
+
+#[derive(Serialize)]
+struct ArticleResearchMetadata {
+    mode_label: String,
+    source_count: usize,
 }
 
 fn article_language_href(slug: &str, lang: Option<&str>) -> String {
@@ -106,6 +114,28 @@ fn uses_manual_article_language_preference(source: PreferredLanguageSource) -> b
         source,
         PreferredLanguageSource::Explicit | PreferredLanguageSource::Cookie
     )
+}
+
+fn parse_article_research_metadata(
+    preview_payload: Option<&str>,
+) -> Option<ArticleResearchMetadata> {
+    let payload: Value = serde_json::from_str(preview_payload?).ok()?;
+    let research = payload.get("research")?.as_object()?;
+    let source_count = research
+        .get("source_count")
+        .and_then(Value::as_u64)
+        .unwrap_or_default() as usize;
+    if source_count == 0 {
+        return None;
+    }
+    let mode_label = match research.get("mode").and_then(Value::as_str) {
+        Some("manual") => "Requested research desk",
+        _ => "Automatic research desk",
+    };
+    Some(ArticleResearchMetadata {
+        mode_label: mode_label.to_string(),
+        source_count,
+    })
 }
 
 #[allow(async_fn_in_trait)]
@@ -246,6 +276,10 @@ impl GetContent for WibbleRequest {
             language_selection,
             self.browser_translation_language,
         );
+        let research_metadata = ArticleJobService::new(self.state.clone())
+            .finalize_job_state_for_article(&article.id)
+            .await?
+            .and_then(|job| parse_article_research_metadata(job.preview_payload.as_deref()));
         let mut template = self.template("content").await;
         template
             .insert("id", &article.id)
@@ -339,6 +373,9 @@ impl GetContent for WibbleRequest {
                 &(interactions_open && self.auth_user.is_some()),
             )
             .insert("comment_pager", &comment_page.pager);
+        if let Some(research_metadata) = research_metadata {
+            template.insert("article_research_metadata", &research_metadata);
+        }
         if uses_manual_article_language_preference(language_selection.preferred_language_source) {
             template.insert(
                 "article_language_override_code",
@@ -357,7 +394,9 @@ mod tests {
     use crate::llm::prompt_registry::find_supported_translation_language;
     use crate::services::article_language::resolve_article_language;
 
-    use super::{article_language_href, build_article_language_options};
+    use super::{
+        article_language_href, build_article_language_options, parse_article_research_metadata,
+    };
 
     #[test]
     fn article_language_href_uses_query_param_when_override_exists() {
@@ -441,5 +480,24 @@ mod tests {
 
         assert!(portuguese.active);
         assert_eq!(portuguese.note, "Saved for this article");
+    }
+
+    #[test]
+    fn research_metadata_parses_manual_mode_and_source_count() {
+        let metadata = parse_article_research_metadata(Some(
+            r#"{"research":{"mode":"manual","source_count":3}}"#,
+        ))
+        .unwrap();
+
+        assert_eq!(metadata.mode_label, "Requested research desk");
+        assert_eq!(metadata.source_count, 3);
+    }
+
+    #[test]
+    fn research_metadata_ignores_missing_sources() {
+        assert!(parse_article_research_metadata(Some(
+            r#"{"research":{"mode":"auto","source_count":0}}"#,
+        ))
+        .is_none());
     }
 }

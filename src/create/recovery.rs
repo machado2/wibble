@@ -116,7 +116,7 @@ pub async fn start_recover_article_for_slug(
             permit,
             ArticleJobTrace::dead_link_recovery(slug.clone()),
             async move {
-                let result = create_article(&state, id.clone(), prompt, None).await;
+                let result = create_article(&state, id.clone(), prompt, None, None).await;
                 if result.is_err() {
                     let _ = Content::delete_by_id(id.clone()).exec(&state.db).await;
                 }

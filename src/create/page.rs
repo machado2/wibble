@@ -5,7 +5,7 @@ use crate::error::Error;
 use crate::rate_limit::{RateLimitCapability, RateLimitState, RequesterTier};
 use crate::wibble_request::WibbleRequest;
 
-use super::MAX_PROMPT_CHARS;
+use super::{CreateModeSelection, MAX_PROMPT_CHARS};
 
 #[derive(Serialize)]
 struct PromptPreset {
@@ -38,6 +38,7 @@ pub async fn render_create_page(
     wr: &WibbleRequest,
     prompt: &str,
     error_message: Option<&str>,
+    selected_mode: CreateModeSelection,
 ) -> Result<Html<String>, Error> {
     let presets = create_prompt_presets();
     let logged_in = wr.auth_user.is_some();
@@ -57,6 +58,14 @@ pub async fn render_create_page(
         RateLimitCapability::BackgroundTranslation,
         RequesterTier::Authenticated,
     );
+    let research_quota = RateLimitState::quota_summary_for(
+        RateLimitCapability::ResearchGeneration,
+        wr.requester_tier,
+    );
+    let authenticated_research_quota = RateLimitState::quota_summary_for(
+        RateLimitCapability::ResearchGeneration,
+        RequesterTier::Authenticated,
+    );
     let mut template = wr.template("create").await;
     template
         .insert("title", "Create a new article")
@@ -69,10 +78,16 @@ pub async fn render_create_page(
         .insert("prompt_max_length", &MAX_PROMPT_CHARS)
         .insert("prompt_presets", &presets)
         .insert("logged_in", &logged_in)
+        .insert("selected_create_mode", selected_mode.as_str())
         .insert("standard_quota", &standard_quota)
+        .insert("research_quota", &research_quota)
         .insert(
             "authenticated_standard_quota",
             &authenticated_standard_quota,
+        )
+        .insert(
+            "authenticated_research_quota",
+            &authenticated_research_quota,
         )
         .insert("authenticated_edit_quota", &authenticated_edit_quota)
         .insert(
@@ -86,5 +101,5 @@ pub async fn render_create_page(
 }
 
 pub async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
-    render_create_page(&wr, "", None).await
+    render_create_page(&wr, "", None, CreateModeSelection::Auto).await
 }

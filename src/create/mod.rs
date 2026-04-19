@@ -13,11 +13,16 @@ use tracing::debug;
 
 use crate::app_state::AppState;
 use crate::error::Error;
-use crate::llm::article_generator::{create_article_attempt, create_article_using_placeholders};
+use crate::llm::article_generator::{
+    create_article_attempt, create_article_using_placeholders, create_researched_article_attempt,
+    ResearchModeSource,
+};
 
 const MAX_PROMPT_CHARS: usize = 600;
 
-pub use input::{normalize_create_prompt, PostCreateData};
+pub use input::{
+    normalize_create_mode, normalize_create_prompt, CreateModeSelection, PostCreateData,
+};
 pub use orchestration::start_create_article;
 pub use page::{get_create, render_create_page};
 pub use recovery::start_recover_article_for_slug;
@@ -28,6 +33,7 @@ pub(crate) async fn create_article(
     id: String,
     instructions: String,
     author_email: Option<String>,
+    research_mode: Option<ResearchModeSource>,
 ) -> Result<(), Error> {
     debug!("Generating article for instructions: {}", instructions);
     let model = state
@@ -35,6 +41,18 @@ pub(crate) async fn create_article(
         .models
         .first()
         .ok_or_else(|| Error::Llm("No language model configured".to_string()))?;
+
+    if let Some(research_mode) = research_mode {
+        return create_researched_article_attempt(
+            state,
+            id,
+            instructions,
+            model,
+            author_email,
+            research_mode,
+        )
+        .await;
+    }
 
     let use_examples_env = env::var("USE_EXAMPLES").unwrap_or("false".to_string());
     debug!("USE_EXAMPLES: {}", use_examples_env);

@@ -45,11 +45,33 @@ async fn create_article(
     Form(data): Form<create_page::PostCreateData>,
 ) -> impl IntoResponse {
     let author_email = wr.auth_user.as_ref().map(|u| u.email.clone());
+    let selected_mode = match create_page::normalize_create_mode(data.mode.as_deref()) {
+        Ok(mode) => mode,
+        Err(Error::BadRequest(message)) => {
+            return match create_page::render_create_page(
+                &wr,
+                data.prompt.trim(),
+                Some(&message),
+                create_page::CreateModeSelection::Auto,
+            )
+            .await
+            {
+                Ok(html) => (StatusCode::BAD_REQUEST, html).into_response(),
+                Err(e) => e.into_response(),
+            };
+        }
+        Err(e) => return e.into_response(),
+    };
     let prompt = match create_page::normalize_create_prompt(&data.prompt) {
         Ok(prompt) => prompt,
         Err(Error::BadRequest(message)) => {
-            return match create_page::render_create_page(&wr, data.prompt.trim(), Some(&message))
-                .await
+            return match create_page::render_create_page(
+                &wr,
+                data.prompt.trim(),
+                Some(&message),
+                selected_mode,
+            )
+            .await
             {
                 Ok(html) => (StatusCode::BAD_REQUEST, html).into_response(),
                 Err(e) => e.into_response(),
@@ -59,15 +81,23 @@ async fn create_article(
     };
 
     match create_page::start_create_article(
-        wr.state,
-        prompt,
+        wr.state.clone(),
+        prompt.clone(),
         author_email,
         wr.requester_tier,
-        wr.rate_limit_key,
+        wr.rate_limit_key.clone(),
+        selected_mode,
     )
     .await
     {
         Ok(id) => Redirect::to(&format!("/wait/{}", id)).into_response(),
+        Err(Error::BadRequest(message)) | Err(Error::Auth(message)) => {
+            match create_page::render_create_page(&wr, &prompt, Some(&message), selected_mode).await
+            {
+                Ok(html) => (StatusCode::BAD_REQUEST, html).into_response(),
+                Err(e) => e.into_response(),
+            }
+        }
         Err(e) => e.into_response(),
     }
 }

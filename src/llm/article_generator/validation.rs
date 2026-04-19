@@ -2,6 +2,8 @@ use crate::error::Error;
 use crate::image_generator::{ImageGenerated, ImageToCreate};
 use crate::services::editorial_policy::enforce_article_output_policy;
 
+use super::research::ResearchSource;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedArticleDraft {
     pub title: String,
@@ -117,6 +119,74 @@ pub fn ensure_no_prompt_leakage(text: &str) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn ensure_no_research_citation_scaffolding(text: &str) -> Result<(), Error> {
+    let normalized = text.to_ascii_lowercase();
+    for forbidden in [
+        "http://",
+        "https://",
+        "www.",
+        "[1]",
+        "[2]",
+        "research file",
+        "research notes",
+        "source list",
+        "footnote",
+        "citation",
+    ] {
+        if normalized.contains(forbidden) {
+            return Err(Error::Llm(format!(
+                "Generated researched article leaked citation scaffolding: {}",
+                forbidden
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn ensure_no_internal_source_domain_mentions(
+    text: &str,
+    sources: &[ResearchSource],
+) -> Result<(), Error> {
+    let normalized = text.to_ascii_lowercase();
+    for source in sources {
+        let domain = source.domain.trim().to_ascii_lowercase();
+        for marker in source_leak_markers(&domain) {
+            if normalized.contains(&marker) {
+                return Err(Error::Llm(format!(
+                    "Generated researched article cited an internal source domain: {}",
+                    marker
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn source_leak_markers(domain: &str) -> Vec<String> {
+    if domain.is_empty() {
+        return Vec::new();
+    }
+    let mut markers = vec![domain.to_string()];
+    for publisher in [
+        "reuters",
+        "apnews",
+        "associated press",
+        "bbc",
+        "npr",
+        "economist",
+    ] {
+        if domain.contains(publisher) {
+            markers.push(publisher.to_string());
+        }
+    }
+    if domain.contains("ft.com") {
+        markers.push("financial times".to_string());
+    }
+    markers.sort();
+    markers.dedup();
+    markers
+}
+
 pub fn ensure_deadpan_tone(title: &str, markdown: &str) -> Result<(), Error> {
     let normalized = format!("{}\n{}", title, markdown).to_ascii_lowercase();
     for tone_break in ["haha", "lol", "lmao", "this is satire", "this is parody"] {
@@ -156,12 +226,28 @@ pub fn validate_article_output(
     Ok(())
 }
 
+pub fn validate_researched_article_output(
+    title: &str,
+    markdown: &str,
+    expected_images: usize,
+    sources: &[ResearchSource],
+) -> Result<(), Error> {
+    validate_article_output(title, markdown, expected_images)?;
+    let full_text = format!("{}\n{}", title, markdown);
+    ensure_no_research_citation_scaffolding(&full_text)?;
+    ensure_no_internal_source_domain_mentions(&full_text, sources)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_minimum_paragraph_count, ensure_no_forbidden_markup, ensure_no_prompt_leakage,
-        parse_titled_markdown, split_paragraphs, validate_article_output,
+        ensure_minimum_paragraph_count, ensure_no_forbidden_markup,
+        ensure_no_internal_source_domain_mentions, ensure_no_prompt_leakage,
+        ensure_no_research_citation_scaffolding, parse_titled_markdown, source_leak_markers,
+        split_paragraphs, validate_article_output,
     };
+    use crate::llm::article_generator::research::ResearchSource;
 
     #[test]
     fn parse_titled_markdown_extracts_heading_and_body() {
@@ -221,5 +307,40 @@ mod tests {
             .to_string();
 
         assert!(err.contains("image count mismatch"));
+    }
+
+    #[test]
+    fn researched_output_rejects_citation_scaffolding() {
+        let err = ensure_no_research_citation_scaffolding("See https://example.com [1]")
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("citation scaffolding"));
+    }
+
+    #[test]
+    fn researched_output_rejects_internal_source_domains() {
+        let err = ensure_no_internal_source_domain_mentions(
+            "Officials said Reuters had framed the matter carefully.",
+            &[ResearchSource {
+                title: "Wire update".to_string(),
+                url: "https://www.reuters.com/example".to_string(),
+                domain: "reuters.com".to_string(),
+                snippet: String::new(),
+                context: String::new(),
+            }],
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(err.contains("internal source domain"));
+    }
+
+    #[test]
+    fn source_leak_markers_include_known_publication_names() {
+        let markers = source_leak_markers("reuters.com");
+
+        assert!(markers.contains(&"reuters.com".to_string()));
+        assert!(markers.contains(&"reuters".to_string()));
     }
 }

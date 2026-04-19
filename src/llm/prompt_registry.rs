@@ -18,6 +18,12 @@ const ARTICLE_GENERATION_PROMPT: PromptDefinition = PromptDefinition {
     body: include_str!("../../prompts/system_article.txt"),
 };
 
+const RESEARCH_ARTICLE_GENERATION_PROMPT: PromptDefinition = PromptDefinition {
+    key: "research_article_generation",
+    version: 1,
+    body: include_str!("../../prompts/system_article_research.txt"),
+};
+
 const PLACEHOLDER_GENERATION_PROMPT: PromptDefinition = PromptDefinition {
     key: "placeholder_generation",
     version: 2,
@@ -83,6 +89,10 @@ pub fn placeholder_generation_prompt() -> PromptDefinition {
     PLACEHOLDER_GENERATION_PROMPT
 }
 
+pub fn research_article_generation_prompt() -> PromptDefinition {
+    RESEARCH_ARTICLE_GENERATION_PROMPT
+}
+
 pub fn image_brief_generation_prompt() -> PromptDefinition {
     IMAGE_BRIEF_GENERATION_PROMPT
 }
@@ -118,12 +128,14 @@ pub fn find_supported_translation_language(value: &str) -> Option<SupportedTrans
 mod tests {
     use super::{
         article_generation_prompt, edit_rewrite_prompt, find_supported_translation_language,
-        image_brief_generation_prompt, placeholder_generation_prompt, translation_prompt,
+        image_brief_generation_prompt, placeholder_generation_prompt,
+        research_article_generation_prompt, translation_prompt,
     };
 
     #[test]
     fn prompt_definitions_expose_stable_versions() {
         assert_eq!(article_generation_prompt().version, 1);
+        assert_eq!(research_article_generation_prompt().version, 1);
         assert_eq!(edit_rewrite_prompt().version, 1);
         assert_eq!(translation_prompt().version, 1);
     }
@@ -135,6 +147,15 @@ mod tests {
         assert!(prompt.contains("The first line must be the headline"));
         assert!(prompt.contains("Reply with the article only, in Markdown."));
         assert!(prompt.contains("Do not add disclaimers"));
+    }
+
+    #[test]
+    fn research_generation_prompt_contains_source_contract() {
+        let prompt = research_article_generation_prompt().body;
+
+        assert!(prompt.contains("internal research file"));
+        assert!(prompt.contains("Do not invent citations"));
+        assert!(prompt.contains("stay general instead of fabricating specifics"));
     }
 
     #[test]
