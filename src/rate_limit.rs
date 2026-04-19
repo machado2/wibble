@@ -182,6 +182,12 @@ pub struct RateLimitMetricsSnapshot {
     pub hits: Vec<RateLimitHitSnapshot>,
 }
 
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct RateLimitQuotaSummary {
+    pub hourly: u32,
+    pub daily: u32,
+}
+
 // Shared state for rate limiters
 #[derive(Clone, Debug)]
 pub struct RateLimitState {
@@ -409,6 +415,16 @@ impl RateLimitState {
                 LimitWindow::Hourly => TranslationRateLimit::Hourly,
                 LimitWindow::Daily => TranslationRateLimit::Daily,
             })
+    }
+
+    pub fn quota_summary_for(
+        capability: RateLimitCapability,
+        tier: RequesterTier,
+    ) -> RateLimitQuotaSummary {
+        RateLimitQuotaSummary {
+            hourly: Self::capability_limit(capability, tier, LimitWindow::Hourly),
+            daily: Self::capability_limit(capability, tier, LimitWindow::Daily),
+        }
     }
 
     pub fn admin_snapshot(&self) -> RateLimitMetricsSnapshot {

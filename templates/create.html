@@ -17,6 +17,16 @@
           Anonymous filings publish immediately if they succeed. Log in if you want an editable draft and explicit publish control.
           {% endif %}
         </div>
+        <div class="alert alert-light border mb-3" role="note">
+          <strong>Desk quota:</strong>
+          {{ standard_quota.hourly }} filings per hour / {{ standard_quota.daily }} per day on your current tier.
+          {% if logged_in %}
+          Owner editing is capped separately at {{ authenticated_edit_quota.hourly }} edit-agent previews per hour.
+          Background translation refreshes stay on their own lane at {{ authenticated_translation_quota.hourly }} per hour.
+          {% else %}
+          Login raises the standard desk to {{ authenticated_standard_quota.hourly }} per hour, keeps results private as drafts, and unlocks the edit desk.
+          {% endif %}
+        </div>
         <div class="create-tips">
           <span class="badge badge-info">Write it like a memo, not a punchline</span>
           <span class="badge badge-info">One absurd policy is enough</span>
@@ -44,9 +54,9 @@
           <span class="text-muted small">
             Typical wait: a few seconds to a minute, depending on the image queue and the severity of the incident.
             {% if logged_in %}
-            Result: private draft.
+            Result: private draft with the same background translation fallback rules as public stories.
             {% else %}
-            Result: immediate public article.
+            Result: immediate public article. Login keeps the filing private until you approve it.
             {% endif %}
           </span>
         </div>

@@ -146,11 +146,12 @@
               <div class="article-language-menu-body">
                 <p class="article-language-intro">
                   Automatic service follows your browser only when a prepared edition exists.
+                  If a requested edition is still being prepared, the source article stays readable immediately and the translation continues in the background.
                   Manual changes are filed for this article only.
                 </p>
                 {% if article_translation_requested and not article_translation_available %}
                 <div class="article-language-notice" role="status">
-                  {{ preferred_article_language_name }} was requested. This page is currently showing the original {{ article_source_language_name }} edition.
+                  {{ preferred_article_language_name }} was requested. This page is currently showing the original {{ article_source_language_name }} edition while that translation is prepared.
                 </div>
                 {% endif %}
                 <div class="article-language-options">

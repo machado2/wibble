@@ -365,8 +365,8 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Add job-status UI for multi-step agent states.
 - [x] Add question/answer UI for clarifying prompts.
 - [x] Add preview/diff UI for agent edits.
-- [ ] Add quota messaging and login upsell copy.
-- [ ] Add translation toggle UI and fallback messaging that does not interrupt reading.
+- [x] Add quota messaging and login upsell copy.
+- [x] Add translation toggle UI and fallback messaging that does not interrupt reading.
 - [ ] Add article metadata display if research mode used internally and that becomes product-relevant.
 
 ## Phase 10: Safety, Moderation, and Editorial Policy

@@ -2,6 +2,7 @@ use axum::response::Html;
 use serde::Serialize;
 
 use crate::error::Error;
+use crate::rate_limit::{RateLimitCapability, RateLimitState, RequesterTier};
 use crate::wibble_request::WibbleRequest;
 
 use super::MAX_PROMPT_CHARS;
@@ -40,6 +41,22 @@ pub async fn render_create_page(
 ) -> Result<Html<String>, Error> {
     let presets = create_prompt_presets();
     let logged_in = wr.auth_user.is_some();
+    let standard_quota = RateLimitState::quota_summary_for(
+        RateLimitCapability::PlainArticleGeneration,
+        wr.requester_tier,
+    );
+    let authenticated_standard_quota = RateLimitState::quota_summary_for(
+        RateLimitCapability::PlainArticleGeneration,
+        RequesterTier::Authenticated,
+    );
+    let authenticated_edit_quota = RateLimitState::quota_summary_for(
+        RateLimitCapability::EditAgentRequest,
+        RequesterTier::Authenticated,
+    );
+    let authenticated_translation_quota = RateLimitState::quota_summary_for(
+        RateLimitCapability::BackgroundTranslation,
+        RequesterTier::Authenticated,
+    );
     let mut template = wr.template("create").await;
     template
         .insert("title", "Create a new article")
@@ -51,7 +68,17 @@ pub async fn render_create_page(
         .insert("prompt", &prompt)
         .insert("prompt_max_length", &MAX_PROMPT_CHARS)
         .insert("prompt_presets", &presets)
-        .insert("logged_in", &logged_in);
+        .insert("logged_in", &logged_in)
+        .insert("standard_quota", &standard_quota)
+        .insert(
+            "authenticated_standard_quota",
+            &authenticated_standard_quota,
+        )
+        .insert("authenticated_edit_quota", &authenticated_edit_quota)
+        .insert(
+            "authenticated_translation_quota",
+            &authenticated_translation_quota,
+        );
     if let Some(error_message) = error_message {
         template.insert("error_message", error_message);
     }
