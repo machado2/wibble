@@ -134,6 +134,8 @@
                   Requested {{ preferred_article_language_name }}
                   {% elif preferred_article_language_source == "explicit" %}
                   Manual selection
+                  {% elif preferred_article_language_source == "cookie" %}
+                  Saved selection
                   {% elif preferred_article_language_source == "browser" %}
                   Automatic
                   {% else %}

@@ -342,8 +342,8 @@ No release until every phase below is complete or explicitly removed from scope.
   - icon + text
   - compact menu
 - [ ] Match the control to the deadpan editorial UI rather than making it look like a consumer app language picker.
-- [ ] Remember non-default language preference in a cookie.
-- [ ] Do not write a cookie when the current state matches the automatic browser-language default.
+- [x] Remember non-default language preference in a cookie.
+- [x] Do not write a cookie when the current state matches the automatic browser-language default.
 - [x] Define whether the preference is article-page only or site-wide.
 
 ### 8.6 Safety and abuse controls

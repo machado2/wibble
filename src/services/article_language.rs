@@ -8,6 +8,7 @@ const DEFAULT_SOURCE_LANGUAGE_CODE: &str = "en";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PreferredLanguageSource {
     Explicit,
+    Cookie,
     Browser,
     ArticleSource,
 }
@@ -37,6 +38,7 @@ pub fn article_source_language() -> SupportedTranslationLanguage {
 
 pub fn resolve_article_language(
     explicit_language: Option<&str>,
+    saved_language: Option<SupportedTranslationLanguage>,
     browser_language: Option<SupportedTranslationLanguage>,
     available_translations: &[SupportedTranslationLanguage],
 ) -> ArticleLanguageSelection {
@@ -45,9 +47,12 @@ pub fn resolve_article_language(
 
     let (preferred_language, preferred_language_source) = match explicit_language {
         Some(language) => (language, PreferredLanguageSource::Explicit),
-        None => match browser_language {
-            Some(language) => (language, PreferredLanguageSource::Browser),
-            None => (source_language, PreferredLanguageSource::ArticleSource),
+        None => match saved_language {
+            Some(language) => (language, PreferredLanguageSource::Cookie),
+            None => match browser_language {
+                Some(language) => (language, PreferredLanguageSource::Browser),
+                None => (source_language, PreferredLanguageSource::ArticleSource),
+            },
         },
     };
 
@@ -84,7 +89,7 @@ pub fn resolve_article_language(
     }
 }
 
-fn resolve_supported_language_preference(value: &str) -> Option<SupportedTranslationLanguage> {
+pub fn resolve_supported_language_preference(value: &str) -> Option<SupportedTranslationLanguage> {
     find_supported_translation_language(value).or_else(|| {
         value
             .split(['-', '_'])
@@ -112,8 +117,12 @@ mod tests {
         let browser_language = find_supported_translation_language("fr");
         let available_translations = [find_supported_translation_language("pt").unwrap()];
 
-        let selection =
-            resolve_article_language(Some("pt-BR"), browser_language, &available_translations);
+        let selection = resolve_article_language(
+            Some("pt-BR"),
+            None,
+            browser_language,
+            &available_translations,
+        );
 
         assert_eq!(selection.preferred_language.code, "pt");
         assert_eq!(
@@ -132,7 +141,8 @@ mod tests {
         let browser_language = find_supported_translation_language("es");
         let available_translations = [find_supported_translation_language("es").unwrap()];
 
-        let selection = resolve_article_language(None, browser_language, &available_translations);
+        let selection =
+            resolve_article_language(None, None, browser_language, &available_translations);
 
         assert_eq!(selection.preferred_language.code, "es");
         assert_eq!(
@@ -146,7 +156,7 @@ mod tests {
     fn missing_translation_falls_back_to_source_article_immediately() {
         let browser_language = find_supported_translation_language("pt");
 
-        let selection = resolve_article_language(None, browser_language, &[]);
+        let selection = resolve_article_language(None, None, browser_language, &[]);
 
         assert_eq!(selection.preferred_language.code, "pt");
         assert!(selection.translation_requested);
@@ -163,8 +173,12 @@ mod tests {
         let browser_language = find_supported_translation_language("de");
         let available_translations = [find_supported_translation_language("de").unwrap()];
 
-        let selection =
-            resolve_article_language(Some("klingon"), browser_language, &available_translations);
+        let selection = resolve_article_language(
+            Some("klingon"),
+            None,
+            browser_language,
+            &available_translations,
+        );
 
         assert_eq!(selection.preferred_language.code, "de");
         assert_eq!(
@@ -172,5 +186,19 @@ mod tests {
             PreferredLanguageSource::Browser
         );
         assert_eq!(selection.served_language.code, "de");
+    }
+
+    #[test]
+    fn saved_cookie_language_is_used_when_query_is_absent() {
+        let saved_language = find_supported_translation_language("pt");
+        let browser_language = find_supported_translation_language("fr");
+
+        let selection = resolve_article_language(None, saved_language, browser_language, &[]);
+
+        assert_eq!(selection.preferred_language.code, "pt");
+        assert_eq!(
+            selection.preferred_language_source,
+            PreferredLanguageSource::Cookie
+        );
     }
 }

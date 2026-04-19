@@ -17,6 +17,9 @@ use crate::auth::{extract_auth_token, AuthUser};
 use crate::error::Error;
 use crate::llm::prompt_registry::SupportedTranslationLanguage;
 use crate::llm::translate::detect_browser_translation_language;
+use crate::services::article_language::resolve_supported_language_preference;
+
+const ARTICLE_LANGUAGE_COOKIE_NAME: &str = "__article_lang";
 
 #[derive(Debug, Clone)]
 pub struct WibbleRequest
@@ -28,6 +31,7 @@ where
     pub request_path: String,
     pub auth_user: Option<AuthUser>,
     pub browser_translation_language: Option<SupportedTranslationLanguage>,
+    pub saved_article_language: Option<SupportedTranslationLanguage>,
 }
 
 pub struct Template {
@@ -119,6 +123,17 @@ impl WibbleRequest {
                 .and_then(|value| value.to_str().ok()),
         )
     }
+
+    fn saved_article_language_from_headers(
+        headers: &http::HeaderMap,
+    ) -> Option<SupportedTranslationLanguage> {
+        let cookie_header = headers.get(http::header::COOKIE)?.to_str().ok()?;
+        cookie_header.split(';').map(str::trim).find_map(|cookie| {
+            cookie
+                .strip_prefix(&format!("{}=", ARTICLE_LANGUAGE_COOKIE_NAME))
+                .and_then(resolve_supported_language_preference)
+        })
+    }
 }
 
 impl<S> FromRequestParts<S> for WibbleRequest
@@ -138,6 +153,8 @@ where
         let state = AppState::from_ref(state);
         let browser_translation_language =
             WibbleRequest::browser_translation_language_from_headers(&parts.headers);
+        let saved_article_language =
+            WibbleRequest::saved_article_language_from_headers(&parts.headers);
         let auth_user = if let Some(token) = extract_auth_token(parts) {
             state.jwks_client.validate_token(&token).await.ok()
         } else {
@@ -149,6 +166,7 @@ where
             request_path,
             auth_user,
             browser_translation_language,
+            saved_article_language,
         })
     }
 }
@@ -183,5 +201,31 @@ mod tests {
         let language = WibbleRequest::browser_translation_language_from_headers(&headers).unwrap();
 
         assert_eq!(language.code, "it");
+    }
+
+    #[test]
+    fn saved_article_language_from_headers_reads_supported_cookie_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::COOKIE,
+            HeaderValue::from_static("__article_lang=pt-BR; other=value"),
+        );
+
+        let language = WibbleRequest::saved_article_language_from_headers(&headers).unwrap();
+
+        assert_eq!(language.code, "pt");
+    }
+
+    #[test]
+    fn saved_article_language_from_headers_ignores_unsupported_cookie_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::COOKIE,
+            HeaderValue::from_static("__article_lang=klingon"),
+        );
+
+        let language = WibbleRequest::saved_article_language_from_headers(&headers);
+
+        assert!(language.is_none());
     }
 }

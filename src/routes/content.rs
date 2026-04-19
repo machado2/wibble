@@ -1,5 +1,8 @@
+use std::env;
+
 use axum::extract::{Path, Query};
-use axum::response::{Html, Redirect};
+use axum::http::header::SET_COOKIE;
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Router};
 use chrono::TimeDelta;
@@ -18,7 +21,13 @@ use crate::content as content_page;
 use crate::entities::{content as content_entity, content_comment, content_vote, prelude::*};
 use crate::error::Error;
 use crate::hot_score::calculate_hot_score;
+use crate::services::article_language::{
+    resolve_article_language, resolve_supported_language_preference,
+};
 use crate::wibble_request::WibbleRequest;
+
+const ARTICLE_LANGUAGE_COOKIE_NAME: &str = "__article_lang";
+const ARTICLE_LANGUAGE_AUTOMATIC: &str = "auto";
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -57,15 +66,31 @@ async fn get_content(
     wr: WibbleRequest,
     Path(slug): Path<String>,
     Query(query): Query<ContentQuery>,
-) -> Result<Html<String>, Error> {
-    content_page::GetContent::get_content(
-        &wr,
+) -> Result<Response, Error> {
+    let automatic_selection =
+        resolve_article_language(None, None, wr.browser_translation_language, &[]);
+    let cookie_header = article_language_cookie_header(
+        &slug,
+        query.lang.as_deref(),
+        automatic_selection.preferred_language.code,
+    );
+    let mut content_request = wr.clone();
+    if matches!(query.lang.as_deref(), Some(ARTICLE_LANGUAGE_AUTOMATIC)) {
+        content_request.saved_article_language = None;
+    }
+    let response = content_page::GetContent::get_content(
+        &content_request,
         &slug,
         query.source.as_deref(),
         query.comments_page,
-        query.lang.as_deref(),
+        requested_article_language(query.lang.as_deref()),
     )
-    .await
+    .await?;
+
+    Ok(match cookie_header {
+        Some(cookie) => ([(SET_COOKIE, cookie)], response).into_response(),
+        None => response.into_response(),
+    })
 }
 
 fn content_location(slug: &str, lang: Option<&str>, anchor: Option<&str>) -> String {
@@ -79,6 +104,63 @@ fn content_location(slug: &str, lang: Option<&str>, anchor: Option<&str>) -> Str
         path.push_str(anchor);
     }
     path
+}
+
+fn requested_article_language(lang: Option<&str>) -> Option<&str> {
+    match lang {
+        Some(ARTICLE_LANGUAGE_AUTOMATIC) => None,
+        other => other,
+    }
+}
+
+fn article_language_cookie_path(slug: &str) -> String {
+    format!("/content/{}", slug)
+}
+
+fn article_language_cookie(slug: &str, value: &str, max_age: u64) -> String {
+    let secure = if env::var("SITE_URL")
+        .unwrap_or_else(|_| "http://localhost:8000".to_string())
+        .starts_with("https://")
+    {
+        "; Secure"
+    } else {
+        ""
+    };
+    format!(
+        "{}={}; Path={}; SameSite=Lax{}; Max-Age={}",
+        ARTICLE_LANGUAGE_COOKIE_NAME,
+        value,
+        article_language_cookie_path(slug),
+        secure,
+        max_age
+    )
+}
+
+fn clear_article_language_cookie(slug: &str) -> String {
+    article_language_cookie(slug, "", 0)
+}
+
+fn article_language_cookie_header(
+    slug: &str,
+    lang: Option<&str>,
+    automatic_language_code: &str,
+) -> Option<String> {
+    match lang {
+        Some(ARTICLE_LANGUAGE_AUTOMATIC) => Some(clear_article_language_cookie(slug)),
+        Some(language) => {
+            let normalized = resolve_supported_language_preference(language)?;
+            if normalized.code == automatic_language_code {
+                Some(clear_article_language_cookie(slug))
+            } else {
+                Some(article_language_cookie(
+                    slug,
+                    normalized.code,
+                    30 * 24 * 60 * 60,
+                ))
+            }
+        }
+        None => None,
+    }
 }
 
 fn parse_vote_action(raw: &str) -> Result<VoteAction, Error> {
@@ -334,7 +416,7 @@ async fn post_vote(
 
 #[cfg(test)]
 mod tests {
-    use super::content_location;
+    use super::{article_language_cookie_header, content_location};
 
     #[test]
     fn content_location_preserves_language_query() {
@@ -350,5 +432,33 @@ mod tests {
             content_location("test-story", Some("pt"), Some("comments")),
             "/content/test-story?lang=pt#comments"
         );
+    }
+
+    #[test]
+    fn article_language_cookie_header_sets_manual_article_cookie() {
+        let cookie = article_language_cookie_header("test-story", Some("pt-BR"), "en").unwrap();
+
+        assert!(cookie.contains("__article_lang=pt"));
+        assert!(cookie.contains("Path=/content/test-story"));
+    }
+
+    #[test]
+    fn article_language_cookie_header_clears_cookie_for_automatic_mode() {
+        let cookie = article_language_cookie_header("test-story", Some("auto"), "en").unwrap();
+
+        assert!(cookie.contains("__article_lang="));
+        assert!(cookie.contains("Max-Age=0"));
+    }
+
+    #[test]
+    fn article_language_cookie_header_skips_cookie_when_language_is_unsupported() {
+        assert!(article_language_cookie_header("test-story", Some("klingon"), "en").is_none());
+    }
+
+    #[test]
+    fn article_language_cookie_header_clears_cookie_when_choice_matches_automatic_language() {
+        let cookie = article_language_cookie_header("test-story", Some("pt"), "pt").unwrap();
+
+        assert!(cookie.contains("Max-Age=0"));
     }
 }

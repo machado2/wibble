@@ -45,16 +45,16 @@ fn build_article_language_options(
         .unwrap_or_else(|| format!("Original edition: {}", selection.source_language.name));
     let mut options = vec![
         ArticleLanguageOption {
-            href: article_language_href(slug, None),
+            href: article_language_href(slug, Some("auto")),
             label: "Automatic".to_string(),
             note: automatic_note,
-            active: selection.preferred_language_source != PreferredLanguageSource::Explicit,
+            active: !uses_manual_article_language_preference(selection.preferred_language_source),
         },
         ArticleLanguageOption {
             href: article_language_href(slug, Some(selection.source_language.code)),
             label: format!("Original ({})", selection.source_language.name),
             note: "Manual source edition".to_string(),
-            active: selection.preferred_language_source == PreferredLanguageSource::Explicit
+            active: uses_manual_article_language_preference(selection.preferred_language_source)
                 && selection.preferred_language.code == selection.source_language.code,
         },
     ];
@@ -65,15 +65,19 @@ fn build_article_language_options(
             .copied()
             .filter(|language| language.code != selection.source_language.code)
             .map(|language| {
-                let explicitly_selected = selection.preferred_language_source
-                    == PreferredLanguageSource::Explicit
-                    && selection.preferred_language.code == language.code;
-                let note = if explicitly_selected && !selection.translation_available {
+                let manually_selected =
+                    uses_manual_article_language_preference(selection.preferred_language_source)
+                        && selection.preferred_language.code == language.code;
+                let note = if manually_selected && !selection.translation_available {
                     format!(
                         "Requested; showing {} for now",
                         selection.served_language.name
                     )
-                } else if explicitly_selected {
+                } else if manually_selected
+                    && selection.preferred_language_source == PreferredLanguageSource::Cookie
+                {
+                    "Saved for this article".to_string()
+                } else if manually_selected {
                     "Selected edition".to_string()
                 } else {
                     "Open when available".to_string()
@@ -83,12 +87,19 @@ fn build_article_language_options(
                     href: article_language_href(slug, Some(language.code)),
                     label: language.name.to_string(),
                     note,
-                    active: explicitly_selected,
+                    active: manually_selected,
                 }
             }),
     );
 
     options
+}
+
+fn uses_manual_article_language_preference(source: PreferredLanguageSource) -> bool {
+    matches!(
+        source,
+        PreferredLanguageSource::Explicit | PreferredLanguageSource::Cookie
+    )
 }
 
 #[allow(async_fn_in_trait)]
@@ -161,8 +172,12 @@ impl GetContent for WibbleRequest {
             markdown,
             &article.description,
         ));
-        let language_selection =
-            resolve_article_language(requested_language, self.browser_translation_language, &[]);
+        let language_selection = resolve_article_language(
+            requested_language,
+            self.saved_article_language,
+            self.browser_translation_language,
+            &[],
+        );
         let language_options = build_article_language_options(
             &article.slug,
             language_selection,
@@ -205,6 +220,7 @@ impl GetContent for WibbleRequest {
                 "preferred_article_language_source",
                 match language_selection.preferred_language_source {
                     PreferredLanguageSource::Explicit => "explicit",
+                    PreferredLanguageSource::Cookie => "cookie",
                     PreferredLanguageSource::Browser => "browser",
                     PreferredLanguageSource::ArticleSource => "source",
                 },
@@ -228,10 +244,10 @@ impl GetContent for WibbleRequest {
             .insert("article_language_options", &language_options)
             .insert(
                 "article_language_menu_open",
-                &(language_selection.preferred_language_source
-                    == PreferredLanguageSource::Explicit
-                    || (language_selection.translation_requested
-                        && !language_selection.translation_available)),
+                &(uses_manual_article_language_preference(
+                    language_selection.preferred_language_source,
+                ) || (language_selection.translation_requested
+                    && !language_selection.translation_available)),
             )
             .insert(
                 "can_edit",
@@ -260,7 +276,7 @@ impl GetContent for WibbleRequest {
                 &(interactions_open && self.auth_user.is_some()),
             )
             .insert("comment_pager", &comment_page.pager);
-        if language_selection.preferred_language_source == PreferredLanguageSource::Explicit {
+        if uses_manual_article_language_preference(language_selection.preferred_language_source) {
             template.insert(
                 "article_language_override_code",
                 language_selection.preferred_language.code,
@@ -291,7 +307,7 @@ mod tests {
     #[test]
     fn automatic_language_option_is_active_without_explicit_override() {
         let selection =
-            resolve_article_language(None, find_supported_translation_language("pt"), &[]);
+            resolve_article_language(None, None, find_supported_translation_language("pt"), &[]);
 
         let options = build_article_language_options(
             "story-slug",
@@ -305,7 +321,7 @@ mod tests {
 
     #[test]
     fn requested_language_option_stays_active_while_falling_back() {
-        let selection = resolve_article_language(Some("pt-BR"), None, &[]);
+        let selection = resolve_article_language(Some("pt-BR"), None, None, &[]);
 
         let options = build_article_language_options("story-slug", selection, None);
         let portuguese = options
@@ -315,5 +331,51 @@ mod tests {
 
         assert!(portuguese.active);
         assert!(portuguese.note.contains("showing English for now"));
+    }
+
+    #[test]
+    fn saved_language_option_is_marked_active_from_cookie_preference() {
+        let selection = resolve_article_language(
+            None,
+            find_supported_translation_language("pt"),
+            find_supported_translation_language("fr"),
+            &[],
+        );
+
+        let options = build_article_language_options(
+            "story-slug",
+            selection,
+            find_supported_translation_language("fr"),
+        );
+        let portuguese = options
+            .iter()
+            .find(|option| option.label == "Portuguese")
+            .unwrap();
+
+        assert!(portuguese.active);
+        assert!(portuguese.note.contains("showing English for now"));
+    }
+
+    #[test]
+    fn saved_language_option_notes_saved_preference_when_translation_is_available() {
+        let selection = resolve_article_language(
+            None,
+            find_supported_translation_language("pt"),
+            find_supported_translation_language("fr"),
+            &[find_supported_translation_language("pt").unwrap()],
+        );
+
+        let options = build_article_language_options(
+            "story-slug",
+            selection,
+            find_supported_translation_language("fr"),
+        );
+        let portuguese = options
+            .iter()
+            .find(|option| option.label == "Portuguese")
+            .unwrap();
+
+        assert!(portuguese.active);
+        assert_eq!(portuguese.note, "Saved for this article");
     }
 }
