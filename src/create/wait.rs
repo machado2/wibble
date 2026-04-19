@@ -19,6 +19,8 @@ struct WaitSummary {
     slug: Option<String>,
     stage_title: String,
     stage_description: String,
+    publication_title: String,
+    publication_note: String,
     image_total: usize,
     image_completed: usize,
     image_processing: usize,
@@ -33,7 +35,27 @@ pub enum WaitResponse {
     NotFound,
 }
 
-async fn build_wait_summary(state: &AppState, id: &str) -> Result<WaitSummary, Error> {
+fn publication_copy(is_logged_in: bool) -> (String, String) {
+    if is_logged_in {
+        (
+            "Destination: draft".to_string(),
+            "Signed-in articles stay private until you review and publish them.".to_string(),
+        )
+    } else {
+        (
+            "Destination: public".to_string(),
+            "Anonymous articles publish immediately and are not tied to an editable owner account."
+                .to_string(),
+        )
+    }
+}
+
+async fn build_wait_summary(
+    state: &AppState,
+    id: &str,
+    is_logged_in: bool,
+) -> Result<WaitSummary, Error> {
+    let fallback_publication_copy = publication_copy(is_logged_in);
     let article = Content::find()
         .filter(content::Column::Id.eq(id))
         .one(&state.db)
@@ -89,11 +111,15 @@ async fn build_wait_summary(state: &AppState, id: &str) -> Result<WaitSummary, E
             )
         };
 
+        let (publication_title, publication_note) =
+            publication_copy(article.author_email.is_some());
         Ok(WaitSummary {
             article_title: Some(article.title),
             slug: Some(article.slug),
             stage_title,
             stage_description,
+            publication_title,
+            publication_note,
             image_total,
             image_completed,
             image_processing,
@@ -107,6 +133,8 @@ async fn build_wait_summary(state: &AppState, id: &str) -> Result<WaitSummary, E
             stage_description:
                 "The prompt is in the queue and the article body is still being written."
                     .to_string(),
+            publication_title: fallback_publication_copy.0,
+            publication_note: fallback_publication_copy.1,
             image_total: 0,
             image_completed: 0,
             image_processing: 0,
@@ -116,7 +144,7 @@ async fn build_wait_summary(state: &AppState, id: &str) -> Result<WaitSummary, E
 }
 
 pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<String>, Error> {
-    let wait_summary = build_wait_summary(&wr.state, id).await?;
+    let wait_summary = build_wait_summary(&wr.state, id, wr.auth_user.is_some()).await?;
     wr.template("wait")
         .await
         .insert("id", id)

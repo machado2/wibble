@@ -139,13 +139,13 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 3.1 Ownership model
 
-- [ ] Audit all content ownership paths.
-- [ ] Ensure every created article has a coherent owner model.
-- [ ] Extend edit rights from admin-only to `admin || author`.
-- [ ] Decide how anonymous articles are owned:
-  - session-only drafts
-  - anonymous published items with no edit rights
-  - forced login for advanced features
+- [x] Audit all content ownership paths.
+- [x] Ensure every created article has a coherent owner model.
+- [x] Extend edit rights from admin-only to `admin || author`.
+- [x] Decide how anonymous articles are owned:
+  - chosen approach: anonymous published items with no edit rights
+  - logged-in articles are author-owned drafts that require explicit publish
+  - forced login remains reserved for future advanced features
 
 ### 3.2 Rate limits and anti-abuse
 
@@ -176,7 +176,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - agent editing
   - article ownership and publish controls
   - richer translation controls if needed beyond the default browser-language behavior
-- [ ] Update create / wait / edit UI to explain why login unlocks more capability.
+- [x] Update create / wait / edit UI to explain why login unlocks more capability.
 
 ## Phase 4: Agent Runtime Architecture
 

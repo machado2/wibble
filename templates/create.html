@@ -10,6 +10,13 @@
         <p class="card-text">
           Submit a scene, policy failure, administrative memo, or civic incident. The model works best when the premise is specific, official-sounding, and treated as entirely routine.
         </p>
+        <div class="alert alert-light border mb-3" role="status">
+          {% if logged_in %}
+          Signed-in filings open as private drafts under your account. You can revise the copy, replace images, and publish when ready.
+          {% else %}
+          Anonymous filings publish immediately if they succeed. Log in if you want an editable draft and explicit publish control.
+          {% endif %}
+        </div>
         <div class="create-tips">
           <span class="badge badge-info">Write it like a memo, not a punchline</span>
           <span class="badge badge-info">One absurd policy is enough</span>
@@ -34,7 +41,14 @@
         </div>
         <div class="create-submit-row">
           <button type="submit" class="btn btn-primary">Draft report</button>
-          <span class="text-muted small">Typical wait: a few seconds to a minute, depending on the image queue and the severity of the incident.</span>
+          <span class="text-muted small">
+            Typical wait: a few seconds to a minute, depending on the image queue and the severity of the incident.
+            {% if logged_in %}
+            Result: private draft.
+            {% else %}
+            Result: immediate public article.
+            {% endif %}
+          </span>
         </div>
       </form>
     </div>

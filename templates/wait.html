@@ -42,6 +42,11 @@
         </div>
       </div>
 
+      <div class="alert alert-light border mb-0" role="status">
+        <strong>{{ wait_summary.publication_title }}</strong>
+        {{ wait_summary.publication_note }}
+      </div>
+
       <div class="wait-actions">
         <a href="/wait/{{ id }}" class="btn btn-outline-primary">Refresh now</a>
         {% if wait_summary.slug %}

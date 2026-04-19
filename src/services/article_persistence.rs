@@ -45,6 +45,7 @@ pub async fn next_slug_for_title(db: &DatabaseConnection, title: &str) -> Result
 }
 
 pub fn build_saved_content_model(input: SavedContentInput, now: DateTime) -> content::Model {
+    let published = input.author_email.is_none();
     content::Model {
         id: input.id,
         slug: input.slug,
@@ -73,7 +74,7 @@ pub fn build_saved_content_model(input: SavedContentInput, now: DateTime) -> con
         impression_count: 0,
         click_count: 0,
         author_email: input.author_email,
-        published: true,
+        published,
         recovered_from_dead_link: input.recovered_from_dead_link,
     }
 }
@@ -157,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn build_saved_content_model_keeps_articles_published_with_author_email() {
+    fn build_saved_content_model_creates_draft_for_authenticated_authors() {
         let model = build_saved_content_model(
             SavedContentInput {
                 id: "article-id".to_string(),
@@ -176,7 +177,7 @@ mod tests {
             sample_time(),
         );
 
-        assert!(model.published);
+        assert!(!model.published);
     }
 
     #[test]

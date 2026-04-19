@@ -39,6 +39,7 @@ pub async fn render_create_page(
     error_message: Option<&str>,
 ) -> Result<Html<String>, Error> {
     let presets = create_prompt_presets();
+    let logged_in = wr.auth_user.is_some();
     let mut template = wr.template("create").await;
     template
         .insert("title", "Create a new article")
@@ -49,7 +50,8 @@ pub async fn render_create_page(
         .insert("robots", "noindex,nofollow")
         .insert("prompt", &prompt)
         .insert("prompt_max_length", &MAX_PROMPT_CHARS)
-        .insert("prompt_presets", &presets);
+        .insert("prompt_presets", &presets)
+        .insert("logged_in", &logged_in);
     if let Some(error_message) = error_message {
         template.insert("error_message", error_message);
     }
