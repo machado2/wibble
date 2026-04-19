@@ -5,6 +5,9 @@ use crate::services::article_language::{
     resolve_article_language, ArticleLanguageSelection, PreferredLanguageSource,
     ServedLanguageSource,
 };
+use crate::services::article_translations::{
+    cached_translation_languages, load_cached_article_translation, ArticleSourceText,
+};
 use crate::wibble_request::WibbleRequest;
 use axum::response::Html;
 use serde::Serialize;
@@ -168,16 +171,59 @@ impl GetContent for WibbleRequest {
                 "Markdown for content {} not found",
                 article.id
             ))))?;
-        let rendered_body = render::markdown_to_html(&render::strip_leading_description(
+        let source_article = ArticleSourceText {
+            title: &article.title,
+            description: &article.description,
             markdown,
-            &article.description,
-        ));
-        let language_selection = resolve_article_language(
+        };
+        let mut available_translations =
+            cached_translation_languages(&self.state.db, source_article).await?;
+        let mut language_selection = resolve_article_language(
             requested_language,
             self.saved_article_language,
             self.browser_translation_language,
-            &[],
+            &available_translations,
         );
+        let translated_article =
+            if language_selection.served_language.code != language_selection.source_language.code {
+                load_cached_article_translation(
+                    &self.state.db,
+                    source_article,
+                    language_selection.served_language,
+                )
+                .await?
+            } else {
+                None
+            };
+        if translated_article.is_none()
+            && language_selection.served_language.code != language_selection.source_language.code
+        {
+            available_translations
+                .retain(|language| language.code != language_selection.served_language.code);
+            language_selection = resolve_article_language(
+                requested_language,
+                self.saved_article_language,
+                self.browser_translation_language,
+                &available_translations,
+            );
+        }
+        let rendered_title = translated_article
+            .as_ref()
+            .map_or(article.title.as_str(), |translation| {
+                translation.title.as_str()
+            });
+        let rendered_description = translated_article
+            .as_ref()
+            .map_or(article.description.as_str(), |translation| {
+                translation.description.as_str()
+            });
+        let rendered_markdown = translated_article
+            .as_ref()
+            .map_or(markdown, |translation| translation.markdown.as_str());
+        let rendered_body = render::markdown_to_html(&render::strip_leading_description(
+            rendered_markdown,
+            rendered_description,
+        ));
         let language_options = build_article_language_options(
             &article.slug,
             language_selection,
@@ -188,9 +234,9 @@ impl GetContent for WibbleRequest {
             .insert("id", &article.id)
             .insert("slug", &article.slug)
             .insert("created_at", &article.created_at.format("%F").to_string())
-            .insert("description", &article.description)
+            .insert("description", rendered_description)
             .insert("image_id", &image_id)
-            .insert("title", &article.title)
+            .insert("title", rendered_title)
             .insert("body", &rendered_body)
             .insert(
                 "page_language_code",

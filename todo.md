@@ -298,7 +298,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 8.2 Translation persistence and cache model
 
-- [ ] Use `language` / `translation` tables for actual runtime persistence.
+- [x] Use `language` / `translation` tables for actual runtime persistence.
 - [ ] Add a translation service instead of leaving `src/llm/translate.rs` orphaned.
 - [ ] Persist translations so repeat reads do not re-run the model.
 - [ ] Cache by:
@@ -324,7 +324,7 @@ No release until every phase below is complete or explicitly removed from scope.
 ### 8.4 Serving behavior
 
 - [x] When a new translation is needed, serve the source article immediately instead of making the user wait.
-- [ ] Prefer the browser language only when:
+- [x] Prefer the browser language only when:
   - it is supported
   - the user has not overridden the preference
   - a cached translation exists, or the source-language fallback is acceptable while translation is being generated
