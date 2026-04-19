@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ page_language_code | default(value='en') }}">
     {%- if title -%} {%- set_global pagetitle = title ~ " - The Wibble" -%} {%-
     else -%} {%- set_global pagetitle = "The Wibble" -%} {%- endif -%} {%- if
     not description -%} {%- set_global description = "Get the latest news with a

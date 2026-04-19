@@ -31,16 +31,19 @@ pub fn router() -> Router<AppState> {
 struct ContentQuery {
     source: Option<String>,
     comments_page: Option<u64>,
+    lang: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct PostCommentData {
     body: String,
+    lang: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct VoteData {
     direction: String,
+    lang: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -55,8 +58,27 @@ async fn get_content(
     Path(slug): Path<String>,
     Query(query): Query<ContentQuery>,
 ) -> Result<Html<String>, Error> {
-    content_page::GetContent::get_content(&wr, &slug, query.source.as_deref(), query.comments_page)
-        .await
+    content_page::GetContent::get_content(
+        &wr,
+        &slug,
+        query.source.as_deref(),
+        query.comments_page,
+        query.lang.as_deref(),
+    )
+    .await
+}
+
+fn content_location(slug: &str, lang: Option<&str>, anchor: Option<&str>) -> String {
+    let mut path = format!("/content/{}", slug);
+    if let Some(lang) = lang {
+        path.push_str("?lang=");
+        path.push_str(lang);
+    }
+    if let Some(anchor) = anchor {
+        path.push('#');
+        path.push_str(anchor);
+    }
+    path
 }
 
 fn parse_vote_action(raw: &str) -> Result<VoteAction, Error> {
@@ -154,7 +176,11 @@ async fn post_comment(
 
     log_audit(db, auth_user, "create_comment", "content", &slug, None).await?;
 
-    Ok(Redirect::to(&format!("/content/{}#comments", slug)))
+    Ok(Redirect::to(&content_location(
+        &slug,
+        data.lang.as_deref(),
+        Some("comments"),
+    )))
 }
 
 async fn post_vote(
@@ -299,5 +325,30 @@ async fn post_vote(
     )
     .await?;
 
-    Ok(Redirect::to(&format!("/content/{}#article-voting", slug)))
+    Ok(Redirect::to(&content_location(
+        &slug,
+        data.lang.as_deref(),
+        Some("article-voting"),
+    )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::content_location;
+
+    #[test]
+    fn content_location_preserves_language_query() {
+        assert_eq!(
+            content_location("test-story", Some("pt"), None),
+            "/content/test-story?lang=pt"
+        );
+    }
+
+    #[test]
+    fn content_location_appends_anchor_after_language_query() {
+        assert_eq!(
+            content_location("test-story", Some("pt"), Some("comments")),
+            "/content/test-story?lang=pt#comments"
+        );
+    }
 }

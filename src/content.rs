@@ -1,5 +1,8 @@
 use crate::error::Error;
 use crate::permissions::{can_edit_article, can_toggle_publish};
+use crate::services::article_language::{
+    resolve_article_language, PreferredLanguageSource, ServedLanguageSource,
+};
 use crate::wibble_request::WibbleRequest;
 use axum::response::Html;
 
@@ -19,6 +22,7 @@ pub trait GetContent {
         slug: &str,
         source: Option<&str>,
         comments_page: Option<u64>,
+        requested_language: Option<&str>,
     ) -> Result<Html<String>, Error>;
     async fn get_content_paged(
         &self,
@@ -42,6 +46,7 @@ impl GetContent for WibbleRequest {
         slug: &str,
         source: Option<&str>,
         comments_page: Option<u64>,
+        requested_language: Option<&str>,
     ) -> Result<Html<String>, Error> {
         let article = match query::load_content_page_article(self, slug).await? {
             query::ContentPageArticle::Ready(article) => *article,
@@ -80,6 +85,8 @@ impl GetContent for WibbleRequest {
             markdown,
             &article.description,
         ));
+        let language_selection =
+            resolve_article_language(requested_language, self.browser_translation_language, &[]);
         let mut template = self.template("content").await;
         template
             .insert("id", &article.id)
@@ -89,6 +96,54 @@ impl GetContent for WibbleRequest {
             .insert("image_id", &image_id)
             .insert("title", &article.title)
             .insert("body", &rendered_body)
+            .insert(
+                "page_language_code",
+                language_selection.served_language.code,
+            )
+            .insert(
+                "page_language_name",
+                language_selection.served_language.name,
+            )
+            .insert(
+                "article_source_language_code",
+                language_selection.source_language.code,
+            )
+            .insert(
+                "article_source_language_name",
+                language_selection.source_language.name,
+            )
+            .insert(
+                "preferred_article_language_code",
+                language_selection.preferred_language.code,
+            )
+            .insert(
+                "preferred_article_language_name",
+                language_selection.preferred_language.name,
+            )
+            .insert(
+                "preferred_article_language_source",
+                match language_selection.preferred_language_source {
+                    PreferredLanguageSource::Explicit => "explicit",
+                    PreferredLanguageSource::Browser => "browser",
+                    PreferredLanguageSource::ArticleSource => "source",
+                },
+            )
+            .insert(
+                "served_article_language_source",
+                match language_selection.served_language_source {
+                    ServedLanguageSource::Preferred => "preferred",
+                    ServedLanguageSource::ArticleSource => "source",
+                    ServedLanguageSource::EnglishFallback => "english_fallback",
+                },
+            )
+            .insert(
+                "article_translation_requested",
+                &language_selection.translation_requested,
+            )
+            .insert(
+                "article_translation_available",
+                &language_selection.translation_available,
+            )
             .insert(
                 "can_edit",
                 &self
@@ -116,6 +171,12 @@ impl GetContent for WibbleRequest {
                 &(interactions_open && self.auth_user.is_some()),
             )
             .insert("comment_pager", &comment_page.pager);
+        if language_selection.preferred_language_source == PreferredLanguageSource::Explicit {
+            template.insert(
+                "article_language_override_code",
+                language_selection.preferred_language.code,
+            );
+        }
         if !public_article {
             template.insert("robots", "noindex,nofollow");
         }

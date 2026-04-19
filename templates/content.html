@@ -61,6 +61,9 @@
               {%- if can_vote -%}
               <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
                 <input type="hidden" name="direction" value="{% if user_vote == "up" %}clear{% else %}up{% endif %}">
+                {% if article_language_override_code %}
+                <input type="hidden" name="lang" value="{{ article_language_override_code }}">
+                {% endif %}
                 <button
                   type="submit"
                   class="article-vote-arrow is-up{% if user_vote == "up" %} active{% endif %}"
@@ -83,6 +86,9 @@
               {%- if can_vote -%}
               <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
                 <input type="hidden" name="direction" value="{% if user_vote == "down" %}clear{% else %}down{% endif %}">
+                {% if article_language_override_code %}
+                <input type="hidden" name="lang" value="{{ article_language_override_code }}">
+                {% endif %}
                 <button
                   type="submit"
                   class="article-vote-arrow is-down{% if user_vote == "down" %} active{% endif %}"
@@ -142,6 +148,9 @@
         <label for="comment-body" class="form-label">Add a comment</label>
         <textarea id="comment-body" name="body" class="form-control" rows="4" maxlength="5000" required></textarea>
       </div>
+      {% if article_language_override_code %}
+      <input type="hidden" name="lang" value="{{ article_language_override_code }}">
+      {% endif %}
       <button type="submit" class="btn btn-primary">Post comment</button>
     </form>
     {%- elif comments_open -%}
@@ -169,13 +178,13 @@
     {%- if comment_pager.total_pages > 1 -%}
     <div class="comments-pager">
       {%- if comment_pager.has_prev -%}
-      <a href="/content/{{ slug }}?comments_page={{ comment_pager.prev_page }}#comments" class="btn btn-outline-primary btn-sm">Newer comments</a>
+      <a href="/content/{{ slug }}?comments_page={{ comment_pager.prev_page }}{% if article_language_override_code %}&lang={{ article_language_override_code }}{% endif %}#comments" class="btn btn-outline-primary btn-sm">Newer comments</a>
       {%- else -%}
       <span></span>
       {%- endif -%}
       <span class="text-muted small">Page {{ comment_pager.current_page }} / {{ comment_pager.total_pages }}</span>
       {%- if comment_pager.has_next -%}
-      <a href="/content/{{ slug }}?comments_page={{ comment_pager.next_page }}#comments" class="btn btn-outline-primary btn-sm">Older comments</a>
+      <a href="/content/{{ slug }}?comments_page={{ comment_pager.next_page }}{% if article_language_override_code %}&lang={{ article_language_override_code }}{% endif %}#comments" class="btn btn-outline-primary btn-sm">Older comments</a>
       {%- else -%}
       <span></span>
       {%- endif -%}

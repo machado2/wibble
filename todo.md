@@ -286,12 +286,12 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 8.1 Product rules
 
-- [ ] Define the source-language model for articles:
+- [x] Define the source-language model for articles:
   - article language is the generated language
   - English is the baseline fallback if browser-language translation is unavailable
 - [x] Detect the user's preferred language from the browser request.
 - [x] Restrict translation targets to a curated whitelist of languages the model handles well.
-- [ ] Define fallback rules:
+- [x] Define fallback rules:
   - if browser language is unsupported, serve English or the source article immediately
   - if translation is missing or in progress, do not block the page; serve the source article immediately
   - once translation is ready, the preferred variant should be served automatically when appropriate
@@ -328,7 +328,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - it is supported
   - the user has not overridden the preference
   - a cached translation exists, or the source-language fallback is acceptable while translation is being generated
-- [ ] Define precedence between:
+- [x] Define precedence between:
   - explicit user toggle choice
   - browser default language
   - article source language
