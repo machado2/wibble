@@ -323,7 +323,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 8.4 Serving behavior
 
-- [ ] When a new translation is needed, serve the source article immediately instead of making the user wait.
+- [x] When a new translation is needed, serve the source article immediately instead of making the user wait.
 - [ ] Prefer the browser language only when:
   - it is supported
   - the user has not overridden the preference
@@ -336,15 +336,15 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 8.5 UI and preference controls
 
-- [ ] Add a language toggle control on article pages.
-- [ ] Decide whether the toggle is:
+- [x] Add a language toggle control on article pages.
+- [x] Decide whether the toggle is:
   - icon-only
   - icon + text
   - compact menu
 - [ ] Match the control to the deadpan editorial UI rather than making it look like a consumer app language picker.
 - [ ] Remember non-default language preference in a cookie.
 - [ ] Do not write a cookie when the current state matches the automatic browser-language default.
-- [ ] Define whether the preference is article-page only or site-wide.
+- [x] Define whether the preference is article-page only or site-wide.
 
 ### 8.6 Safety and abuse controls
 

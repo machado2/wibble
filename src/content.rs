@@ -1,10 +1,13 @@
 use crate::error::Error;
+use crate::llm::prompt_registry::{supported_translation_languages, SupportedTranslationLanguage};
 use crate::permissions::{can_edit_article, can_toggle_publish};
 use crate::services::article_language::{
-    resolve_article_language, PreferredLanguageSource, ServedLanguageSource,
+    resolve_article_language, ArticleLanguageSelection, PreferredLanguageSource,
+    ServedLanguageSource,
 };
 use crate::wibble_request::WibbleRequest;
 use axum::response::Html;
+use serde::Serialize;
 
 mod comments;
 mod policy;
@@ -14,6 +17,79 @@ mod render;
 pub use comments::{normalize_comment_body, normalize_comments_page};
 pub use policy::{article_accepts_public_interactions, can_view_article};
 pub use query::{find_article_by_slug, require_article_by_slug};
+
+#[derive(Serialize)]
+struct ArticleLanguageOption {
+    href: String,
+    label: String,
+    note: String,
+    active: bool,
+}
+
+fn article_language_href(slug: &str, lang: Option<&str>) -> String {
+    let mut path = format!("/content/{}", slug);
+    if let Some(lang) = lang {
+        path.push_str("?lang=");
+        path.push_str(lang);
+    }
+    path
+}
+
+fn build_article_language_options(
+    slug: &str,
+    selection: ArticleLanguageSelection,
+    browser_language: Option<SupportedTranslationLanguage>,
+) -> Vec<ArticleLanguageOption> {
+    let automatic_note = browser_language
+        .map(|language| format!("Browser default: {}", language.name))
+        .unwrap_or_else(|| format!("Original edition: {}", selection.source_language.name));
+    let mut options = vec![
+        ArticleLanguageOption {
+            href: article_language_href(slug, None),
+            label: "Automatic".to_string(),
+            note: automatic_note,
+            active: selection.preferred_language_source != PreferredLanguageSource::Explicit,
+        },
+        ArticleLanguageOption {
+            href: article_language_href(slug, Some(selection.source_language.code)),
+            label: format!("Original ({})", selection.source_language.name),
+            note: "Manual source edition".to_string(),
+            active: selection.preferred_language_source == PreferredLanguageSource::Explicit
+                && selection.preferred_language.code == selection.source_language.code,
+        },
+    ];
+
+    options.extend(
+        supported_translation_languages()
+            .iter()
+            .copied()
+            .filter(|language| language.code != selection.source_language.code)
+            .map(|language| {
+                let explicitly_selected = selection.preferred_language_source
+                    == PreferredLanguageSource::Explicit
+                    && selection.preferred_language.code == language.code;
+                let note = if explicitly_selected && !selection.translation_available {
+                    format!(
+                        "Requested; showing {} for now",
+                        selection.served_language.name
+                    )
+                } else if explicitly_selected {
+                    "Selected edition".to_string()
+                } else {
+                    "Open when available".to_string()
+                };
+
+                ArticleLanguageOption {
+                    href: article_language_href(slug, Some(language.code)),
+                    label: language.name.to_string(),
+                    note,
+                    active: explicitly_selected,
+                }
+            }),
+    );
+
+    options
+}
 
 #[allow(async_fn_in_trait)]
 pub trait GetContent {
@@ -87,6 +163,11 @@ impl GetContent for WibbleRequest {
         ));
         let language_selection =
             resolve_article_language(requested_language, self.browser_translation_language, &[]);
+        let language_options = build_article_language_options(
+            &article.slug,
+            language_selection,
+            self.browser_translation_language,
+        );
         let mut template = self.template("content").await;
         template
             .insert("id", &article.id)
@@ -144,6 +225,14 @@ impl GetContent for WibbleRequest {
                 "article_translation_available",
                 &language_selection.translation_available,
             )
+            .insert("article_language_options", &language_options)
+            .insert(
+                "article_language_menu_open",
+                &(language_selection.preferred_language_source
+                    == PreferredLanguageSource::Explicit
+                    || (language_selection.translation_requested
+                        && !language_selection.translation_available)),
+            )
             .insert(
                 "can_edit",
                 &self
@@ -181,5 +270,50 @@ impl GetContent for WibbleRequest {
             template.insert("robots", "noindex,nofollow");
         }
         template.render()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::llm::prompt_registry::find_supported_translation_language;
+    use crate::services::article_language::resolve_article_language;
+
+    use super::{article_language_href, build_article_language_options};
+
+    #[test]
+    fn article_language_href_uses_query_param_when_override_exists() {
+        assert_eq!(
+            article_language_href("story-slug", Some("pt")),
+            "/content/story-slug?lang=pt"
+        );
+    }
+
+    #[test]
+    fn automatic_language_option_is_active_without_explicit_override() {
+        let selection =
+            resolve_article_language(None, find_supported_translation_language("pt"), &[]);
+
+        let options = build_article_language_options(
+            "story-slug",
+            selection,
+            find_supported_translation_language("pt"),
+        );
+
+        assert!(options[0].active);
+        assert_eq!(options[0].label, "Automatic");
+    }
+
+    #[test]
+    fn requested_language_option_stays_active_while_falling_back() {
+        let selection = resolve_article_language(Some("pt-BR"), None, &[]);
+
+        let options = build_article_language_options("story-slug", selection, None);
+        let portuguese = options
+            .iter()
+            .find(|option| option.label == "Portuguese")
+            .unwrap();
+
+        assert!(portuguese.active);
+        assert!(portuguese.note.contains("showing English for now"));
     }
 }
