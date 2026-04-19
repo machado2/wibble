@@ -84,7 +84,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - wait-page rendering
   - dead-link recovery
   - generation orchestration
-- [ ] Split `src/content.rs` into:
+- [x] Split `src/content.rs` into:
   - article query / load service
   - rendering helpers
   - comment query / pagination

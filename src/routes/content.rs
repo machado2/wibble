@@ -130,12 +130,7 @@ async fn post_comment(
         .ok_or_else(|| Error::Auth("Login required".to_string()))?;
     let body = content_page::normalize_comment_body(&data.body)?;
     let db = &wr.state.db;
-    let article = Content::find()
-        .filter(content_entity::Column::Slug.eq(&slug))
-        .one(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
-        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+    let article = content_page::require_article_by_slug(db, &slug).await?;
     if !content_page::article_accepts_public_interactions(&article) {
         return Err(Error::BadRequest(
             "Comments are only available on published articles".to_string(),
@@ -173,12 +168,7 @@ async fn post_vote(
         .ok_or_else(|| Error::Auth("Login required".to_string()))?;
     let action = parse_vote_action(&data.direction)?;
     let db = &wr.state.db;
-    let article = Content::find()
-        .filter(content_entity::Column::Slug.eq(&slug))
-        .one(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error finding article: {}", e)))?
-        .ok_or(Error::NotFound(Some(format!("Article {} not found", slug))))?;
+    let article = content_page::require_article_by_slug(db, &slug).await?;
     if !content_page::article_accepts_public_interactions(&article) {
         return Err(Error::BadRequest(
             "Voting is only available on published articles".to_string(),
