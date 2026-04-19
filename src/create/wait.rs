@@ -3,6 +3,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::Serialize;
 
 use crate::app_state::AppState;
+use crate::create::clarify::parse_clarification_request;
 use crate::entities::prelude::*;
 use crate::entities::{content, content_image};
 use crate::error::Error;
@@ -30,6 +31,15 @@ struct WaitSummary {
     image_completed: usize,
     image_processing: usize,
     image_failed: usize,
+    clarification_question: Option<String>,
+    clarification_deadline: Option<String>,
+    phase_items: Vec<WaitPhaseItem>,
+}
+
+#[derive(Serialize)]
+struct WaitPhaseItem {
+    label: String,
+    state: String,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -71,7 +81,7 @@ fn queued_stage_copy(phase: Option<&str>) -> (String, String) {
         ),
         ARTICLE_JOB_PHASE_AWAITING_USER_INPUT => (
             "Waiting for clarification".to_string(),
-            "The draft is paused until the missing instruction is resolved.".to_string(),
+            "The draft is paused because the brief is still ambiguous enough to change the article materially.".to_string(),
         ),
         ARTICLE_JOB_PHASE_READY_FOR_REVIEW => (
             "Preparing review".to_string(),
@@ -88,13 +98,107 @@ fn queued_stage_copy(phase: Option<&str>) -> (String, String) {
     }
 }
 
+fn build_wait_phase_items(
+    phase: Option<&str>,
+    clarification_requested: bool,
+) -> Vec<WaitPhaseItem> {
+    let steps = [
+        (ARTICLE_JOB_PHASE_QUEUED, "Queued"),
+        (ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, "Clarify"),
+        (ARTICLE_JOB_PHASE_WRITING, "Write"),
+        (ARTICLE_JOB_PHASE_RENDERING_IMAGES, "Images"),
+        (ARTICLE_JOB_PHASE_READY_FOR_REVIEW, "Review"),
+    ];
+
+    let phase_rank = match phase.unwrap_or(ARTICLE_JOB_PHASE_QUEUED) {
+        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT => 1,
+        ARTICLE_JOB_PHASE_WRITING
+        | ARTICLE_JOB_PHASE_RESEARCHING
+        | ARTICLE_JOB_PHASE_TRANSLATING => {
+            if clarification_requested {
+                2
+            } else {
+                1
+            }
+        }
+        ARTICLE_JOB_PHASE_RENDERING_IMAGES => {
+            if clarification_requested {
+                3
+            } else {
+                2
+            }
+        }
+        ARTICLE_JOB_PHASE_READY_FOR_REVIEW => {
+            if clarification_requested {
+                4
+            } else {
+                3
+            }
+        }
+        _ => 0,
+    };
+
+    steps
+        .into_iter()
+        .filter(|(step_phase, _)| {
+            clarification_requested || *step_phase != ARTICLE_JOB_PHASE_AWAITING_USER_INPUT
+        })
+        .map(|(_step_phase, label)| {
+            let step_rank = match label {
+                "Queued" => 0,
+                "Clarify" => 1,
+                "Write" => {
+                    if clarification_requested {
+                        2
+                    } else {
+                        1
+                    }
+                }
+                "Images" => {
+                    if clarification_requested {
+                        3
+                    } else {
+                        2
+                    }
+                }
+                "Review" => {
+                    if clarification_requested {
+                        4
+                    } else {
+                        3
+                    }
+                }
+                _ => 0,
+            };
+            let state = if phase_rank > step_rank {
+                "done"
+            } else if phase_rank == step_rank {
+                "active"
+            } else {
+                "pending"
+            };
+            WaitPhaseItem {
+                label: label.to_string(),
+                state: state.to_string(),
+            }
+        })
+        .collect()
+}
+
 async fn build_wait_summary(
     state: &AppState,
     id: &str,
     is_logged_in: bool,
     job_phase: Option<&str>,
+    job_preview_payload: Option<&str>,
 ) -> Result<WaitSummary, Error> {
     let fallback_publication_copy = publication_copy(is_logged_in);
+    let clarification = parse_clarification_request(job_preview_payload);
+    let clarification_question = clarification.as_ref().map(|value| value.question.clone());
+    let clarification_deadline = clarification
+        .as_ref()
+        .and_then(|value| value.formatted_deadline());
+    let phase_items = build_wait_phase_items(job_phase, clarification_question.is_some());
     let article = Content::find()
         .filter(content::Column::Id.eq(id))
         .one(&state.db)
@@ -163,6 +267,9 @@ async fn build_wait_summary(
             image_completed,
             image_processing,
             image_failed,
+            clarification_question: None,
+            clarification_deadline: None,
+            phase_items,
         })
     } else {
         let (stage_title, stage_description) = queued_stage_copy(job_phase);
@@ -177,17 +284,25 @@ async fn build_wait_summary(
             image_completed: 0,
             image_processing: 0,
             image_failed: 0,
+            clarification_question,
+            clarification_deadline,
+            phase_items,
         })
     }
 }
 
 pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<String>, Error> {
-    let job_phase = ArticleJobService::new(wr.state.clone())
+    let job = ArticleJobService::new(wr.state.clone())
         .load_job(id)
-        .await?
-        .map(|job| job.phase);
-    let wait_summary =
-        build_wait_summary(&wr.state, id, wr.auth_user.is_some(), job_phase.as_deref()).await?;
+        .await?;
+    let wait_summary = build_wait_summary(
+        &wr.state,
+        id,
+        wr.auth_user.is_some(),
+        job.as_ref().map(|job| job.phase.as_str()),
+        job.as_ref().and_then(|job| job.preview_payload.as_deref()),
+    )
+    .await?;
     wr.template("wait")
         .await
         .insert("id", id)
@@ -197,6 +312,10 @@ pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<Strin
             "The article is still being generated and this page auto-refreshes.",
         )
         .insert("robots", "noindex,nofollow")
+        .insert(
+            "wait_auto_refresh",
+            &wait_summary.clarification_question.is_none(),
+        )
         .insert("wait_summary", &wait_summary)
         .render()
 }

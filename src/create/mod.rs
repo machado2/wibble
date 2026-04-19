@@ -1,5 +1,6 @@
 #![allow(clippy::blocks_in_conditions)]
 
+pub(crate) mod clarify;
 mod input;
 mod orchestration;
 mod page;

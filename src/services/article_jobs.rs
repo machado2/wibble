@@ -15,6 +15,9 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::audit::log_system_audit;
+use crate::create::clarify::{
+    append_clarification_answer, append_clarification_fallback, parse_clarification_request,
+};
 use crate::create::create_article;
 use crate::entities::{article_job, content, content_image, prelude::*};
 use crate::error::Error;
@@ -315,13 +318,89 @@ impl ArticleJobService {
         Ok(Some(updated))
     }
 
+    pub async fn request_clarification(
+        &self,
+        id: &str,
+        payload: String,
+    ) -> Result<Option<article_job::Model>, Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Ok(None);
+        };
+
+        let mut active: article_job::ActiveModel = job.into();
+        let reference_time = now();
+        active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_AWAITING_USER_INPUT.to_string());
+        active.status = ActiveValue::set(ARTICLE_JOB_STATUS_PROCESSING.to_string());
+        active.preview_payload = ActiveValue::set(Some(payload));
+        active.updated_at = ActiveValue::set(reference_time);
+        if active.started_at.is_not_set() {
+            active.started_at = ActiveValue::set(Some(reference_time));
+        }
+        let updated = active
+            .update(&self.state.db)
+            .await
+            .map_err(|e| Error::Database(format!("Error requesting clarification: {}", e)))?;
+        let details = serde_json::json!({
+            "phase": ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
+        })
+        .to_string();
+        log_system_audit(
+            &self.state.db,
+            "article_job_clarification_requested",
+            "article_job",
+            id,
+            Some(details),
+        )
+        .await?;
+        Ok(Some(updated))
+    }
+
+    pub async fn submit_clarification_answer(
+        &self,
+        id: &str,
+        answer: &str,
+    ) -> Result<Option<article_job::Model>, Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Ok(None);
+        };
+        if job.phase != ARTICLE_JOB_PHASE_AWAITING_USER_INPUT {
+            return Err(Error::BadRequest(format!(
+                "Article job {} is not waiting for clarification",
+                id
+            )));
+        }
+        let clarification = parse_clarification_request(job.preview_payload.as_deref())
+            .ok_or_else(|| Error::BadRequest("Clarification prompt is missing".to_string()))?;
+        let prompt = append_clarification_answer(&job.prompt, &clarification.question, answer);
+        let updated = self.resume_job_with_prompt(job, prompt).await?;
+        let details = serde_json::json!({
+            "answer_chars": answer.chars().count(),
+        })
+        .to_string();
+        log_system_audit(
+            &self.state.db,
+            "article_job_clarification_answered",
+            "article_job",
+            id,
+            Some(details),
+        )
+        .await?;
+        Ok(Some(updated))
+    }
+
     pub async fn ensure_job_progress(&self, id: &str) -> Result<Option<article_job::Model>, Error> {
         let Some(job) = self.load_job(id).await? else {
             return Ok(None);
         };
-        let job = self.reconcile_job_model(job, true).await?;
+        let job = if job.phase == ARTICLE_JOB_PHASE_AWAITING_USER_INPUT {
+            self.maybe_resume_clarification_timeout(job).await?
+        } else {
+            self.reconcile_job_model(job, true).await?
+        };
 
-        if is_in_progress_job_status(&job.status) && job.phase != ARTICLE_JOB_PHASE_RENDERING_IMAGES
+        if is_in_progress_job_status(&job.status)
+            && job.phase != ARTICLE_JOB_PHASE_RENDERING_IMAGES
+            && job.phase != ARTICLE_JOB_PHASE_AWAITING_USER_INPUT
         {
             let _ = self.start_generation_job_from_model(job.clone()).await?;
         }
@@ -540,6 +619,40 @@ impl ArticleJobService {
         Ok(())
     }
 
+    async fn maybe_resume_clarification_timeout(
+        &self,
+        job: article_job::Model,
+    ) -> Result<article_job::Model, Error> {
+        let Some(clarification) = parse_clarification_request(job.preview_payload.as_deref())
+        else {
+            return Ok(job);
+        };
+        let Some(auto_resume_at) = clarification.auto_resume_at_datetime() else {
+            return Ok(job);
+        };
+        if auto_resume_at > now() {
+            return Ok(job);
+        }
+
+        let prompt =
+            append_clarification_fallback(&job.prompt, &clarification.fallback_instruction);
+        let updated = self.resume_job_with_prompt(job.clone(), prompt).await?;
+        let details = serde_json::json!({
+            "question": clarification.question,
+            "auto_resume_at": clarification.auto_resume_at,
+        })
+        .to_string();
+        log_system_audit(
+            &self.state.db,
+            "article_job_clarification_timed_out",
+            "article_job",
+            &job.id,
+            Some(details),
+        )
+        .await?;
+        Ok(updated)
+    }
+
     async fn mark_job_processing(
         &self,
         job: article_job::Model,
@@ -558,6 +671,28 @@ impl ArticleJobService {
             .update(&self.state.db)
             .await
             .map_err(|e| Error::Database(format!("Error marking article job as processing: {}", e)))
+    }
+
+    async fn resume_job_with_prompt(
+        &self,
+        job: article_job::Model,
+        prompt: String,
+    ) -> Result<article_job::Model, Error> {
+        let mut active: article_job::ActiveModel = job.into();
+        let reference_time = now();
+        active.prompt = ActiveValue::set(prompt);
+        active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_QUEUED.to_string());
+        active.status = ActiveValue::set(ARTICLE_JOB_STATUS_QUEUED.to_string());
+        active.preview_payload = ActiveValue::set(None);
+        active.error_summary = ActiveValue::set(None);
+        active.finished_at = ActiveValue::set(None);
+        active.updated_at = ActiveValue::set(reference_time);
+        active.update(&self.state.db).await.map_err(|e| {
+            Error::Database(format!(
+                "Error resuming article job from clarification: {}",
+                e
+            ))
+        })
     }
 
     async fn mark_job_rendering_images(

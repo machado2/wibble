@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
 {% block headers %}
+{% if wait_auto_refresh %}
 <meta http-equiv="refresh" content="4">
+{% endif %}
 {% endblock headers %}
 
 {% block content %}
@@ -18,12 +20,30 @@
       </div>
 
       <div class="wait-spinner-wrap">
+        {% if wait_summary.clarification_question %}
+        <div class="alert alert-warning border mb-0 text-start" role="status">
+          <strong>Clarification needed.</strong>
+          {{ wait_summary.clarification_question }}
+          {% if wait_summary.clarification_deadline %}
+          <div class="small text-muted mt-2">
+            If nobody answers by {{ wait_summary.clarification_deadline }}, the job resumes with a conservative fallback.
+          </div>
+          {% endif %}
+        </div>
+        {% else %}
         <div class="spinner-border text-primary" role="status">
           <span class="visually-hidden">Loading...</span>
         </div>
+        {% endif %}
       </div>
 
       <div class="wait-metrics" aria-label="Generation progress">
+        {% for item in wait_summary.phase_items %}
+        <div class="image-meta-chip">
+          <span class="image-meta-label">{{ item.label }}</span>
+          <strong>{{ item.state }}</strong>
+        </div>
+        {% endfor %}
         <div class="image-meta-chip">
           <span class="image-meta-label">Images planned</span>
           <strong>{{ wait_summary.image_total }}</strong>
@@ -48,9 +68,17 @@
       </div>
 
       <div class="wait-actions">
+        {% if wait_summary.clarification_question %}
+        <form method="post" action="/wait/{{ id }}/clarify" class="w-100">
+          <label class="form-label" for="clarification-answer">Answer the missing detail</label>
+          <textarea id="clarification-answer" class="form-control mb-3" name="answer" rows="3" maxlength="200" required></textarea>
+          <button type="submit" class="btn btn-primary">Resume drafting</button>
+        </form>
+        {% else %}
         <a href="/wait/{{ id }}" class="btn btn-outline-primary">Refresh now</a>
         {% if wait_summary.slug %}
         <a href="/content/{{ wait_summary.slug }}" class="btn btn-outline-secondary">Open article</a>
+        {% endif %}
         {% endif %}
       </div>
     </div>

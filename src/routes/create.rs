@@ -3,16 +3,28 @@ use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::{Form, Router};
+use serde::Deserialize;
 
 use crate::app_state::AppState;
 use crate::create as create_page;
+use crate::create::clarify::normalize_clarification_answer;
 use crate::error::Error;
+use crate::services::article_jobs::{spawn_due_article_jobs, ArticleJobService};
 use crate::wibble_request::WibbleRequest;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/wait/{id}", get(get_wait))
+        .route(
+            "/wait/{id}/clarify",
+            axum::routing::post(post_wait_clarification),
+        )
         .route("/create", get(get_create).post(create_article))
+}
+
+#[derive(Deserialize)]
+struct WaitClarificationData {
+    answer: String,
 }
 
 async fn get_wait(wr: WibbleRequest, Path(id): Path<String>) -> Response {
@@ -62,4 +74,25 @@ async fn create_article(
 
 async fn get_create(wr: WibbleRequest) -> Result<Html<String>, Error> {
     create_page::get_create(wr).await
+}
+
+async fn post_wait_clarification(
+    wr: WibbleRequest,
+    Path(id): Path<String>,
+    Form(data): Form<WaitClarificationData>,
+) -> Response {
+    let answer = match normalize_clarification_answer(&data.answer) {
+        Ok(answer) => answer,
+        Err(e) => return e.into_response(),
+    };
+
+    let service = ArticleJobService::new(wr.state.clone());
+    match service.submit_clarification_answer(&id, &answer).await {
+        Ok(Some(_)) => {
+            spawn_due_article_jobs(wr.state.clone()).await;
+            Redirect::to(&format!("/wait/{}", id)).into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => e.into_response(),
+    }
 }

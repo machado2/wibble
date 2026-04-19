@@ -16,7 +16,8 @@ No release until every phase below is complete or explicitly removed from scope.
 - [ ] **Research-mode and edit-agent orchestration are still missing**
   - The default generation path now uses a bounded runtime with structured steps, usage accounting, validation, and policy limits.
   - Create and dead-link recovery jobs use persisted `article_job` rows instead of `src/tasklist.rs`.
-  - Research, preview/review editing, and user-input pause/resume still need dedicated orchestration.
+  - Preview/review editing and single-question pause/resume now use persisted job state.
+  - Remaining work in this area is bounded research mode and its source-handling contract.
 
 - [ ] **Abuse controls still need agent-specific hardening**
   - `src/rate_limit.rs` uses keyed, tiered quotas by capability, the admin job monitor exposes audit/queue/rate-limit summaries, and generation/edit flows enforce editorial policy guardrails.
@@ -229,10 +230,10 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 5.3 Clarifying question flow
 
-- [ ] Allow the agent to ask at most one clarifying question per job unless the user is admin.
-- [ ] Only allow clarification when ambiguity materially changes the article.
-- [ ] Add a job state and UI for pending questions.
-- [ ] Add timeout / fallback behavior if the user does not answer.
+- [x] Allow the agent to ask at most one clarifying question per job unless the user is admin.
+- [x] Only allow clarification when ambiguity materially changes the article.
+- [x] Add a job state and UI for pending questions.
+- [x] Add timeout / fallback behavior if the user does not answer.
 
 ### 5.4 Output validation
 
@@ -361,8 +362,8 @@ No release until every phase below is complete or explicitly removed from scope.
   - standard draft
   - research-enabled draft
   - maybe “requires login”
-- [ ] Add job-status UI for multi-step agent states.
-- [ ] Add question/answer UI for clarifying prompts.
+- [x] Add job-status UI for multi-step agent states.
+- [x] Add question/answer UI for clarifying prompts.
 - [x] Add preview/diff UI for agent edits.
 - [ ] Add quota messaging and login upsell copy.
 - [ ] Add translation toggle UI and fallback messaging that does not interrupt reading.
