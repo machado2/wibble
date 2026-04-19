@@ -15,6 +15,7 @@ use crate::image_status::{
     IMAGE_STATUS_PROCESSING,
 };
 use crate::repositories::images::store_image_file;
+use crate::services::article_jobs::ArticleJobService;
 
 fn pending_resume_interval_seconds() -> u64 {
     env::var("IMAGE_RESUME_INTERVAL_SECONDS")
@@ -194,12 +195,12 @@ async fn process_image_generation(state: &AppState, image_id: &str) -> Result<()
     }
 }
 
-pub async fn spawn_image_generation(state: AppState, image_id: String) {
-    if !state.try_mark_image_generation_started(&image_id).await {
-        return;
-    }
-
+pub fn spawn_image_generation(state: AppState, image_id: String) {
     tokio::spawn(async move {
+        if !state.try_mark_image_generation_started(&image_id).await {
+            return;
+        }
+
         let result = process_image_generation(&state, &image_id).await;
         if let Err(err) = result {
             event!(
@@ -211,13 +212,29 @@ pub async fn spawn_image_generation(state: AppState, image_id: String) {
         } else {
             event!(Level::INFO, image_id = %image_id, "Async image generation finished");
         }
+
+        if let Ok(Some(image)) = load_content_image(&state, &image_id).await {
+            let job_service = ArticleJobService::new(state.clone());
+            if let Err(err) = job_service
+                .finalize_job_state_for_article(&image.content_id)
+                .await
+            {
+                event!(
+                    Level::ERROR,
+                    image_id = %image_id,
+                    article_id = %image.content_id,
+                    error = %err,
+                    "Failed to reconcile article job after image update"
+                );
+            }
+        }
         state.mark_image_generation_finished(&image_id).await;
     });
 }
 
 pub async fn enqueue_pending_images(state: AppState, image_ids: Vec<String>) {
     for image_id in image_ids {
-        spawn_image_generation(state.clone(), image_id).await;
+        spawn_image_generation(state.clone(), image_id);
     }
 }
 
@@ -234,7 +251,7 @@ pub async fn resume_pending_images(state: &AppState) -> Result<(), Error> {
 
     for image in images {
         if is_pending_status(&image.status) {
-            spawn_image_generation(state.clone(), image.id).await;
+            spawn_image_generation(state.clone(), image.id);
         }
     }
     Ok(())

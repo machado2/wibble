@@ -15,7 +15,6 @@ use crate::image_generator::replicate::ReplicateImageGenerator;
 use crate::image_generator::ImageGenerator;
 use crate::llm::Llm;
 use crate::rate_limit::RateLimitState;
-use crate::tasklist::TaskList;
 
 mod background_jobs;
 mod db;
@@ -35,11 +34,15 @@ use schema_compat::{
 };
 
 impl AppState {
-    pub async fn mark_generation_started(&self, article_id: &str) {
+    pub async fn try_mark_generation_started(&self, article_id: &str) -> bool {
         self.active_generation_ids
             .lock()
             .await
-            .insert(article_id.to_string());
+            .insert(article_id.to_string())
+    }
+
+    pub async fn mark_generation_started(&self, article_id: &str) {
+        let _ = self.try_mark_generation_started(article_id).await;
     }
 
     pub async fn mark_generation_finished(&self, article_id: &str) {
@@ -103,7 +106,6 @@ impl AppState {
 
         let runtime_limits = read_runtime_limits();
         let jwks_client = JwksClient::new();
-        let task_list = TaskList::default();
         let tera = init_templates()?;
         let template_auto_reload = detect_template_auto_reload();
         let llm = Llm::init();
@@ -121,7 +123,6 @@ impl AppState {
 
         let state = Self {
             db,
-            task_list,
             tera: runtime_state.tera,
             llm,
             image_generator: image_providers.generator,
@@ -150,7 +151,6 @@ impl AppState {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub db: DatabaseConnection,
-    pub task_list: TaskList,
     pub tera: Arc<RwLock<Tera>>,
     pub llm: Llm,
     pub image_generator: Arc<dyn ImageGenerator>,

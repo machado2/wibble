@@ -5,7 +5,7 @@ use crate::app_state::AppState;
 use crate::entities::content;
 use crate::entities::prelude::*;
 use crate::error::Error;
-use crate::services::article_jobs::{ArticleJobService, ArticleJobTrace};
+use crate::services::article_jobs::{ArticleJobRequest, ArticleJobService, ArticleJobTrace};
 
 use super::create_article;
 
@@ -97,6 +97,17 @@ pub async fn start_recover_article_for_slug(
         );
         let _ = Content::delete_by_id(id).exec(&state.db).await;
         return Ok(None);
+    }
+
+    if let Err(err) = job_service
+        .create_job(
+            id.clone(),
+            ArticleJobRequest::dead_link_recovery(prompt.clone(), id.clone()),
+        )
+        .await
+    {
+        let _ = Content::delete_by_id(id.clone()).exec(&state.db).await;
+        return Err(err);
     }
 
     job_service

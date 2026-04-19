@@ -3,7 +3,7 @@ use tracing::{event, Level};
 use crate::app_state::AppState;
 use crate::error::Error;
 use crate::rate_limit::RequesterTier;
-use crate::services::article_jobs::{ArticleJobService, ArticleJobTrace};
+use crate::services::article_jobs::{ArticleJobRequest, ArticleJobService, ArticleJobTrace};
 
 use super::{create_article, normalize_create_prompt};
 
@@ -22,6 +22,17 @@ pub async fn start_create_article(
     let id = job_service.new_job_id();
     event!(Level::DEBUG, "Created id {}", &id);
     let return_id = id.clone();
+    job_service
+        .create_job(
+            id.clone(),
+            ArticleJobRequest::create(
+                prompt.clone(),
+                author_email.clone(),
+                requester_tier,
+                rate_limit_key,
+            ),
+        )
+        .await?;
     job_service
         .spawn_generation_job(id.clone(), permit, ArticleJobTrace::create(), async move {
             create_article(&state, id.clone(), prompt.clone(), author_email).await

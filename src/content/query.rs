@@ -7,7 +7,7 @@ use crate::auth::AuthUser;
 use crate::create::{render_wait_page, start_recover_article_for_slug};
 use crate::entities::{content, content_image, prelude::*};
 use crate::error::Error;
-use crate::services::article_jobs::ArticleJobService;
+use crate::services::article_jobs::{is_in_progress_job_status, ArticleJobService};
 use crate::wibble_request::WibbleRequest;
 
 use super::policy::can_view_article;
@@ -164,7 +164,10 @@ pub async fn load_content_page_article(
         return Ok(ContentPageArticle::Ready(Box::new(article)));
     }
 
-    if job_service.is_job_processing(&article.id).await {
+    if matches!(
+        job_service.ensure_job_progress(&article.id).await?,
+        Some(ref job) if is_in_progress_job_status(&job.status)
+    ) {
         event!(
             Level::INFO,
             slug = %slug,

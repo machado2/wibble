@@ -109,9 +109,9 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Phase 2: Persistent Job Model for Agents
 
-- [ ] Replace the current minimal task result model with persisted job state.
-- [ ] Add a DB-backed job table for long-running work.
-- [ ] Add explicit job phases such as:
+- [x] Replace the current minimal task result model with persisted job state.
+- [x] Add a DB-backed job table for long-running work.
+- [x] Add explicit job phases such as:
   - `queued`
   - `planning`
   - `researching`
@@ -124,7 +124,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - `completed`
   - `failed`
   - `cancelled`
-- [ ] Store job metadata:
+- [x] Store job metadata:
   - requesting user or anonymous key
   - article id
   - prompt
@@ -132,8 +132,8 @@ No release until every phase below is complete or explicitly removed from scope.
   - usage counters
   - error summary
   - preview payload / draft output
-- [ ] Keep the single-instance in-memory “currently active” protections, but layer them over persisted job state rather than replacing it.
-- [ ] Add resume-safe behavior after restart.
+- [x] Keep the single-instance in-memory “currently active” protections, but layer them over persisted job state rather than replacing it.
+- [x] Add resume-safe behavior after restart.
 
 ## Phase 3: Identity, Ownership, and Quotas
 
@@ -458,7 +458,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - replace global counters with keyed quota service
   - add tier-aware policies
 
-- [ ] `src/tasklist.rs`
+- [x] `src/tasklist.rs`
   - replace with richer persisted job model
   - preserve in-memory active tracking as an optimization only
 
@@ -484,7 +484,7 @@ No release until every phase below is complete or explicitly removed from scope.
 ## Release Checklist
 
 - [ ] Core refactor completed
-- [ ] Persisted job system completed
+- [x] Persisted job system completed
 - [x] Keyed quotas completed
 - [x] Ownership + author editing completed
 - [ ] Agent generation completed

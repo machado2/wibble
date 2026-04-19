@@ -1,18 +1,112 @@
+use std::env;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
+use sea_orm::{
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect,
+};
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::{event, Level};
 use uuid::Uuid;
 
 use crate::app_state::AppState;
+use crate::audit::log_system_audit;
+use crate::create::create_article;
+use crate::entities::{article_job, content, content_image, prelude::*};
 use crate::error::Error;
+use crate::image_jobs::enqueue_pending_images;
+use crate::image_status::{is_pending_status, IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED};
 use crate::rate_limit::{ArticleRateLimit, RequesterTier};
-use crate::tasklist::TaskResult;
+
+pub const ARTICLE_JOB_STATUS_QUEUED: &str = "queued";
+pub const ARTICLE_JOB_STATUS_PROCESSING: &str = "processing";
+pub const ARTICLE_JOB_STATUS_COMPLETED: &str = "completed";
+pub const ARTICLE_JOB_STATUS_FAILED: &str = "failed";
+pub const ARTICLE_JOB_STATUS_CANCELLED: &str = "cancelled";
+
+pub const ARTICLE_JOB_PHASE_QUEUED: &str = "queued";
+pub const ARTICLE_JOB_PHASE_PLANNING: &str = "planning";
+pub const ARTICLE_JOB_PHASE_RESEARCHING: &str = "researching";
+pub const ARTICLE_JOB_PHASE_AWAITING_USER_INPUT: &str = "awaiting_user_input";
+pub const ARTICLE_JOB_PHASE_WRITING: &str = "writing";
+pub const ARTICLE_JOB_PHASE_EDITING: &str = "editing";
+pub const ARTICLE_JOB_PHASE_TRANSLATING: &str = "translating";
+pub const ARTICLE_JOB_PHASE_RENDERING_IMAGES: &str = "rendering_images";
+pub const ARTICLE_JOB_PHASE_READY_FOR_REVIEW: &str = "ready_for_review";
+pub const ARTICLE_JOB_PHASE_COMPLETED: &str = "completed";
+pub const ARTICLE_JOB_PHASE_FAILED: &str = "failed";
+pub const ARTICLE_JOB_PHASE_CANCELLED: &str = "cancelled";
+
+type BoxedArticleFuture = Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 #[derive(Clone)]
 pub struct ArticleJobService {
     state: AppState,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArticleJobFeatureType {
+    Create,
+    DeadLinkRecovery,
+}
+
+impl ArticleJobFeatureType {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Create => "create",
+            Self::DeadLinkRecovery => "dead_link_recovery",
+        }
+    }
+
+    fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "create" => Some(Self::Create),
+            "dead_link_recovery" => Some(Self::DeadLinkRecovery),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ArticleJobRequest {
+    article_id: Option<String>,
+    requester_key: String,
+    requester_tier: String,
+    author_email: Option<String>,
+    prompt: String,
+    feature_type: ArticleJobFeatureType,
+}
+
+impl ArticleJobRequest {
+    pub fn create(
+        prompt: String,
+        author_email: Option<String>,
+        requester_tier: RequesterTier,
+        rate_limit_key: String,
+    ) -> Self {
+        Self {
+            article_id: None,
+            requester_key: rate_limit_key,
+            requester_tier: requester_tier_label(requester_tier).to_string(),
+            author_email,
+            prompt,
+            feature_type: ArticleJobFeatureType::Create,
+        }
+    }
+
+    pub fn dead_link_recovery(prompt: String, article_id: String) -> Self {
+        Self {
+            article_id: Some(article_id),
+            requester_key: "system:dead_link_recovery".to_string(),
+            requester_tier: "SYSTEM".to_string(),
+            author_email: None,
+            prompt,
+            feature_type: ArticleJobFeatureType::DeadLinkRecovery,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -24,16 +118,41 @@ pub struct ArticleJobTrace {
 impl ArticleJobTrace {
     pub fn create() -> Self {
         Self {
-            job_kind: "create",
+            job_kind: ArticleJobFeatureType::Create.as_str(),
             recovery_slug: None,
         }
     }
 
     pub fn dead_link_recovery(slug: String) -> Self {
         Self {
-            job_kind: "dead_link_recovery",
+            job_kind: ArticleJobFeatureType::DeadLinkRecovery.as_str(),
             recovery_slug: Some(slug),
         }
+    }
+
+    fn from_job(job: &article_job::Model) -> Self {
+        match ArticleJobFeatureType::from_str(&job.feature_type) {
+            Some(ArticleJobFeatureType::DeadLinkRecovery) => Self {
+                job_kind: ArticleJobFeatureType::DeadLinkRecovery.as_str(),
+                recovery_slug: None,
+            },
+            _ => Self::create(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct ImageProgress {
+    total: usize,
+    completed: usize,
+    processing: usize,
+    failed: usize,
+    pending_ids: Vec<String>,
+}
+
+impl ImageProgress {
+    fn has_pending(&self) -> bool {
+        !self.pending_ids.is_empty()
     }
 }
 
@@ -87,19 +206,89 @@ impl ArticleJobService {
             })
     }
 
-    pub async fn task_result(&self, id: &str) -> Result<TaskResult, Error> {
-        self.state.task_list.get(id).await
+    pub async fn create_job(&self, id: String, request: ArticleJobRequest) -> Result<(), Error> {
+        let prompt_chars = request.prompt.chars().count();
+        let prompt = request.prompt;
+        let reference_time = now();
+
+        ArticleJob::insert(article_job::ActiveModel {
+            id: ActiveValue::set(id),
+            article_id: ActiveValue::set(request.article_id),
+            requester_key: ActiveValue::set(request.requester_key),
+            requester_tier: ActiveValue::set(request.requester_tier),
+            author_email: ActiveValue::set(request.author_email),
+            prompt: ActiveValue::set(prompt),
+            feature_type: ActiveValue::set(request.feature_type.as_str().to_string()),
+            phase: ActiveValue::set(ARTICLE_JOB_PHASE_QUEUED.to_string()),
+            status: ActiveValue::set(ARTICLE_JOB_STATUS_QUEUED.to_string()),
+            usage_counters: ActiveValue::set(Some(
+                serde_json::json!({
+                    "prompt_chars": prompt_chars,
+                    "image_total": 0,
+                    "image_completed": 0,
+                    "image_processing": 0,
+                    "image_failed": 0,
+                })
+                .to_string(),
+            )),
+            preview_payload: ActiveValue::set(None),
+            error_summary: ActiveValue::set(None),
+            fail_count: ActiveValue::set(0),
+            created_at: ActiveValue::set(reference_time),
+            updated_at: ActiveValue::set(reference_time),
+            started_at: ActiveValue::set(None),
+            finished_at: ActiveValue::set(None),
+        })
+        .exec(&self.state.db)
+        .await
+        .map_err(|e| Error::Database(format!("Error inserting article job: {}", e)))?;
+
+        Ok(())
     }
 
-    pub async fn is_job_processing(&self, article_id: &str) -> bool {
-        if self.state.is_generation_active(article_id).await {
-            return true;
+    pub async fn load_job(&self, id: &str) -> Result<Option<article_job::Model>, Error> {
+        load_article_job(&self.state, id).await
+    }
+
+    pub async fn ensure_job_progress(&self, id: &str) -> Result<Option<article_job::Model>, Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Ok(None);
+        };
+        let job = self.reconcile_job_model(job, true).await?;
+
+        if is_in_progress_job_status(&job.status) && job.phase != ARTICLE_JOB_PHASE_RENDERING_IMAGES
+        {
+            let _ = self.start_generation_job_from_model(job.clone()).await?;
         }
 
-        matches!(
-            self.task_result(article_id).await,
-            Ok(TaskResult::Processing)
-        )
+        self.load_job(id).await
+    }
+
+    pub async fn reconcile_job_state(&self, id: &str) -> Result<Option<article_job::Model>, Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Ok(None);
+        };
+        self.reconcile_job_model(job, true).await.map(Some)
+    }
+
+    pub async fn reconcile_job_state_for_article(
+        &self,
+        article_id: &str,
+    ) -> Result<Option<article_job::Model>, Error> {
+        let Some(job) = load_article_job_for_article(&self.state, article_id).await? else {
+            return Ok(None);
+        };
+        self.reconcile_job_model(job, true).await.map(Some)
+    }
+
+    pub async fn finalize_job_state_for_article(
+        &self,
+        article_id: &str,
+    ) -> Result<Option<article_job::Model>, Error> {
+        let Some(job) = load_article_job_for_article(&self.state, article_id).await? else {
+            return Ok(None);
+        };
+        self.reconcile_job_model(job, false).await.map(Some)
     }
 
     pub async fn spawn_generation_job<F>(
@@ -111,28 +300,514 @@ impl ArticleJobService {
     ) where
         F: Future<Output = Result<(), Error>> + Send + 'static,
     {
-        let state = self.state.clone();
-        let active_counter = state.active_article_generations.clone();
-        state.mark_generation_started(&id).await;
-        state
-            .task_list
-            .clone()
-            .spawn_task(id.clone(), async move {
-                let _permit = permit;
-                let in_flight = active_counter.fetch_add(1, Ordering::SeqCst) + 1;
-                log_job_transition("started", &id, &trace, in_flight);
+        if !self.state.try_mark_generation_started(&id).await {
+            return;
+        }
 
-                let result = future.await;
-                let in_flight_after = active_counter
+        let service = self.clone();
+        let state = self.state.clone();
+
+        tokio::spawn(async move {
+            let _permit = permit;
+            let in_flight = state
+                .active_article_generations
+                .fetch_add(1, Ordering::SeqCst)
+                + 1;
+            log_job_transition("started", &id, &trace, in_flight);
+
+            if let Err(err) = service
+                .mark_job_processing_by_id(&id, ARTICLE_JOB_PHASE_WRITING)
+                .await
+            {
+                event!(
+                    Level::ERROR,
+                    job_id = %id,
+                    error = %err,
+                    "Failed to mark article job as processing"
+                );
+                let _ = service.mark_job_failed_by_id(&id, &err).await;
+                let in_flight_after = state
+                    .active_article_generations
                     .fetch_sub(1, Ordering::SeqCst)
                     .saturating_sub(1);
+                log_job_transition("worker_finished", &id, &trace, in_flight_after);
+                return;
+            }
 
-                log_job_transition("finished", &id, &trace, in_flight_after);
-                state.mark_generation_finished(&id).await;
-                result
-            })
-            .await;
+            let result = future.await;
+            let in_flight_after = state
+                .active_article_generations
+                .fetch_sub(1, Ordering::SeqCst)
+                .saturating_sub(1);
+
+            match result {
+                Ok(()) => {
+                    if let Err(err) = service.reconcile_job_state(&id).await {
+                        event!(
+                            Level::ERROR,
+                            job_id = %id,
+                            error = %err,
+                            "Failed to reconcile article job after generation"
+                        );
+                        let _ = service.mark_job_failed_by_id(&id, &err).await;
+                    }
+                }
+                Err(err) => {
+                    event!(
+                        Level::ERROR,
+                        job_id = %id,
+                        error = %err,
+                        "Article generation job failed"
+                    );
+                    let _ = service.mark_job_failed_by_id(&id, &err).await;
+                }
+            }
+
+            log_job_transition("worker_finished", &id, &trace, in_flight_after);
+        });
     }
+
+    async fn reconcile_job_model(
+        &self,
+        job: article_job::Model,
+        enqueue_missing_images: bool,
+    ) -> Result<article_job::Model, Error> {
+        if is_terminal_job_status(&job.status) {
+            self.state.mark_generation_finished(&job.id).await;
+            return Ok(job);
+        }
+
+        let Some(article) = load_job_article_content(&self.state, &job).await? else {
+            if job.phase == ARTICLE_JOB_PHASE_RENDERING_IMAGES {
+                let err = Error::NotFound(Some(format!(
+                    "Article content is missing for article job {}",
+                    job.id
+                )));
+                return self.mark_job_failed(job, &err).await;
+            }
+            return Ok(job);
+        };
+
+        if article.markdown.is_none() {
+            return Ok(job);
+        }
+
+        let progress = load_article_image_progress(&self.state, &article.id).await?;
+        if progress.has_pending() {
+            if enqueue_missing_images {
+                enqueue_pending_images(self.state.clone(), progress.pending_ids.clone()).await;
+            }
+            return self
+                .mark_job_rendering_images(job, &article, &progress)
+                .await;
+        }
+
+        self.mark_job_completed(job, &article, &progress).await
+    }
+
+    async fn start_generation_job_from_model(
+        &self,
+        job: article_job::Model,
+    ) -> Result<bool, Error> {
+        if !is_in_progress_job_status(&job.status)
+            || job.phase == ARTICLE_JOB_PHASE_RENDERING_IMAGES
+        {
+            return Ok(false);
+        }
+
+        let permit = match self
+            .state
+            .article_generation_semaphore
+            .clone()
+            .try_acquire_owned()
+        {
+            Ok(permit) => permit,
+            Err(_) => return Ok(false),
+        };
+
+        let trace = ArticleJobTrace::from_job(&job);
+        let future = build_generation_future(self.state.clone(), &job)?;
+        self.spawn_generation_job(job.id.clone(), permit, trace, future)
+            .await;
+        Ok(true)
+    }
+
+    async fn mark_job_processing_by_id(&self, id: &str, phase: &str) -> Result<(), Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Err(Error::NotFound(Some(format!(
+                "Article job {} not found",
+                id
+            ))));
+        };
+        self.mark_job_processing(job, phase).await?;
+        Ok(())
+    }
+
+    async fn mark_job_failed_by_id(&self, id: &str, err: &Error) -> Result<(), Error> {
+        let Some(job) = self.load_job(id).await? else {
+            self.state.mark_generation_finished(id).await;
+            return Ok(());
+        };
+        self.mark_job_failed(job, err).await?;
+        Ok(())
+    }
+
+    async fn mark_job_processing(
+        &self,
+        job: article_job::Model,
+        phase: &str,
+    ) -> Result<article_job::Model, Error> {
+        let mut active: article_job::ActiveModel = job.into();
+        let reference_time = now();
+        active.phase = ActiveValue::set(phase.to_string());
+        active.status = ActiveValue::set(ARTICLE_JOB_STATUS_PROCESSING.to_string());
+        active.error_summary = ActiveValue::set(None);
+        active.updated_at = ActiveValue::set(reference_time);
+        if active.started_at.is_not_set() {
+            active.started_at = ActiveValue::set(Some(reference_time));
+        }
+        active
+            .update(&self.state.db)
+            .await
+            .map_err(|e| Error::Database(format!("Error marking article job as processing: {}", e)))
+    }
+
+    async fn mark_job_rendering_images(
+        &self,
+        job: article_job::Model,
+        article: &content::Model,
+        progress: &ImageProgress,
+    ) -> Result<article_job::Model, Error> {
+        let mut active: article_job::ActiveModel = job.clone().into();
+        let reference_time = now();
+        active.article_id = ActiveValue::set(Some(article.id.clone()));
+        active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_RENDERING_IMAGES.to_string());
+        active.status = ActiveValue::set(ARTICLE_JOB_STATUS_PROCESSING.to_string());
+        active.preview_payload =
+            ActiveValue::set(Some(build_job_preview_payload(article, progress)));
+        active.usage_counters =
+            ActiveValue::set(Some(build_job_usage_counters(&job.prompt, progress)));
+        active.error_summary = ActiveValue::set(None);
+        active.updated_at = ActiveValue::set(reference_time);
+        if active.started_at.is_not_set() {
+            active.started_at = ActiveValue::set(Some(reference_time));
+        }
+        let updated = active.update(&self.state.db).await.map_err(|e| {
+            Error::Database(format!(
+                "Error marking article job as rendering images: {}",
+                e
+            ))
+        })?;
+        self.state.mark_generation_started(&job.id).await;
+        Ok(updated)
+    }
+
+    async fn mark_job_completed(
+        &self,
+        job: article_job::Model,
+        article: &content::Model,
+        progress: &ImageProgress,
+    ) -> Result<article_job::Model, Error> {
+        let mut active: article_job::ActiveModel = job.clone().into();
+        let reference_time = now();
+        active.article_id = ActiveValue::set(Some(article.id.clone()));
+        active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_COMPLETED.to_string());
+        active.status = ActiveValue::set(ARTICLE_JOB_STATUS_COMPLETED.to_string());
+        active.preview_payload =
+            ActiveValue::set(Some(build_job_preview_payload(article, progress)));
+        active.usage_counters =
+            ActiveValue::set(Some(build_job_usage_counters(&job.prompt, progress)));
+        active.error_summary = ActiveValue::set(None);
+        active.finished_at = ActiveValue::set(Some(reference_time));
+        active.updated_at = ActiveValue::set(reference_time);
+        let updated = active.update(&self.state.db).await.map_err(|e| {
+            Error::Database(format!("Error marking article job as completed: {}", e))
+        })?;
+
+        self.state.mark_generation_finished(&job.id).await;
+        let details = serde_json::json!({
+            "article_id": article.id,
+            "slug": article.slug,
+            "feature_type": job.feature_type,
+            "image_total": progress.total,
+            "image_failed": progress.failed,
+        })
+        .to_string();
+        log_system_audit(
+            &self.state.db,
+            "article_job_completed",
+            "article_job",
+            &job.id,
+            Some(details),
+        )
+        .await?;
+        Ok(updated)
+    }
+
+    async fn mark_job_failed(
+        &self,
+        job: article_job::Model,
+        err: &Error,
+    ) -> Result<article_job::Model, Error> {
+        let mut active: article_job::ActiveModel = job.clone().into();
+        let reference_time = now();
+        active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_FAILED.to_string());
+        active.status = ActiveValue::set(ARTICLE_JOB_STATUS_FAILED.to_string());
+        active.error_summary = ActiveValue::set(Some(err.to_string()));
+        active.fail_count = ActiveValue::set(job.fail_count + 1);
+        active.finished_at = ActiveValue::set(Some(reference_time));
+        active.updated_at = ActiveValue::set(reference_time);
+        let updated = active
+            .update(&self.state.db)
+            .await
+            .map_err(|e| Error::Database(format!("Error marking article job as failed: {}", e)))?;
+
+        self.state.mark_generation_finished(&job.id).await;
+        let details = serde_json::json!({
+            "article_id": job.article_id,
+            "feature_type": job.feature_type,
+            "error": err.to_string(),
+            "fail_count": job.fail_count + 1,
+        })
+        .to_string();
+        log_system_audit(
+            &self.state.db,
+            "article_job_failed",
+            "article_job",
+            &job.id,
+            Some(details),
+        )
+        .await?;
+        Ok(updated)
+    }
+}
+
+pub fn is_in_progress_job_status(status: &str) -> bool {
+    matches!(
+        status,
+        ARTICLE_JOB_STATUS_QUEUED | ARTICLE_JOB_STATUS_PROCESSING
+    )
+}
+
+pub fn is_terminal_job_status(status: &str) -> bool {
+    matches!(
+        status,
+        ARTICLE_JOB_STATUS_COMPLETED | ARTICLE_JOB_STATUS_FAILED | ARTICLE_JOB_STATUS_CANCELLED
+    )
+}
+
+pub async fn spawn_due_article_jobs(state: AppState) {
+    let jobs = match due_article_job_ids(&state).await {
+        Ok(jobs) => jobs,
+        Err(err) => {
+            event!(Level::ERROR, error = %err, "Failed to load due article jobs");
+            return;
+        }
+    };
+
+    let service = ArticleJobService::new(state);
+    for job_id in jobs {
+        if let Err(err) = service.ensure_job_progress(&job_id).await {
+            event!(
+                Level::ERROR,
+                job_id = %job_id,
+                error = %err,
+                "Failed to resume article job"
+            );
+        }
+    }
+}
+
+pub fn spawn_resume_loop(state: AppState) {
+    tokio::spawn(async move {
+        let mut interval =
+            tokio::time::interval(Duration::from_secs(article_job_resume_interval_seconds()));
+        loop {
+            interval.tick().await;
+            spawn_due_article_jobs(state.clone()).await;
+        }
+    });
+}
+
+async fn due_article_job_ids(state: &AppState) -> Result<Vec<String>, Error> {
+    ArticleJob::find()
+        .filter(
+            article_job::Column::Status
+                .is_in([ARTICLE_JOB_STATUS_QUEUED, ARTICLE_JOB_STATUS_PROCESSING]),
+        )
+        .order_by_asc(article_job::Column::CreatedAt)
+        .limit(article_job_resume_batch_size())
+        .select_only()
+        .column(article_job::Column::Id)
+        .into_tuple::<String>()
+        .all(&state.db)
+        .await
+        .map_err(|e| Error::Database(format!("Error loading pending article jobs: {}", e)))
+}
+
+async fn load_article_job(
+    state: &AppState,
+    job_id: &str,
+) -> Result<Option<article_job::Model>, Error> {
+    ArticleJob::find_by_id(job_id.to_string())
+        .one(&state.db)
+        .await
+        .map_err(|e| Error::Database(format!("Error loading article job {}: {}", job_id, e)))
+}
+
+async fn load_article_job_for_article(
+    state: &AppState,
+    article_id: &str,
+) -> Result<Option<article_job::Model>, Error> {
+    ArticleJob::find()
+        .filter(
+            Condition::any()
+                .add(article_job::Column::Id.eq(article_id.to_string()))
+                .add(article_job::Column::ArticleId.eq(article_id.to_string())),
+        )
+        .order_by_desc(article_job::Column::CreatedAt)
+        .one(&state.db)
+        .await
+        .map_err(|e| {
+            Error::Database(format!(
+                "Error loading article job for article {}: {}",
+                article_id, e
+            ))
+        })
+}
+
+async fn load_job_article_content(
+    state: &AppState,
+    job: &article_job::Model,
+) -> Result<Option<content::Model>, Error> {
+    let mut candidate_ids = Vec::new();
+    if let Some(article_id) = job.article_id.as_deref() {
+        candidate_ids.push(article_id.to_string());
+    }
+    if job.id != job.article_id.as_deref().unwrap_or_default() {
+        candidate_ids.push(job.id.clone());
+    }
+
+    for article_id in candidate_ids {
+        if let Some(article) = Content::find_by_id(article_id.clone())
+            .one(&state.db)
+            .await
+            .map_err(|e| {
+                Error::Database(format!(
+                    "Error loading article content {}: {}",
+                    article_id, e
+                ))
+            })?
+        {
+            return Ok(Some(article));
+        }
+    }
+
+    Ok(None)
+}
+
+async fn load_article_image_progress(
+    state: &AppState,
+    article_id: &str,
+) -> Result<ImageProgress, Error> {
+    let images = ContentImage::find()
+        .filter(content_image::Column::ContentId.eq(article_id.to_string()))
+        .all(&state.db)
+        .await
+        .map_err(|e| {
+            Error::Database(format!(
+                "Error loading article images for article {}: {}",
+                article_id, e
+            ))
+        })?;
+
+    let mut progress = ImageProgress {
+        total: images.len(),
+        ..ImageProgress::default()
+    };
+    for image in images {
+        if image.status == IMAGE_STATUS_COMPLETED {
+            progress.completed += 1;
+        } else if image.status == IMAGE_STATUS_FAILED {
+            progress.failed += 1;
+        } else if is_pending_status(&image.status) {
+            progress.processing += 1;
+            progress.pending_ids.push(image.id);
+        }
+    }
+
+    Ok(progress)
+}
+
+fn build_generation_future(
+    state: AppState,
+    job: &article_job::Model,
+) -> Result<BoxedArticleFuture, Error> {
+    let Some(_feature_type) = ArticleJobFeatureType::from_str(&job.feature_type) else {
+        return Err(Error::BadRequest(format!(
+            "Unsupported article job feature type: {}",
+            job.feature_type
+        )));
+    };
+    let job_id = job.id.clone();
+    let prompt = job.prompt.clone();
+    let author_email = job.author_email.clone();
+    Ok(Box::pin(async move {
+        create_article(&state, job_id, prompt, author_email).await
+    }))
+}
+
+fn requester_tier_label(requester_tier: RequesterTier) -> &'static str {
+    match requester_tier {
+        RequesterTier::Anonymous => "ANON",
+        RequesterTier::Authenticated => "AUTH",
+        RequesterTier::Admin => "ADMIN",
+    }
+}
+
+fn build_job_usage_counters(prompt: &str, progress: &ImageProgress) -> String {
+    serde_json::json!({
+        "prompt_chars": prompt.chars().count(),
+        "image_total": progress.total,
+        "image_completed": progress.completed,
+        "image_processing": progress.processing,
+        "image_failed": progress.failed,
+    })
+    .to_string()
+}
+
+fn build_job_preview_payload(article: &content::Model, progress: &ImageProgress) -> String {
+    let publication_state = if article.published { "public" } else { "draft" };
+    serde_json::json!({
+        "article_id": article.id,
+        "slug": article.slug,
+        "title": article.title,
+        "publication_state": publication_state,
+        "image_total": progress.total,
+        "image_completed": progress.completed,
+        "image_failed": progress.failed,
+    })
+    .to_string()
+}
+
+fn article_job_resume_interval_seconds() -> u64 {
+    env::var("ARTICLE_JOB_RESUME_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(10)
+}
+
+fn article_job_resume_batch_size() -> u64 {
+    env::var("ARTICLE_JOB_RESUME_BATCH_SIZE")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(50)
+}
+
+fn now() -> chrono::NaiveDateTime {
+    chrono::Utc::now().naive_local()
 }
 
 fn log_job_transition(
@@ -150,4 +825,64 @@ fn log_job_transition(
         in_flight,
         "Article generation job state changed"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_job_usage_counters, is_in_progress_job_status, is_terminal_job_status, ImageProgress,
+        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, ARTICLE_JOB_PHASE_COMPLETED,
+        ARTICLE_JOB_PHASE_EDITING, ARTICLE_JOB_PHASE_FAILED, ARTICLE_JOB_PHASE_PLANNING,
+        ARTICLE_JOB_PHASE_QUEUED, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
+        ARTICLE_JOB_PHASE_RENDERING_IMAGES, ARTICLE_JOB_PHASE_RESEARCHING,
+        ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING, ARTICLE_JOB_STATUS_COMPLETED,
+        ARTICLE_JOB_STATUS_FAILED, ARTICLE_JOB_STATUS_PROCESSING, ARTICLE_JOB_STATUS_QUEUED,
+    };
+
+    #[test]
+    fn explicit_phase_constants_cover_persisted_agent_lifecycle() {
+        let phases = [
+            ARTICLE_JOB_PHASE_QUEUED,
+            ARTICLE_JOB_PHASE_PLANNING,
+            ARTICLE_JOB_PHASE_RESEARCHING,
+            ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
+            ARTICLE_JOB_PHASE_WRITING,
+            ARTICLE_JOB_PHASE_EDITING,
+            ARTICLE_JOB_PHASE_TRANSLATING,
+            ARTICLE_JOB_PHASE_RENDERING_IMAGES,
+            ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
+            ARTICLE_JOB_PHASE_COMPLETED,
+            ARTICLE_JOB_PHASE_FAILED,
+        ];
+
+        assert!(phases.contains(&ARTICLE_JOB_PHASE_RENDERING_IMAGES));
+        assert!(phases.contains(&ARTICLE_JOB_PHASE_READY_FOR_REVIEW));
+    }
+
+    #[test]
+    fn job_status_helpers_distinguish_terminal_and_active_states() {
+        assert!(is_in_progress_job_status(ARTICLE_JOB_STATUS_QUEUED));
+        assert!(is_in_progress_job_status(ARTICLE_JOB_STATUS_PROCESSING));
+        assert!(is_terminal_job_status(ARTICLE_JOB_STATUS_COMPLETED));
+        assert!(is_terminal_job_status(ARTICLE_JOB_STATUS_FAILED));
+        assert!(!is_terminal_job_status(ARTICLE_JOB_STATUS_QUEUED));
+    }
+
+    #[test]
+    fn usage_counters_include_prompt_and_image_progress() {
+        let json = build_job_usage_counters(
+            "deadpan prompt",
+            &ImageProgress {
+                total: 3,
+                completed: 1,
+                processing: 1,
+                failed: 1,
+                pending_ids: vec!["img-2".to_string()],
+            },
+        );
+
+        assert!(json.contains("\"prompt_chars\":14"));
+        assert!(json.contains("\"image_total\":3"));
+        assert!(json.contains("\"image_failed\":1"));
+    }
 }

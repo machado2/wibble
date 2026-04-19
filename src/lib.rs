@@ -21,6 +21,5 @@ pub mod routes;
 pub mod s3;
 pub mod services;
 pub mod sitemap;
-pub mod tasklist;
 pub mod translation_jobs;
 pub mod wibble_request;

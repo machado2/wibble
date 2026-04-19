@@ -110,7 +110,7 @@ pub async fn get_image(
     }
 
     if is_pending_status(&image.status) && !state.is_image_generation_active(id).await {
-        spawn_image_generation(state.clone(), id.to_string()).await;
+        spawn_image_generation(state.clone(), id.to_string());
     }
     let placeholder_status = if is_pending_status(&image.status) {
         image.status.as_str()

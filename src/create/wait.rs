@@ -9,8 +9,13 @@ use crate::error::Error;
 use crate::image_status::{
     IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED, IMAGE_STATUS_PENDING, IMAGE_STATUS_PROCESSING,
 };
-use crate::services::article_jobs::ArticleJobService;
-use crate::tasklist::TaskResult;
+use crate::services::article_jobs::{
+    is_in_progress_job_status, ArticleJobService, ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
+    ARTICLE_JOB_PHASE_QUEUED, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
+    ARTICLE_JOB_PHASE_RENDERING_IMAGES, ARTICLE_JOB_PHASE_RESEARCHING,
+    ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING, ARTICLE_JOB_STATUS_COMPLETED,
+    ARTICLE_JOB_STATUS_FAILED,
+};
 use crate::wibble_request::WibbleRequest;
 
 #[derive(Serialize)]
@@ -50,10 +55,44 @@ fn publication_copy(is_logged_in: bool) -> (String, String) {
     }
 }
 
+fn queued_stage_copy(phase: Option<&str>) -> (String, String) {
+    match phase.unwrap_or(ARTICLE_JOB_PHASE_WRITING) {
+        ARTICLE_JOB_PHASE_QUEUED => (
+            "Queued for generation".to_string(),
+            "The prompt is waiting for a generation slot before drafting starts.".to_string(),
+        ),
+        ARTICLE_JOB_PHASE_RESEARCHING => (
+            "Researching the brief".to_string(),
+            "The job is gathering bounded context before the draft is written.".to_string(),
+        ),
+        ARTICLE_JOB_PHASE_TRANSLATING => (
+            "Translating the draft".to_string(),
+            "The article text is being transformed into a new language variant.".to_string(),
+        ),
+        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT => (
+            "Waiting for clarification".to_string(),
+            "The draft is paused until the missing instruction is resolved.".to_string(),
+        ),
+        ARTICLE_JOB_PHASE_READY_FOR_REVIEW => (
+            "Preparing review".to_string(),
+            "The draft is being packaged for a final review pass.".to_string(),
+        ),
+        ARTICLE_JOB_PHASE_RENDERING_IMAGES => (
+            "Rendering illustrations".to_string(),
+            "The story draft is ready and the image queue is actively rendering art.".to_string(),
+        ),
+        _ => (
+            "Drafting the story".to_string(),
+            "The headline, angle, and article body are still being assembled.".to_string(),
+        ),
+    }
+}
+
 async fn build_wait_summary(
     state: &AppState,
     id: &str,
     is_logged_in: bool,
+    job_phase: Option<&str>,
 ) -> Result<WaitSummary, Error> {
     let fallback_publication_copy = publication_copy(is_logged_in);
     let article = Content::find()
@@ -126,13 +165,12 @@ async fn build_wait_summary(
             image_failed,
         })
     } else {
+        let (stage_title, stage_description) = queued_stage_copy(job_phase);
         Ok(WaitSummary {
             article_title: None,
             slug: None,
-            stage_title: "Drafting the story".to_string(),
-            stage_description:
-                "The prompt is in the queue and the article body is still being written."
-                    .to_string(),
+            stage_title,
+            stage_description,
             publication_title: fallback_publication_copy.0,
             publication_note: fallback_publication_copy.1,
             image_total: 0,
@@ -144,7 +182,12 @@ async fn build_wait_summary(
 }
 
 pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<String>, Error> {
-    let wait_summary = build_wait_summary(&wr.state, id, wr.auth_user.is_some()).await?;
+    let job_phase = ArticleJobService::new(wr.state.clone())
+        .load_job(id)
+        .await?
+        .map(|job| job.phase);
+    let wait_summary =
+        build_wait_summary(&wr.state, id, wr.auth_user.is_some(), job_phase.as_deref()).await?;
     wr.template("wait")
         .await
         .insert("id", id)
@@ -160,9 +203,9 @@ pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<Strin
 
 pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
     let job_service = ArticleJobService::new(wr.state.clone());
-    let task = job_service.task_result(id).await;
-    match task {
-        Ok(TaskResult::Success) => {
+    let job = job_service.ensure_job_progress(id).await;
+    match job {
+        Ok(Some(job)) if job.status == ARTICLE_JOB_STATUS_COMPLETED => {
             let content = Content::find()
                 .filter(content::Column::Id.eq(id))
                 .one(&wr.state.db)
@@ -173,11 +216,15 @@ pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
                 Err(_) => WaitResponse::InternalError,
             }
         }
-        Ok(TaskResult::Error) => WaitResponse::InternalError,
-        Ok(TaskResult::Processing) => match render_wait_page(&wr, id).await {
-            Ok(html) => WaitResponse::Html(html),
-            Err(_) => WaitResponse::InternalError,
-        },
-        _ => WaitResponse::NotFound,
+        Ok(Some(job)) if job.status == ARTICLE_JOB_STATUS_FAILED => WaitResponse::InternalError,
+        Ok(Some(job)) if is_in_progress_job_status(&job.status) => {
+            match render_wait_page(&wr, id).await {
+                Ok(html) => WaitResponse::Html(html),
+                Err(_) => WaitResponse::InternalError,
+            }
+        }
+        Ok(Some(_)) => WaitResponse::InternalError,
+        Ok(None) => WaitResponse::NotFound,
+        Err(_) => WaitResponse::InternalError,
     }
 }

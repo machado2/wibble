@@ -43,6 +43,7 @@ model content {
   author_email            String?         @db.VarChar(350)
   published               Boolean         @default(true)
   recovered_from_dead_link Boolean        @default(false)
+  article_jobs            article_job[]
   translation_jobs        translation_job[]
   content_comment         content_comment[]
   content_image           content_image[]
@@ -116,6 +117,30 @@ model content_comment {
 
   @@index([content_id, created_at], map: "idx_content_comment_content_created_at")
   @@index([user_email, created_at], map: "idx_content_comment_user_created_at")
+}
+
+model article_job {
+  id              String    @id @db.VarChar(36)
+  article_id      String?   @db.VarChar(36)
+  requester_key   String    @db.VarChar(500)
+  requester_tier  String    @db.VarChar(32)
+  author_email    String?   @db.VarChar(350)
+  prompt          String
+  feature_type    String    @db.VarChar(64)
+  phase           String    @default("queued") @db.VarChar(32)
+  status          String    @default("queued") @db.VarChar(32)
+  usage_counters  String?
+  preview_payload String?
+  error_summary   String?
+  fail_count      Int       @default(0)
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime  @default(now()) @db.Timestamp(6)
+  started_at      DateTime? @db.Timestamp(6)
+  finished_at     DateTime? @db.Timestamp(6)
+
+  @@index([article_id], map: "idx_article_job_article_id")
+  @@index([status, phase, created_at], map: "idx_article_job_status_phase_created_at")
+  @@index([requester_key, created_at], map: "idx_article_job_requester_key_created_at")
 }
 
 model examples {

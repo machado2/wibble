@@ -22,7 +22,7 @@ pub use page::{get_create, render_create_page};
 pub use recovery::start_recover_article_for_slug;
 pub use wait::{render_wait_page, wait, WaitResponse};
 
-async fn create_article(
+pub(crate) async fn create_article(
     state: &AppState,
     id: String,
     instructions: String,
