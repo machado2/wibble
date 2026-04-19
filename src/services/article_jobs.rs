@@ -275,6 +275,46 @@ impl ArticleJobService {
         load_article_job(&self.state, id).await
     }
 
+    pub async fn is_job_cancelled(&self, id: &str) -> Result<bool, Error> {
+        Ok(self
+            .load_job(id)
+            .await?
+            .is_some_and(|job| job.status == ARTICLE_JOB_STATUS_CANCELLED))
+    }
+
+    pub async fn cancel_job(
+        &self,
+        id: &str,
+        reason: &str,
+    ) -> Result<Option<article_job::Model>, Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Ok(None);
+        };
+        if job.status == ARTICLE_JOB_STATUS_CANCELLED {
+            return Ok(Some(job));
+        }
+        if is_terminal_job_status(&job.status) {
+            return Err(Error::BadRequest(format!(
+                "Article job {} is already {}",
+                id, job.status
+            )));
+        }
+
+        let mut active: article_job::ActiveModel = job.into();
+        let reference_time = now();
+        active.phase = ActiveValue::set(ARTICLE_JOB_PHASE_CANCELLED.to_string());
+        active.status = ActiveValue::set(ARTICLE_JOB_STATUS_CANCELLED.to_string());
+        active.error_summary = ActiveValue::set(Some(reason.to_string()));
+        active.finished_at = ActiveValue::set(Some(reference_time));
+        active.updated_at = ActiveValue::set(reference_time);
+        let updated = active
+            .update(&self.state.db)
+            .await
+            .map_err(|e| Error::Database(format!("Error cancelling article job: {}", e)))?;
+        self.state.mark_generation_finished(id).await;
+        Ok(Some(updated))
+    }
+
     pub async fn ensure_job_progress(&self, id: &str) -> Result<Option<article_job::Model>, Error> {
         let Some(job) = self.load_job(id).await? else {
             return Ok(None);
@@ -344,6 +384,14 @@ impl ArticleJobService {
                 .mark_job_processing_by_id(&id, ARTICLE_JOB_PHASE_WRITING)
                 .await
             {
+                if service.is_job_cancelled(&id).await.unwrap_or(false) {
+                    let in_flight_after = state
+                        .active_article_generations
+                        .fetch_sub(1, Ordering::SeqCst)
+                        .saturating_sub(1);
+                    log_job_transition("worker_cancelled", &id, &trace, in_flight_after);
+                    return;
+                }
                 event!(
                     Level::ERROR,
                     job_id = %id,
@@ -378,6 +426,15 @@ impl ArticleJobService {
                     }
                 }
                 Err(err) => {
+                    if service.is_job_cancelled(&id).await.unwrap_or(false) {
+                        event!(
+                            Level::INFO,
+                            job_id = %id,
+                            "Article generation job was cancelled before completion"
+                        );
+                        log_job_transition("worker_cancelled", &id, &trace, in_flight_after);
+                        return;
+                    }
                     event!(
                         Level::ERROR,
                         job_id = %id,
@@ -464,6 +521,12 @@ impl ArticleJobService {
                 id
             ))));
         };
+        if job.status == ARTICLE_JOB_STATUS_CANCELLED {
+            return Err(Error::BadRequest(format!(
+                "Article job {} was cancelled",
+                id
+            )));
+        }
         self.mark_job_processing(job, phase).await?;
         Ok(())
     }
@@ -907,11 +970,12 @@ mod tests {
     use super::{
         default_usage_counters, is_in_progress_job_status, is_terminal_job_status,
         merge_job_usage_counters, ImageProgress, ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
-        ARTICLE_JOB_PHASE_COMPLETED, ARTICLE_JOB_PHASE_EDITING, ARTICLE_JOB_PHASE_FAILED,
-        ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_QUEUED, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
-        ARTICLE_JOB_PHASE_RENDERING_IMAGES, ARTICLE_JOB_PHASE_RESEARCHING,
-        ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING, ARTICLE_JOB_STATUS_COMPLETED,
-        ARTICLE_JOB_STATUS_FAILED, ARTICLE_JOB_STATUS_PROCESSING, ARTICLE_JOB_STATUS_QUEUED,
+        ARTICLE_JOB_PHASE_CANCELLED, ARTICLE_JOB_PHASE_COMPLETED, ARTICLE_JOB_PHASE_EDITING,
+        ARTICLE_JOB_PHASE_FAILED, ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_QUEUED,
+        ARTICLE_JOB_PHASE_READY_FOR_REVIEW, ARTICLE_JOB_PHASE_RENDERING_IMAGES,
+        ARTICLE_JOB_PHASE_RESEARCHING, ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING,
+        ARTICLE_JOB_STATUS_CANCELLED, ARTICLE_JOB_STATUS_COMPLETED, ARTICLE_JOB_STATUS_FAILED,
+        ARTICLE_JOB_STATUS_PROCESSING, ARTICLE_JOB_STATUS_QUEUED,
     };
 
     #[test]
@@ -928,6 +992,7 @@ mod tests {
             ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
             ARTICLE_JOB_PHASE_COMPLETED,
             ARTICLE_JOB_PHASE_FAILED,
+            ARTICLE_JOB_PHASE_CANCELLED,
         ];
 
         assert!(phases.contains(&ARTICLE_JOB_PHASE_RENDERING_IMAGES));
@@ -940,6 +1005,7 @@ mod tests {
         assert!(is_in_progress_job_status(ARTICLE_JOB_STATUS_PROCESSING));
         assert!(is_terminal_job_status(ARTICLE_JOB_STATUS_COMPLETED));
         assert!(is_terminal_job_status(ARTICLE_JOB_STATUS_FAILED));
+        assert!(is_terminal_job_status(ARTICLE_JOB_STATUS_CANCELLED));
         assert!(!is_terminal_job_status(ARTICLE_JOB_STATUS_QUEUED));
     }
 

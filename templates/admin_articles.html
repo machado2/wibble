@@ -8,6 +8,11 @@
   </div>
 </div>
 
+<div class="sort-bar mb-3">
+  <span class="sort-link active">Articles</span>
+  <a href="/admin/jobs" class="sort-link">Jobs</a>
+</div>
+
 <div class="sort-bar">
   {%- if current_sort == "created_at" -%}<span class="sort-link active">Newest</span>{%- else -%}<a href="?sort=created_at&amp;page=1" class="sort-link">Newest</a>{%- endif -%}
   {%- if current_sort == "title" -%}<span class="sort-link active">Title</span>{%- else -%}<a href="?sort=title&amp;page=1" class="sort-link">Title</a>{%- endif -%}

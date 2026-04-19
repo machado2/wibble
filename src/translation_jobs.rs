@@ -23,10 +23,11 @@ use crate::services::article_translations::{
     owned_article_source_text, OwnedArticleSourceText,
 };
 
-const TRANSLATION_JOB_STATUS_QUEUED: &str = "queued";
-const TRANSLATION_JOB_STATUS_PROCESSING: &str = "processing";
-const TRANSLATION_JOB_STATUS_COMPLETED: &str = "completed";
-const TRANSLATION_JOB_STATUS_FAILED: &str = "failed";
+pub const TRANSLATION_JOB_STATUS_QUEUED: &str = "queued";
+pub const TRANSLATION_JOB_STATUS_PROCESSING: &str = "processing";
+pub const TRANSLATION_JOB_STATUS_COMPLETED: &str = "completed";
+pub const TRANSLATION_JOB_STATUS_FAILED: &str = "failed";
+pub const TRANSLATION_JOB_STATUS_CANCELLED: &str = "cancelled";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TranslationJobRequestSource {
@@ -259,7 +260,18 @@ async fn mark_processing(
     state: &AppState,
     job: translation_job::Model,
 ) -> Result<translation_job::Model, Error> {
-    let mut active: translation_job::ActiveModel = job.into();
+    let Some(current) = load_translation_job(&state.db, &job.id).await? else {
+        return Ok(job);
+    };
+    if !matches!(
+        current.status.as_str(),
+        TRANSLATION_JOB_STATUS_QUEUED
+            | TRANSLATION_JOB_STATUS_FAILED
+            | TRANSLATION_JOB_STATUS_PROCESSING
+    ) {
+        return Ok(current);
+    }
+    let mut active: translation_job::ActiveModel = current.into();
     let reference_time = now();
     active.status = ActiveValue::set(TRANSLATION_JOB_STATUS_PROCESSING.to_string());
     active.last_error = ActiveValue::set(None);
@@ -280,7 +292,13 @@ async fn mark_completed(
     job: translation_job::Model,
     outcome: &str,
 ) -> Result<(), Error> {
-    let mut active: translation_job::ActiveModel = job.clone().into();
+    let Some(current) = load_translation_job(&state.db, &job.id).await? else {
+        return Ok(());
+    };
+    if current.status != TRANSLATION_JOB_STATUS_PROCESSING {
+        return Ok(());
+    }
+    let mut active: translation_job::ActiveModel = current.into();
     let reference_time = now();
     active.status = ActiveValue::set(TRANSLATION_JOB_STATUS_COMPLETED.to_string());
     active.fail_count = ActiveValue::set(0);
@@ -315,7 +333,13 @@ async fn mark_failed(
     job: translation_job::Model,
     err: &Error,
 ) -> Result<(), Error> {
-    let mut active: translation_job::ActiveModel = job.clone().into();
+    let Some(current) = load_translation_job(&state.db, &job.id).await? else {
+        return Ok(());
+    };
+    if current.status != TRANSLATION_JOB_STATUS_PROCESSING {
+        return Ok(());
+    }
+    let mut active: translation_job::ActiveModel = current.into();
     let reference_time = now();
     let fail_count = job.fail_count + 1;
     let retry_at = reference_time
@@ -352,6 +376,39 @@ async fn mark_failed(
     Ok(())
 }
 
+pub async fn cancel_translation_job(state: &AppState, job_id: &str) -> Result<bool, Error> {
+    let Some(job) = load_translation_job(&state.db, job_id).await? else {
+        return Ok(false);
+    };
+    if job.status == TRANSLATION_JOB_STATUS_CANCELLED {
+        state.mark_translation_generation_finished(job_id).await;
+        return Ok(true);
+    }
+    if matches!(
+        job.status.as_str(),
+        TRANSLATION_JOB_STATUS_COMPLETED | TRANSLATION_JOB_STATUS_CANCELLED
+    ) {
+        return Err(Error::BadRequest(format!(
+            "Translation job {} is already {}",
+            job_id, job.status
+        )));
+    }
+
+    let mut active: translation_job::ActiveModel = job.into();
+    let reference_time = now();
+    active.status = ActiveValue::set(TRANSLATION_JOB_STATUS_CANCELLED.to_string());
+    active.last_error = ActiveValue::set(Some("Cancelled by admin".to_string()));
+    active.finished_at = ActiveValue::set(Some(reference_time));
+    active.next_retry_at = ActiveValue::set(None);
+    active.updated_at = ActiveValue::set(reference_time);
+    active
+        .update(&state.db)
+        .await
+        .map_err(|e| Error::Database(format!("Error cancelling translation job: {}", e)))?;
+    state.mark_translation_generation_finished(job_id).await;
+    Ok(true)
+}
+
 async fn delete_translation_job(state: &AppState, job_id: &str) -> Result<(), Error> {
     TranslationJob::delete_by_id(job_id.to_string())
         .exec(&state.db)
@@ -383,6 +440,9 @@ async fn process_translation_job(state: &AppState, job_id: &str) -> Result<(), E
         return delete_translation_job(state, &job.id).await;
     };
     let job = mark_processing(state, job).await?;
+    if job.status != TRANSLATION_JOB_STATUS_PROCESSING {
+        return Ok(());
+    }
     let Some(article) = Content::find_by_id(job.article_id.clone())
         .one(&state.db)
         .await

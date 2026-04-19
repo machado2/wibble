@@ -116,6 +116,7 @@ impl BoundedGenerationRuntime {
         tool: GenerationTool,
         uses_model: bool,
     ) -> Result<(), Error> {
+        self.ensure_not_cancelled().await?;
         self.agent_steps += 1;
         if self.agent_steps > self.policy.max_agent_steps {
             return Err(Error::Llm(format!(
@@ -156,6 +157,7 @@ impl BoundedGenerationRuntime {
     }
 
     pub async fn record_fetched_content(&mut self, chars: usize) -> Result<(), Error> {
+        self.ensure_not_cancelled().await?;
         self.fetched_content_chars = self.fetched_content_chars.saturating_add(chars);
         if self.fetched_content_chars > self.policy.max_fetched_content_chars {
             return Err(Error::Llm(format!(
@@ -167,6 +169,7 @@ impl BoundedGenerationRuntime {
     }
 
     pub async fn record_search(&mut self) -> Result<(), Error> {
+        self.ensure_not_cancelled().await?;
         self.searches = self.searches.saturating_add(1);
         if self.searches > self.policy.max_searches {
             return Err(Error::Llm(format!(
@@ -178,6 +181,7 @@ impl BoundedGenerationRuntime {
     }
 
     pub async fn record_source(&mut self) -> Result<(), Error> {
+        self.ensure_not_cancelled().await?;
         self.sources = self.sources.saturating_add(1);
         if self.sources > self.policy.max_sources {
             return Err(Error::Llm(format!(
@@ -189,8 +193,19 @@ impl BoundedGenerationRuntime {
     }
 
     pub async fn mark_ready_for_review(&mut self) -> Result<(), Error> {
+        self.ensure_not_cancelled().await?;
         self.current_tool = GenerationTool::PolicyCheck.as_str();
         self.persist(ARTICLE_JOB_PHASE_READY_FOR_REVIEW).await
+    }
+
+    pub async fn ensure_not_cancelled(&self) -> Result<(), Error> {
+        if self.job_service.is_job_cancelled(&self.job_id).await? {
+            return Err(Error::BadRequest(format!(
+                "Article job {} was cancelled",
+                self.job_id
+            )));
+        }
+        Ok(())
     }
 
     async fn persist(&self, phase: &str) -> Result<(), Error> {

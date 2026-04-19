@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="admin-header">
+  <h1>Job monitor</h1>
+  <div class="admin-stats">
+    <span>Total requests observed <strong>{{ rate_limit_metrics.total_requests }}</strong></span>
+  </div>
+</div>
+
+<div class="sort-bar mb-3">
+  <a href="/admin/articles" class="sort-link">Articles</a>
+  <span class="sort-link active">Jobs</span>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <section class="card h-100">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Article jobs</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in article_status_counts %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.count }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card h-100">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Translation jobs</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in translation_status_counts %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.count }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <section class="card h-100">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Requester activity</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Requester</th>
+                <th>Tier</th>
+                <th>Jobs</th>
+                <th>Failures</th>
+                <th>Active</th>
+                <th>Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in requester_summaries %}
+              <tr>
+                <td class="col-prompt" title="{{ row.requester_key }}">{{ row.requester_key | truncate(length=28) }}</td>
+                <td>{{ row.requester_tier }}</td>
+                <td>{{ row.jobs }}</td>
+                <td>{{ row.failures }}</td>
+                <td>{{ row.active }}</td>
+                <td>{{ row.last_seen }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card h-100">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Recent audit actions</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Count</th>
+                <th>Latest</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in audit_summaries %}
+              <tr>
+                <td>{{ row.action }}</td>
+                <td>{{ row.count }}</td>
+                <td>{{ row.latest_at }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <section class="card h-100">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Feature usage</h2>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Jobs</th>
+                <th>Model</th>
+                <th>Tools</th>
+                <th>Searches</th>
+                <th>Sources</th>
+                <th>Chars</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in feature_usage %}
+              <tr>
+                <td>{{ row.feature_type }}</td>
+                <td>{{ row.jobs }}</td>
+                <td>{{ row.model_calls }}</td>
+                <td>{{ row.tool_calls }}</td>
+                <td>{{ row.searches }}</td>
+                <td>{{ row.sources }}</td>
+                <td>{{ row.fetched_content_chars }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card h-100">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Rate-limit hits</h2>
+        {% if rate_limit_metrics.hits | length > 0 %}
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th>Tier</th>
+                <th>Window</th>
+                <th>Hits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rate_limit_metrics.hits %}
+              <tr>
+                <td>{{ row.capability }}</td>
+                <td>{{ row.tier }}</td>
+                <td>{{ row.window }}</td>
+                <td>{{ row.hits }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No rate-limit hits have been recorded since this process started.</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="card mb-4">
+  <div class="card-body">
+    <h2 class="h4 mb-3">Active article jobs</h2>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Prompt</th>
+            <th>Requester</th>
+            <th>Phase</th>
+            <th>Status</th>
+            <th>Article</th>
+            <th>Images</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in active_article_jobs %}
+          <tr>
+            <td class="col-prompt" title="{{ job.prompt }}">{{ job.prompt | truncate(length=70) }}</td>
+            <td class="col-prompt" title="{{ job.requester_key }}">{{ job.requester_tier }} / {{ job.requester_key | truncate(length=18) }}</td>
+            <td>{{ job.phase }}</td>
+            <td><span class="badge badge-info">{{ job.status }}</span></td>
+            <td>
+              {% if job.slug %}
+              <a href="/content/{{ job.slug }}">{{ job.title | default(value=job.slug) }}</a>
+              {% elif job.title %}
+              {{ job.title }}
+              {% else %}
+              {{ job.article_id | default(value="Pending") }}
+              {% endif %}
+              {% if job.publication_state %}
+              <div><span class="badge badge-muted">{{ job.publication_state }}</span></div>
+              {% endif %}
+            </td>
+            <td>
+              {% if job.image_total %}
+              {{ job.image_completed | default(value=0) }}/{{ job.image_total }} ready
+              {% if job.image_failed %}
+              <div><span class="badge badge-warning">{{ job.image_failed }} failed</span></div>
+              {% endif %}
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td>{{ job.updated_at }}</td>
+            <td class="col-actions">
+              {% if job.can_cancel %}
+              <form method="post" action="/admin/article-jobs/{{ job.id }}/cancel">
+                <button type="submit" class="btn btn-sm btn-outline-warning">Cancel</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-body">
+    <h2 class="h4 mb-3">Failed article jobs</h2>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Prompt</th>
+            <th>Requester</th>
+            <th>Status</th>
+            <th>Fails</th>
+            <th>Error</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in failed_article_jobs %}
+          <tr>
+            <td class="col-prompt" title="{{ job.prompt }}">{{ job.prompt | truncate(length=70) }}</td>
+            <td class="col-prompt" title="{{ job.requester_key }}">{{ job.requester_tier }} / {{ job.requester_key | truncate(length=18) }}</td>
+            <td>
+              {% if job.status == "cancelled" %}
+              <span class="badge badge-warning">{{ job.status }}</span>
+              {% else %}
+              <span class="badge badge-danger">{{ job.status }}</span>
+              {% endif %}
+            </td>
+            <td>{{ job.fail_count }}</td>
+            <td class="col-prompt" title="{{ job.error_summary | default(value='') }}">{{ job.error_summary | default(value='—') | truncate(length=80) }}</td>
+            <td>{{ job.updated_at }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-body">
+    <h2 class="h4 mb-3">Active translation jobs</h2>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Article</th>
+            <th>Language</th>
+            <th>Source</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in active_translation_jobs %}
+          <tr>
+            <td>
+              {% if job.article_slug %}
+              <a href="/content/{{ job.article_slug }}">{{ job.article_title | default(value=job.article_id) }}</a>
+              {% else %}
+              {{ job.article_title | default(value=job.article_id) }}
+              {% endif %}
+            </td>
+            <td>{{ job.language_code }}</td>
+            <td>{{ job.request_source }}</td>
+            <td>{{ job.priority }}</td>
+            <td><span class="badge badge-info">{{ job.status }}</span></td>
+            <td>{{ job.updated_at }}</td>
+            <td class="col-actions">
+              {% if job.can_cancel %}
+              <form method="post" action="/admin/translation-jobs/{{ job.id }}/cancel">
+                <button type="submit" class="btn btn-sm btn-outline-warning">Cancel</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-body">
+    <h2 class="h4 mb-3">Failed translation jobs</h2>
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Article</th>
+            <th>Language</th>
+            <th>Status</th>
+            <th>Fails</th>
+            <th>Retry</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in failed_translation_jobs %}
+          <tr>
+            <td>
+              {% if job.article_slug %}
+              <a href="/content/{{ job.article_slug }}">{{ job.article_title | default(value=job.article_id) }}</a>
+              {% else %}
+              {{ job.article_title | default(value=job.article_id) }}
+              {% endif %}
+            </td>
+            <td>{{ job.language_code }}</td>
+            <td>
+              {% if job.status == "cancelled" %}
+              <span class="badge badge-warning">{{ job.status }}</span>
+              {% else %}
+              <span class="badge badge-danger">{{ job.status }}</span>
+              {% endif %}
+            </td>
+            <td>{{ job.fail_count }}</td>
+            <td>{{ job.next_retry_at | default(value="—") }}</td>
+            <td class="col-prompt" title="{{ job.last_error | default(value='') }}">{{ job.last_error | default(value='—') | truncate(length=80) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock content %}

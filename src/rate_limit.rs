@@ -1,5 +1,6 @@
 use axum::{extract::Request, http::StatusCode, middleware::Next, response::Response};
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
+use serde::Serialize;
 use std::{
     collections::HashMap,
     env,
@@ -37,6 +38,14 @@ impl RequesterTier {
             Self::Anonymous => "ANON",
             Self::Authenticated => "AUTH",
             Self::Admin => "ADMIN",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Anonymous => "anonymous",
+            Self::Authenticated => "authenticated",
+            Self::Admin => "admin",
         }
     }
 
@@ -131,6 +140,13 @@ impl LimitWindow {
             Self::Daily => "PER_DAY",
         }
     }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Hourly => "hourly",
+            Self::Daily => "daily",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -152,11 +168,26 @@ impl CapabilityDefaults {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct RateLimitHitSnapshot {
+    pub capability: String,
+    pub tier: String,
+    pub window: String,
+    pub hits: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RateLimitMetricsSnapshot {
+    pub total_requests: u64,
+    pub hits: Vec<RateLimitHitSnapshot>,
+}
+
 // Shared state for rate limiters
 #[derive(Clone, Debug)]
 pub struct RateLimitState {
     limiters: Arc<HashMap<LimiterKey, Arc<KeyedLimiter>>>,
     hit_counters: Arc<HashMap<RateLimitCapability, Arc<AtomicU64>>>,
+    detailed_hit_counters: Arc<HashMap<LimiterKey, Arc<AtomicU64>>>,
     pub total_requests: Arc<AtomicU64>,
 }
 
@@ -290,10 +321,16 @@ impl RateLimitState {
             .into_iter()
             .map(|capability| (capability, Arc::new(AtomicU64::new(0))))
             .collect();
+        let detailed_hit_counters = limiters
+            .keys()
+            .copied()
+            .map(|key| (key, Arc::new(AtomicU64::new(0))))
+            .collect();
 
         Self {
             limiters: Arc::new(limiters),
             hit_counters: Arc::new(hit_counters),
+            detailed_hit_counters: Arc::new(detailed_hit_counters),
             total_requests: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -314,6 +351,10 @@ impl RateLimitState {
                 .get(&capability)
                 .expect("missing hit counter")
                 .fetch_add(1, Ordering::Relaxed);
+            self.detailed_hit_counters
+                .get(&Self::limiter_key(capability, tier, LimitWindow::Hourly))
+                .expect("missing detailed hit counter")
+                .fetch_add(1, Ordering::Relaxed);
             tracing::warn!(
                 capability = capability.label(),
                 tier = ?tier,
@@ -330,6 +371,10 @@ impl RateLimitState {
             self.hit_counters
                 .get(&capability)
                 .expect("missing hit counter")
+                .fetch_add(1, Ordering::Relaxed);
+            self.detailed_hit_counters
+                .get(&Self::limiter_key(capability, tier, LimitWindow::Daily))
+                .expect("missing detailed hit counter")
                 .fetch_add(1, Ordering::Relaxed);
             tracing::warn!(
                 capability = capability.label(),
@@ -364,6 +409,32 @@ impl RateLimitState {
                 LimitWindow::Hourly => TranslationRateLimit::Hourly,
                 LimitWindow::Daily => TranslationRateLimit::Daily,
             })
+    }
+
+    pub fn admin_snapshot(&self) -> RateLimitMetricsSnapshot {
+        let mut hits = self
+            .detailed_hit_counters
+            .iter()
+            .map(|(key, value)| RateLimitHitSnapshot {
+                capability: key.capability.label().to_string(),
+                tier: key.tier.label().to_string(),
+                window: key.window.label().to_string(),
+                hits: value.load(Ordering::Relaxed),
+            })
+            .filter(|entry| entry.hits > 0)
+            .collect::<Vec<_>>();
+        hits.sort_by(|left, right| {
+            right
+                .hits
+                .cmp(&left.hits)
+                .then_with(|| left.capability.cmp(&right.capability))
+                .then_with(|| left.tier.cmp(&right.tier))
+                .then_with(|| left.window.cmp(&right.window))
+        });
+        RateLimitMetricsSnapshot {
+            total_requests: self.total_requests.load(Ordering::Relaxed),
+            hits,
+        }
     }
 }
 

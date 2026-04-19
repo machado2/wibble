@@ -19,8 +19,8 @@ No release until every phase below is complete or explicitly removed from scope.
   - Research, preview/review editing, and user-input pause/resume still need dedicated orchestration.
 
 - [ ] **Abuse controls still need agent-specific hardening**
-  - `src/rate_limit.rs` uses keyed, tiered quotas by capability, and generation jobs now persist per-job execution counters and hard budgets.
-  - Remaining gaps are admin-facing abuse summaries, moderation policy, and richer operational visibility.
+  - `src/rate_limit.rs` uses keyed, tiered quotas by capability, the admin job monitor exposes audit/queue/rate-limit summaries, and generation/edit flows enforce editorial policy guardrails.
+  - The remaining safety gap is fail-closed source handling for future research mode, especially fabricated-citation prevention.
 
 - [ ] **Key refactor hotspots**
   - `src/content.rs` still needs a final cleanup pass around richer article/job metadata.
@@ -161,7 +161,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - admin: elevated
 - [x] Add server-side cost accounting per job.
 - [x] Add upper bounds for prompt size, fetched content size, and number of agent steps.
-- [ ] Add abuse monitoring and audit summaries.
+- [x] Add abuse monitoring and audit summaries.
 
 ### 3.3 Login incentives
 
@@ -412,15 +412,15 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Phase 12: Release Hardening
 
-- [ ] Add metrics and logs for:
+- [x] Add metrics and logs for:
   - job counts by state
   - agent cost by feature
   - search usage
   - edit usage
   - rate-limit hits by tier
-- [ ] Add admin visibility into queued / failed jobs.
-- [ ] Add kill / cancel capability for stuck jobs.
-- [ ] Document operational runbooks for:
+- [x] Add admin visibility into queued / failed jobs.
+- [x] Add kill / cancel capability for stuck jobs.
+- [x] Document operational runbooks for:
   - job failures
   - provider outages
   - search outages

@@ -64,6 +64,7 @@ pub async fn create_article_using_placeholders(
         placeholder_images.images.len(),
     )?;
     runtime.mark_ready_for_review().await?;
+    runtime.ensure_not_cancelled().await?;
 
     let description = leading_paragraph(&placeholder_images.markdown);
     let image_ids = placeholder_images
@@ -128,6 +129,7 @@ pub async fn create_article_attempt(
         .await?;
     validate_article_output(&article.title, &markdown, images.len())?;
     runtime.mark_ready_for_review().await?;
+    runtime.ensure_not_cancelled().await?;
     let description = leading_paragraph(&markdown);
 
     save_article(
