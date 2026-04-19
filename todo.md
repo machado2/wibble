@@ -79,7 +79,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 1.2 Service / repository decomposition
 
-- [ ] Split `src/create.rs` into:
+- [x] Split `src/create.rs` into:
   - input validation
   - wait-page rendering
   - dead-link recovery
@@ -437,9 +437,9 @@ No release until every phase below is complete or explicitly removed from scope.
   - move permission helpers and audit logging out
   - keep route table + startup only
 
-- [ ] `src/create.rs`
+- [x] `src/create/`
   - split orchestration, wait logic, recovery, and form rendering
-  - introduce job-oriented service layer
+- [ ] create flow job-oriented service layer
 
 - [ ] `src/content.rs`
   - separate article loading, rendering, comments, and interaction policy
