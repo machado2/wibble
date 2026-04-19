@@ -14,6 +14,36 @@
       <div class="alert alert-light border mb-4" role="status">
         This workspace is available to the article owner and admins. Signed-in authors can revise draft copy, replace images, and publish when ready.
       </div>
+      <div class="card border mb-4">
+        <div class="card-body">
+          <h2 class="h4 mb-2">Agent edit</h2>
+          <p class="text-muted mb-3">
+            Describe the change in plain language. The agent will draft a revision, summarize it, and show a diff before anything is applied.
+          </p>
+          <form method="post" action="/content/{{ slug }}/edit/agent">
+            <div class="edit-form-group">
+              <label for="change_request" class="form-label">Change request</label>
+              <textarea
+                class="form-control"
+                id="change_request"
+                name="change_request"
+                rows="5"
+                maxlength="{{ agent_edit_max_length }}"
+                placeholder="Example: tighten the opening, cut the third section by a third, and make the closing sound more like an official bulletin."
+                required></textarea>
+            </div>
+            <div class="create-form-footer mb-3">
+              <span class="text-muted small">Owners and admins only. Nothing is applied until you approve the preview.</span>
+              <span class="small text-muted">Max {{ agent_edit_max_length }} characters.</span>
+            </div>
+            <div class="edit-submit-bar">
+              <button type="submit" class="btn btn-primary">Preview agent revision</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <h2 class="h4 mb-3">Manual editor</h2>
       <form method="post" action="/content/{{ slug }}/edit">
         <div class="edit-form-group">
           <label for="title" class="form-label">Title</label>
@@ -32,6 +62,9 @@
           <a href="/content/{{ slug }}" class="btn btn-outline-secondary">Cancel</a>
         </div>
       </form>
+      <p class="text-muted small mb-0">
+        Raw markdown editing remains available as the escape hatch if the agent preview is not precise enough.
+      </p>
     </div>
   </div>
 

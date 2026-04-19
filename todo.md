@@ -247,21 +247,21 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Phase 6: Agent-Based Editing
 
-- [ ] Add a new edit workflow based on a user-supplied change description.
-- [ ] Support requests like:
+- [x] Add a new edit workflow based on a user-supplied change description.
+- [x] Support requests like:
   - “make it drier”
   - “shorten by 30%”
   - “replace the third section with a parliamentary reaction”
   - “rewrite in a stricter bulletin tone”
-- [ ] Edit flow must be:
+- [x] Edit flow must be:
   - load current article
   - generate revised draft
   - produce summary of changes
   - show preview / diff
   - require explicit apply
-- [ ] Persist change request, agent summary, and final apply action to `audit_log`.
-- [ ] Gate agent editing to logged-in owners/admins.
-- [ ] Consider keeping raw markdown editing for admins as an escape hatch.
+- [x] Persist change request, agent summary, and final apply action to `audit_log`.
+- [x] Gate agent editing to logged-in owners/admins.
+- [x] Consider keeping raw markdown editing for admins as an escape hatch.
 
 ## Phase 7: Prompt System Cleanup
 
@@ -272,7 +272,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - translation
 - [ ] Extend prompt versioning to:
   - research-enabled generation
-  - edit-agent rewriting
+  - [x] edit-agent rewriting
 - [x] Move prompt assembly rules out of scattered string constants into a prompt module.
 - [x] Add tests or fixtures that validate prompt structure and output parsers.
 - [x] Store the prompt version used on each generated article.
@@ -363,7 +363,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - maybe “requires login”
 - [ ] Add job-status UI for multi-step agent states.
 - [ ] Add question/answer UI for clarifying prompts.
-- [ ] Add preview/diff UI for agent edits.
+- [x] Add preview/diff UI for agent edits.
 - [ ] Add quota messaging and login upsell copy.
 - [ ] Add translation toggle UI and fallback messaging that does not interrupt reading.
 - [ ] Add article metadata display if research mode used internally and that becomes product-relevant.
@@ -484,7 +484,7 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Keyed quotas completed
 - [x] Ownership + author editing completed
 - [ ] Agent generation completed
-- [ ] Agent editing completed
+- [x] Agent editing completed
 - [x] Translation decision completed
 - [x] Automatic translation implementation completed
 - [ ] Safety / moderation completed

@@ -21,10 +21,10 @@ use image_briefs::{generate_image_briefs, replace_placeholder_tags_with_markdown
 use planning::{compose_article_markdown, leading_paragraph};
 use runtime::{BoundedGenerationRuntime, GenerationTool};
 use validation::{
-    ensure_generated_images_present, ensure_image_briefs_present, ensure_minimum_paragraph_count,
-    ensure_placeholder_images_present, parse_titled_markdown, split_paragraphs,
-    validate_article_output,
+    ensure_generated_images_present, ensure_image_briefs_present,
+    ensure_placeholder_images_present, parse_titled_markdown,
 };
+pub use validation::{ensure_minimum_paragraph_count, split_paragraphs, validate_article_output};
 
 pub async fn create_article_using_placeholders(
     state: &AppState,

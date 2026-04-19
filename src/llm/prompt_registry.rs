@@ -30,6 +30,12 @@ const IMAGE_BRIEF_GENERATION_PROMPT: PromptDefinition = PromptDefinition {
     body: include_str!("../../prompts/illustrator.txt"),
 };
 
+const EDIT_REWRITE_PROMPT: PromptDefinition = PromptDefinition {
+    key: "edit_rewrite",
+    version: 1,
+    body: include_str!("../../prompts/edit_rewrite.txt"),
+};
+
 const TRANSLATION_PROMPT: PromptDefinition = PromptDefinition {
     key: "translation",
     version: 1,
@@ -81,6 +87,10 @@ pub fn image_brief_generation_prompt() -> PromptDefinition {
     IMAGE_BRIEF_GENERATION_PROMPT
 }
 
+pub fn edit_rewrite_prompt() -> PromptDefinition {
+    EDIT_REWRITE_PROMPT
+}
+
 pub fn translation_prompt() -> PromptDefinition {
     TRANSLATION_PROMPT
 }
@@ -107,13 +117,14 @@ pub fn find_supported_translation_language(value: &str) -> Option<SupportedTrans
 #[cfg(test)]
 mod tests {
     use super::{
-        article_generation_prompt, find_supported_translation_language,
+        article_generation_prompt, edit_rewrite_prompt, find_supported_translation_language,
         image_brief_generation_prompt, placeholder_generation_prompt, translation_prompt,
     };
 
     #[test]
     fn prompt_definitions_expose_stable_versions() {
         assert_eq!(article_generation_prompt().version, 1);
+        assert_eq!(edit_rewrite_prompt().version, 1);
         assert_eq!(translation_prompt().version, 1);
     }
 
@@ -142,6 +153,15 @@ mod tests {
         assert!(prompt.contains("Each line must be: caption; detailed description"));
         assert!(prompt.contains("One image per line."));
         assert!(prompt.contains("Do not add bullets, numbering, commentary"));
+    }
+
+    #[test]
+    fn edit_rewrite_prompt_contains_preview_contract() {
+        let prompt = edit_rewrite_prompt().body;
+
+        assert!(prompt.contains("return a full revised markdown article"));
+        assert!(prompt.contains("keep the number of Markdown image tags unchanged"));
+        assert!(prompt.contains("Return only through the provided tool."));
     }
 
     #[test]
