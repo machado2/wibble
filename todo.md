@@ -98,14 +98,14 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 1.3 Startup and runtime state cleanup
 
-- [ ] Split `src/app_state.rs` into:
+- [x] Split `src/app_state.rs` into:
   - DB initialization
   - schema compatibility / migrations bridge
   - provider factory
   - background jobs bootstrap
   - runtime registries
-- [ ] Replace ad hoc schema mutation at startup with a clearer compatibility layer.
-- [ ] Decide whether startup `ALTER TABLE` behavior remains temporary or is replaced with proper migrations before release.
+- [x] Replace ad hoc schema mutation at startup with a clearer compatibility layer.
+- [x] Keep startup `ALTER TABLE` behavior as a temporary compatibility bridge, to be replaced by proper migrations before release.
 
 ## Phase 2: Persistent Job Model for Agents
 
@@ -449,7 +449,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - split by aggregate / concern
   - remove mixed storage + examples + article persistence responsibilities
 
-- [ ] `src/app_state.rs`
+- [x] `src/app_state.rs`
   - separate startup concerns
   - isolate provider factory and schema compatibility code
 

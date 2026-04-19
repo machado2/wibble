@@ -1,166 +1,38 @@
 use std::collections::HashSet;
-use std::env;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 use bustdir::BustDir;
-use sea_orm::{
-    ConnectionTrait, Database, DatabaseConnection, DbBackend, EntityTrait, QuerySelect, Statement,
-};
+use sea_orm::DatabaseConnection;
 use tera::Tera;
-use tokio::sync::Mutex;
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 
 use crate::auth::JwksClient;
-use crate::entities::prelude::*;
 use crate::error::Error;
-use crate::hot_score::update_hot_score_statement;
-use crate::image_generator::ai_horde::AiHordeImageGenerator;
-use crate::image_generator::huggingface::HuggingFaceImageGenerator;
 use crate::image_generator::replicate::ReplicateImageGenerator;
-use crate::image_generator::stability::StabilityImageGenerator;
 use crate::image_generator::ImageGenerator;
-use crate::image_jobs;
 use crate::llm::Llm;
 use crate::rate_limit::RateLimitState;
 use crate::tasklist::TaskList;
 
-async fn connect_database() -> Result<DatabaseConnection, Error> {
-    let connection = env::var("DATABASE_URL")
-        .map_err(|_| Error::Database("DATABASE_URL must be set".to_string()))?;
-    Database::connect(connection)
-        .await
-        .map_err(|e| Error::Database(format!("Failed to connect to database: {}", e)))
-}
+mod background_jobs;
+mod db;
+mod providers;
+mod runtime;
+mod schema_compat;
 
-async fn validate_required_schema(db: &DatabaseConnection) -> Result<(), Error> {
-    Content::find()
-        .limit(1)
-        .all(db)
-        .await
-        .map_err(|e| Error::Database(format!("Content schema validation failed: {}", e)))?;
-    ContentImage::find()
-        .limit(1)
-        .all(db)
-        .await
-        .map_err(|e| Error::Database(format!("ContentImage schema validation failed: {}", e)))?;
-    ContentComment::find()
-        .limit(1)
-        .all(db)
-        .await
-        .map_err(|e| Error::Database(format!("ContentComment schema validation failed: {}", e)))?;
-    AuditLog::find()
-        .limit(1)
-        .all(db)
-        .await
-        .map_err(|e| Error::Database(format!("AuditLog schema validation failed: {}", e)))?;
-    Ok(())
-}
-
-async fn ensure_async_image_job_columns(db: &DatabaseConnection) {
-    let statements = [
-        r#"ALTER TABLE "public"."content_image"
-           ADD COLUMN IF NOT EXISTS "status" VARCHAR(32) NOT NULL DEFAULT 'completed'"#,
-        r#"ALTER TABLE "public"."content_image"
-           ADD COLUMN IF NOT EXISTS "last_error" TEXT"#,
-        r#"ALTER TABLE "public"."content_image"
-           ADD COLUMN IF NOT EXISTS "generation_started_at" TIMESTAMP(6)"#,
-        r#"ALTER TABLE "public"."content_image"
-           ADD COLUMN IF NOT EXISTS "generation_finished_at" TIMESTAMP(6)"#,
-        r#"ALTER TABLE "public"."content_image"
-           ADD COLUMN IF NOT EXISTS "provider_job_id" VARCHAR(100)"#,
-        r#"ALTER TABLE "public"."content_image"
-           ADD COLUMN IF NOT EXISTS "provider_job_url" VARCHAR(1000)"#,
-        r#"UPDATE "public"."content_image"
-           SET "status" = 'completed'
-           WHERE "status" IS NULL"#,
-        r#"CREATE INDEX IF NOT EXISTS "content_image_status_created_at_idx"
-           ON "public"."content_image"("status", "created_at")"#,
-    ];
-
-    for sql in statements {
-        let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
-        if let Err(err) = db.execute(stmt).await {
-            eprintln!(
-                "Error ensuring async image job schema compatibility: {}",
-                err
-            );
-        }
-    }
-}
-
-async fn ensure_auth_columns(db: &DatabaseConnection) {
-    let statements = [
-        r#"ALTER TABLE "public"."content"
-           ADD COLUMN IF NOT EXISTS "author_email" VARCHAR(350)"#,
-        r#"CREATE TABLE IF NOT EXISTS "public"."audit_log" (
-            "id" VARCHAR(36) PRIMARY KEY,
-            "user_email" VARCHAR(350) NOT NULL,
-            "user_name" VARCHAR(500),
-            "action" VARCHAR(100) NOT NULL,
-            "target_type" VARCHAR(50) NOT NULL,
-            "target_id" VARCHAR(500) NOT NULL,
-            "details" TEXT,
-            "created_at" TIMESTAMP(6) DEFAULT NOW()
-        )"#,
-        r#"ALTER TABLE "public"."audit_log"
-           ALTER COLUMN "target_id" TYPE VARCHAR(500)"#,
-        r#"CREATE INDEX IF NOT EXISTS "audit_log_created_at_idx"
-           ON "public"."audit_log"("created_at")"#,
-        r#"CREATE INDEX IF NOT EXISTS "audit_log_target_idx"
-           ON "public"."audit_log"("target_type", "target_id")"#,
-        r#"ALTER TABLE "public"."content"
-           ADD COLUMN IF NOT EXISTS "published" BOOLEAN NOT NULL DEFAULT true"#,
-        r#"ALTER TABLE "public"."content"
-           ADD COLUMN IF NOT EXISTS "recovered_from_dead_link" BOOLEAN NOT NULL DEFAULT false"#,
-    ];
-
-    for sql in statements {
-        let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
-        if let Err(err) = db.execute(stmt).await {
-            eprintln!("Error ensuring auth schema compatibility: {}", err);
-        }
-    }
-}
-
-async fn ensure_comment_tables(db: &DatabaseConnection) {
-    let statements = [
-        r#"CREATE TABLE IF NOT EXISTS "public"."content_comment" (
-            "id" VARCHAR(36) PRIMARY KEY,
-            "content_id" VARCHAR(36) NOT NULL,
-            "user_email" VARCHAR(350) NOT NULL,
-            "user_name" VARCHAR(500) NOT NULL,
-            "body" TEXT NOT NULL,
-            "created_at" TIMESTAMP(6) DEFAULT NOW()
-        )"#,
-        r#"CREATE INDEX IF NOT EXISTS "idx_content_comment_content_created_at"
-           ON "public"."content_comment"("content_id", "created_at")"#,
-        r#"CREATE INDEX IF NOT EXISTS "idx_content_comment_user_created_at"
-           ON "public"."content_comment"("user_email", "created_at")"#,
-        r#"DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1
-                FROM pg_constraint
-                WHERE conname = 'content_comment_content_id_fkey'
-            ) THEN
-                ALTER TABLE "public"."content_comment"
-                ADD CONSTRAINT "content_comment_content_id_fkey"
-                FOREIGN KEY ("content_id") REFERENCES "public"."content"("id")
-                ON DELETE CASCADE ON UPDATE NO ACTION;
-            END IF;
-        END $$"#,
-    ];
-
-    for sql in statements {
-        let stmt = Statement::from_string(DbBackend::Postgres, sql.to_string());
-        if let Err(err) = db.execute(stmt).await {
-            eprintln!("Error ensuring comment schema compatibility: {}", err);
-        }
-    }
-}
+use background_jobs::bootstrap_background_jobs;
+use db::connect_database;
+use providers::{
+    build_bust_dir, build_image_providers, detect_template_auto_reload, init_templates,
+    log_startup_configuration, log_static_dir_diagnostics, read_runtime_limits,
+};
+use runtime::build_runtime_state;
+use schema_compat::{
+    apply_startup_schema_compatibility, startup_schema_compatibility_mode, validate_required_schema,
+};
 
 impl AppState {
     pub async fn mark_generation_started(&self, article_id: &str) {
@@ -211,151 +83,49 @@ impl AppState {
     }
 
     pub async fn init() -> Result<Self, Error> {
-        let image_mode = env::var("IMAGE_MODE").unwrap_or(String::from(""));
         let db = connect_database().await?;
-        ensure_async_image_job_columns(&db).await;
-        ensure_auth_columns(&db).await;
-        ensure_comment_tables(&db).await;
+        apply_startup_schema_compatibility(&db).await;
         validate_required_schema(&db).await?;
+
+        let runtime_limits = read_runtime_limits();
         let jwks_client = JwksClient::new();
         let task_list = TaskList::default();
-        let tera = Tera::new("templates/**/*").map_err(|e| {
-            Error::Template(tera::Error::msg(format!("Failed to load templates: {}", e)))
-        })?;
-        let template_auto_reload = env::var("TEMPLATE_AUTO_RELOAD")
-            .ok()
-            .map(|val| {
-                let val = val.trim().to_lowercase();
-                matches!(val.as_str(), "1" | "true" | "yes" | "y" | "on")
-            })
-            .unwrap_or(cfg!(debug_assertions));
+        let tera = init_templates()?;
+        let template_auto_reload = detect_template_auto_reload();
         let llm = Llm::init();
         let rate_limit_state = RateLimitState::new();
-        let max_concurrent_article_generations = env::var("MAX_CONCURRENT_ARTICLE_GENERATIONS")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .filter(|v| *v > 0)
-            .unwrap_or(1);
-        let dead_link_recovery_max_per_day = env::var("DEAD_LINK_RECOVERY_MAX_PER_DAY")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(5);
-        println!("Image mode: {}", image_mode);
-        println!(
-            "MAX_CONCURRENT_ARTICLE_GENERATIONS={}",
-            max_concurrent_article_generations
-        );
-        println!(
-            "DEAD_LINK_RECOVERY_MAX_PER_DAY={}",
-            dead_link_recovery_max_per_day
-        );
-        let (image_generator_name, image_generator, replicate_image_generator): (
-            String,
-            Arc<dyn ImageGenerator>,
-            Option<Arc<ReplicateImageGenerator>>,
-        ) = if image_mode == "sd3" {
-            println!("Using SD3");
-            (
-                "sd3".to_string(),
-                Arc::new(StabilityImageGenerator::new()),
-                None,
-            )
-        } else if image_mode == "horde" {
-            println!("Using Horde");
-            (
-                "horde".to_string(),
-                Arc::new(AiHordeImageGenerator::new()),
-                None,
-            )
-        } else if image_mode == "huggingface" {
-            println!("Using Hugging Face");
-            (
-                "huggingface".to_string(),
-                Arc::new(HuggingFaceImageGenerator::new()),
-                None,
-            )
-        } else {
-            println!("Using Replicate");
-            let replicate = Arc::new(ReplicateImageGenerator::new());
-            (
-                "replicate".to_string(),
-                replicate.clone() as Arc<dyn ImageGenerator>,
-                Some(replicate),
-            )
-        };
-        // Add diagnostics to help identify missing/incorrect `static` directory in production.
-        // This prints current working directory, metadata for "static" and up to 5 entries if it exists.
-        let state = {
-            match std::env::current_dir() {
-                Ok(cwd) => println!("CWD = {:?}", cwd),
-                Err(e) => println!("Failed to get CWD: {}", e),
-            }
-            match std::fs::metadata("static") {
-                Ok(m) => {
-                    println!("static exists: is_dir={}", m.is_dir());
-                    if m.is_dir() {
-                        match std::fs::read_dir("static") {
-                            Ok(entries) => {
-                                for (i, entry) in entries.take(5).enumerate() {
-                                    match entry {
-                                        Ok(e) => println!("static entry {}: {:?}", i, e.path()),
-                                        Err(e) => println!("static read_dir entry error: {}", e),
-                                    }
-                                }
-                            }
-                            Err(e) => println!("Failed to read static dir: {}", e),
-                        }
-                    }
-                }
-                Err(e) => println!("static metadata error: {}", e),
-            }
+        let image_providers = build_image_providers();
+        let runtime_state = build_runtime_state(tera, template_auto_reload, runtime_limits);
 
-            Self {
-                db,
-                task_list,
-                tera: Arc::new(RwLock::new(tera)),
-                llm,
-                image_generator,
-                image_generator_name,
-                replicate_image_generator,
-                bust_dir: BustDir::new("static")
-                    .map_err(|e| Error::Storage(format!("Failed to build bust dir: {}", e)))?,
-                rate_limit_state,
-                template_auto_reload,
-                article_generation_semaphore: Arc::new(Semaphore::new(
-                    max_concurrent_article_generations,
-                )),
-                active_article_generations: Arc::new(AtomicUsize::new(0)),
-                active_generation_ids: Arc::new(Mutex::new(HashSet::new())),
-                active_image_generation_ids: Arc::new(Mutex::new(HashSet::new())),
-                dead_link_recovery_max_per_day,
-                dead_link_recovery_timestamps: Arc::new(Mutex::new(Vec::new())),
-                jwks_client,
-            }
+        log_startup_configuration(
+            &image_providers.requested_mode,
+            &image_providers.name,
+            runtime_limits,
+            startup_schema_compatibility_mode(),
+        );
+        log_static_dir_diagnostics();
+
+        let state = Self {
+            db,
+            task_list,
+            tera: runtime_state.tera,
+            llm,
+            image_generator: image_providers.generator,
+            image_generator_name: image_providers.name,
+            replicate_image_generator: image_providers.replicate,
+            bust_dir: build_bust_dir()?,
+            rate_limit_state,
+            template_auto_reload: runtime_state.template_auto_reload,
+            article_generation_semaphore: runtime_state.article_generation_semaphore,
+            active_article_generations: runtime_state.active_article_generations,
+            active_generation_ids: runtime_state.active_generation_ids,
+            active_image_generation_ids: runtime_state.active_image_generation_ids,
+            dead_link_recovery_max_per_day: runtime_state.dead_link_recovery_max_per_day,
+            dead_link_recovery_timestamps: runtime_state.dead_link_recovery_timestamps,
+            jwks_client,
         };
 
-        // Spawn a background task to periodically recompute `hot_score` in the DB.
-        // Frequency can be configured with HOT_SCORE_UPDATE_SECONDS (default 300s).
-        {
-            let db_clone = state.db.clone();
-            let secs = std::env::var("HOT_SCORE_UPDATE_SECONDS")
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(300u64);
-
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(secs));
-                loop {
-                    interval.tick().await;
-                    let stmt = update_hot_score_statement();
-                    if let Err(e) = db_clone.execute(stmt).await {
-                        eprintln!("Error updating hot_score: {}", e);
-                    }
-                }
-            });
-        }
-
-        image_jobs::spawn_resume_loop(state.clone());
+        bootstrap_background_jobs(state.clone());
 
         Ok(state)
     }
