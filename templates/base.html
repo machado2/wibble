@@ -48,32 +48,41 @@
         <nav class="site-nav">
             <div class="container">
                 <div class="nav-inner">
-                    <a class="brand" href="/">
-                        <span class="brand-accent">The</span>
-                        <span class="brand-strong">Wibble</span>
-                    </a>
+                    <div class="brand-lockup">
+                        <a class="brand" href="/">
+                            <span class="brand-accent">The</span>
+                            <span class="brand-strong">Wibble</span>
+                        </a>
+                        <p class="brand-note">Daily bulletin of public affairs and avoidable concern</p>
+                    </div>
                     <div class="nav-actions">
-                        <a class="btn btn-primary" href="/create">
-                            {{ text_create_new_article }}
-                        </a>
-                        <a
-                            class="btn btn-outline-secondary"
-                            href="https://discord.gg/UaCzdsNy"
-                            target="_blank"
-                            rel="noreferrer noopener"
-                        >
-                            Join Discord
-                        </a>
-                        {%- block nav_context_actions -%}{%- endblock nav_context_actions -%}
-                        {%- if auth_user -%}
-                        {%- if is_admin -%}
-                        <a class="btn btn-outline-secondary" href="/admin/articles">Admin</a>
-                        {%- endif -%}
-                        <span class="nav-user">{{ auth_user.name }}</span>
-                        <a class="btn btn-outline-secondary" href="/logout">Logout</a>
-                        {%- else -%}
-                        <a class="btn btn-outline-secondary" href="/login">Login</a>
-                        {%- endif -%}
+                        <div class="nav-primary">
+                            <div class="nav-context-actions">
+                                {%- block nav_context_actions -%}{%- endblock nav_context_actions -%}
+                            </div>
+                            <a class="btn btn-primary" href="/create">
+                                {{ text_create_new_article }}
+                            </a>
+                        </div>
+                        <div class="nav-utility">
+                            <a
+                                class="nav-text-link"
+                                href="https://discord.gg/UaCzdsNy"
+                                target="_blank"
+                                rel="noreferrer noopener"
+                            >
+                                Discord
+                            </a>
+                            {%- if auth_user -%}
+                            {%- if is_admin -%}
+                            <a class="nav-text-link" href="/admin/articles">Admin</a>
+                            {%- endif -%}
+                            <span class="nav-user">{{ auth_user.name }}</span>
+                            <a class="nav-text-link" href="/logout">Logout</a>
+                            {%- else -%}
+                            <a class="nav-text-link" href="/login">Login</a>
+                            {%- endif -%}
+                        </div>
                     </div>
                 </div>
             </div>

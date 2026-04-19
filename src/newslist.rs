@@ -127,7 +127,7 @@ async fn get_next_page(
     r.map_err(|e| Error::Database(format!("Error getting next page: {}", e)))
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct FormattedHeadline {
     id: String,
     slug: String,
@@ -254,13 +254,20 @@ impl NewsList for WibbleRequest {
                 .await
                 .map_err(|e| Error::Database(format!("Error updating impressions: {}", e)))?;
         }
-        let items: Vec<_> = items.into_iter().map(format_headline).collect();
+        let mut items: Vec<_> = items.into_iter().map(format_headline).collect();
+        let has_results = !items.is_empty();
+        let lead_item = if items.is_empty() {
+            None
+        } else {
+            Some(items.remove(0))
+        };
         let mut template = self.template("index").await;
         let title = match search {
             Some(search) if !search.trim().is_empty() => format!("Search results for {}", search),
             _ => "Latest Wibble News".to_string(),
         };
-        let description = "Daily AI-generated satire, odd headlines, and absurd current events.";
+        let description =
+            "Dry official bulletins on civic confusion, institutional overreaction, and preventable emergencies.";
         let load_more_url = build_index_url(
             params.search.as_deref(),
             params.t.as_deref(),
@@ -269,7 +276,6 @@ impl NewsList for WibbleRequest {
         );
         let sort_options = sort_options(&params);
         let time_options = time_options(&params);
-        let has_results = !items.is_empty();
         template
             .insert("items", &items)
             .insert("load_more_url", &load_more_url)
@@ -286,10 +292,14 @@ impl NewsList for WibbleRequest {
             .insert("time_options", &time_options)
             .insert("has_results", &has_results)
             .insert("has_active_search", &has_active_search)
+            .insert("secondary_items", &items)
             .insert(
                 "reset_filters_url",
                 &build_index_url(None, None, None, None),
             );
+        if let Some(lead_item) = lead_item {
+            template.insert("lead_item", &lead_item);
+        }
         if has_filters {
             template.insert("robots", "noindex,follow");
         }

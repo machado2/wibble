@@ -1,21 +1,37 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="home-hero">
-  <div class="home-hero-body">
-    <h1 class="visually-hidden">{{ title }}</h1>
+<section class="front-page-shell">
+  <div class="front-page-header">
+    <div class="front-page-intro">
+      <p class="home-eyebrow">{% if has_active_search %}Search Docket{% else %}Front Page{% endif %}</p>
+      <h1 class="front-page-title">
+        {% if has_active_search %}
+        Filed results for "{{ current_search }}"
+        {% else %}
+        Latest bulletins, notices, and administrative disturbances
+        {% endif %}
+      </h1>
+      <p class="front-page-summary">
+        {% if has_active_search %}
+        Review the current file of reports matching that term, then clear filters to return to the general state of concern.
+        {% else %}
+        A straight-faced record of civic confusion, institutional overreaction, and matters requiring no immediate improvement.
+        {% endif %}
+      </p>
+    </div>
 
-    <form action="/" method="get" class="discovery-form" role="search">
+    <form action="/" method="get" class="front-page-search" role="search">
       {% if current_sort_key == "hot" %}
       <input type="hidden" name="sort" value="hot">
       {% endif %}
       {% if current_time_key != "" %}
       <input type="hidden" name="t" value="{{ current_time_key }}">
       {% endif %}
-      <div class="discovery-search-row">
+      <div class="front-page-search-row">
         <label class="visually-hidden" for="search">Search articles</label>
-        <input id="search" class="form-control discovery-search" type="search" name="search" value="{{ current_search }}" placeholder="Search by headline, description, or keyword">
-        <div class="discovery-search-actions">
+        <input id="search" class="form-control front-page-search-input" type="search" name="search" value="{{ current_search }}" placeholder="Search by department, incident, or headline">
+        <div class="front-page-search-actions">
           <button type="submit" class="btn btn-primary">Search</button>
           {% if has_active_search %}
           <a href="{{ reset_filters_url }}" class="btn btn-outline-secondary">Clear</a>
@@ -23,66 +39,90 @@
         </div>
       </div>
     </form>
+  </div>
 
-    <div class="discovery-toolbar" aria-label="Feed controls">
-      <div class="discovery-group">
-        <span class="discovery-label">Sort by</span>
-        <div class="discovery-options">
-          {% for option in sort_options %}
-          <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
-          {% endfor %}
-        </div>
+  <div class="front-page-toolbar" aria-label="Feed controls">
+    <div class="front-page-toolbar-group">
+      <span class="front-page-toolbar-label">Order</span>
+      <div class="front-page-toolbar-options">
+        {% for option in sort_options %}
+        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
+        {% endfor %}
       </div>
-      <div class="discovery-group">
-        <span class="discovery-label">Time range</span>
-        <div class="discovery-options">
-          {% for option in time_options %}
-          <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
-          {% endfor %}
-        </div>
+    </div>
+    <div class="front-page-toolbar-group">
+      <span class="front-page-toolbar-label">Window</span>
+      <div class="front-page-toolbar-options">
+        {% for option in time_options %}
+        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
+        {% endfor %}
       </div>
     </div>
   </div>
 </section>
 
 {% if has_results %}
-<div class="feed-grid">
-  {% for i in items %}
-  <div class="card border-0 bg-white hover-shadow">
-    <a href="/content/{{ i.slug }}{% if loop.index0 < 3 %}?source=top{% endif %}" class="text-decoration-none feed-card stretched-link">
-      {% if i.image_id %}
-      <img src="/image/{{ i.image_id }}"
-           class="feed-card-image"
-           alt="{{ i.title }}">
+  {% if lead_item is defined %}
+  <section class="lead-story card border-0">
+    <a href="/content/{{ lead_item.slug }}?source=top" class="lead-story-link{% if not lead_item.image_id %} no-media{% endif %}">
+      {% if lead_item.image_id %}
+      <div class="lead-story-media">
+        <img src="/image/{{ lead_item.image_id }}" class="lead-story-image" alt="{{ lead_item.title }}">
+      </div>
       {% endif %}
-      <div class="card-body d-flex flex-column">
-        <h5 class="card-title mb-2">{{ i.title }}</h5>
-        <p class="text-muted small mb-2">{{ i.created_at }}</p>
-        <p class="card-text flex-grow-1">{{ i.description }}</p>
+      <div class="lead-story-copy">
+        <p class="story-kicker">Lead Report</p>
+        <h2 class="lead-story-title">{{ lead_item.title }}</h2>
+        <p class="lead-story-date">{{ lead_item.created_at }}</p>
+        <p class="lead-story-dek">{{ lead_item.description }}</p>
       </div>
     </a>
-  </div>
-  {% endfor %}
-</div>
+  </section>
+  {% endif %}
 
-{% if has_more %}
-<div class="text-center mt-5">
-  <a href="{{ load_more_url }}" class="btn btn-outline-primary">Load More Articles</a>
-</div>
-{% endif %}
+  {% if secondary_items | length > 0 %}
+  <section class="briefing-section">
+    <div class="section-heading">
+      <p class="home-eyebrow">Further Notices</p>
+      <h2 class="mb-0">Additional reports from the desk</h2>
+    </div>
+    <div class="briefing-grid">
+      {% for i in secondary_items %}
+      <article class="card border-0 briefing-card">
+        <a href="/content/{{ i.slug }}{% if loop.index0 < 2 %}?source=top{% endif %}" class="briefing-link stretched-link">
+          {% if i.image_id %}
+          <img src="/image/{{ i.image_id }}" class="briefing-image" alt="{{ i.title }}">
+          {% endif %}
+          <div class="card-body briefing-copy">
+            <p class="briefing-date">{{ i.created_at }}</p>
+            <h3 class="briefing-title">{{ i.title }}</h3>
+            <p class="briefing-dek mb-0">{{ i.description }}</p>
+          </div>
+        </a>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if has_more %}
+  <div class="text-center mt-5">
+    <a href="{{ load_more_url }}" class="btn btn-outline-primary">Load more reports</a>
+  </div>
+  {% endif %}
 {% else %}
 <section class="empty-state card border-0">
   <div class="card-body">
     {% if has_active_search %}
-    <h2 class="mb-2">No articles matched that search</h2>
-    <p class="text-muted mb-3">Try a broader keyword, switch back to newest, or clear the filters and let the feed wobble again.</p>
+    <h2 class="mb-2">No filed reports matched that search</h2>
+    <p class="text-muted mb-3">Try a broader term, return to newest, or clear the current docket and resume normal monitoring.</p>
     {% else %}
-    <h2 class="mb-2">No published articles yet</h2>
-    <p class="text-muted mb-3">The feed is empty right now. Generate one and give the homepage something strange to say.</p>
-    <a href="/create" class="btn btn-primary">Create the first article</a>
+    <h2 class="mb-2">No public bulletins have been issued yet</h2>
+    <p class="text-muted mb-3">The front page is presently calm. File a report and correct that condition.</p>
+    <a href="/create" class="btn btn-primary">Draft the first article</a>
     {% endif %}
     {% if has_active_search %}
-    <a href="{{ reset_filters_url }}" class="btn btn-primary">Reset feed</a>
+    <a href="{{ reset_filters_url }}" class="btn btn-primary">Reset front page</a>
     {% endif %}
   </div>
 </section>

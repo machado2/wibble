@@ -89,7 +89,7 @@ impl WibbleRequest {
         context.insert("style", &busted_style);
         context.insert("site_url", &site_url);
         context.insert("canonical_url", &canonical_url);
-        context.insert("text_create_new_article", "Create new article");
+        context.insert("text_create_new_article", "Draft article");
         if let Some(ref user) = self.auth_user {
             context.insert("auth_user", user);
             context.insert("is_admin", &user.is_admin());

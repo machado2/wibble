@@ -46,68 +46,93 @@
       This article is unpublished and hidden from the public feed and sitemap.
     </div>
     {%- endif -%}
+
     <header class="article-header">
       <div class="article-header-top">
-        <h1 class="display-4 mb-0">{{ title }}</h1>
-        <div id="article-voting" class="article-vote-cluster" aria-label="Article score">
-          {%- if voting_open -%}
-            {%- if can_vote -%}
-            <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
-              <input type="hidden" name="direction" value="{% if user_vote == "up" %}clear{% else %}up{% endif %}">
-              <button
-                type="submit"
-                class="article-vote-arrow is-up{% if user_vote == "up" %} active{% endif %}"
-                aria-label="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
-                title="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
-              >
-                ▲
-              </button>
-            </form>
-            {%- else -%}
-            <a href="/login" class="article-vote-arrow is-up" aria-label="Log in to upvote" title="Log in to upvote">▲</a>
-            {%- endif -%}
-          {%- else -%}
-          <span class="article-vote-arrow is-disabled">▲</span>
-          {%- endif -%}
-
-          <span class="article-vote-score">{{ vote_score }}</span>
-
-          {%- if voting_open -%}
-            {%- if can_vote -%}
-            <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
-              <input type="hidden" name="direction" value="{% if user_vote == "down" %}clear{% else %}down{% endif %}">
-              <button
-                type="submit"
-                class="article-vote-arrow is-down{% if user_vote == "down" %} active{% endif %}"
-                aria-label="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
-                title="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
-              >
-                ▼
-              </button>
-            </form>
-            {%- else -%}
-            <a href="/login" class="article-vote-arrow is-down" aria-label="Log in to downvote" title="Log in to downvote">▼</a>
-            {%- endif -%}
-          {%- else -%}
-          <span class="article-vote-arrow is-disabled">▼</span>
-          {%- endif -%}
+        <div class="article-header-copy">
+          <p class="article-kicker">Filed Report</p>
+          <h1 class="display-4 mb-0">{{ title }}</h1>
+          <p class="article-standfirst mb-0">{{ description }}</p>
         </div>
-      </div>
-      <div class="article-meta-row">
-        <p class="text-muted mb-0"><time>{{ created_at }}</time></p>
-        {%- if not is_published -%}
-        <span class="badge badge-warning">Draft</span>
-        {%- endif -%}
+
+        <aside class="article-header-side">
+          <div id="article-voting" class="article-vote-cluster" aria-label="Article score">
+            {%- if voting_open -%}
+              {%- if can_vote -%}
+              <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
+                <input type="hidden" name="direction" value="{% if user_vote == "up" %}clear{% else %}up{% endif %}">
+                <button
+                  type="submit"
+                  class="article-vote-arrow is-up{% if user_vote == "up" %} active{% endif %}"
+                  aria-label="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
+                  title="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
+                >
+                  ▲
+                </button>
+              </form>
+              {%- else -%}
+              <a href="/login" class="article-vote-arrow is-up" aria-label="Log in to upvote" title="Log in to upvote">▲</a>
+              {%- endif -%}
+            {%- else -%}
+            <span class="article-vote-arrow is-disabled">▲</span>
+            {%- endif -%}
+
+            <span class="article-vote-score">{{ vote_score }}</span>
+
+            {%- if voting_open -%}
+              {%- if can_vote -%}
+              <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
+                <input type="hidden" name="direction" value="{% if user_vote == "down" %}clear{% else %}down{% endif %}">
+                <button
+                  type="submit"
+                  class="article-vote-arrow is-down{% if user_vote == "down" %} active{% endif %}"
+                  aria-label="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
+                  title="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
+                >
+                  ▼
+                </button>
+              </form>
+              {%- else -%}
+              <a href="/login" class="article-vote-arrow is-down" aria-label="Log in to downvote" title="Log in to downvote">▼</a>
+              {%- endif -%}
+            {%- else -%}
+            <span class="article-vote-arrow is-disabled">▼</span>
+            {%- endif -%}
+          </div>
+
+          <dl class="article-meta-list">
+            <div class="article-meta-item">
+              <dt class="article-meta-term">Filed</dt>
+              <dd class="article-meta-value"><time>{{ created_at }}</time></dd>
+            </div>
+            <div class="article-meta-item">
+              <dt class="article-meta-term">Status</dt>
+              <dd class="article-meta-value">
+                {% if is_published %}
+                Public
+                {% else %}
+                Draft
+                {% endif %}
+              </dd>
+            </div>
+          </dl>
+        </aside>
       </div>
     </header>
-    {{ body | safe }}
+
+    <div class="article-body">
+      {{ body | safe }}
+    </div>
   </div>
 </article>
 
-<section id="comments" class="card border-0 bg-white article-card mt-4">
+<section id="comments" class="card border-0 bg-white article-card mt-4 comments-card">
   <div class="card-body">
     <div class="comments-header">
-      <h2 class="comments-title">Comments</h2>
+      <div>
+        <p class="article-kicker comments-kicker">Public Response</p>
+        <h2 class="comments-title">Comments</h2>
+      </div>
       <span class="comments-count">{{ comment_count }} {% if comment_count == 1 %}comment{% else %}comments{% endif %}</span>
     </div>
 

@@ -58,6 +58,22 @@ fn markdown_to_html(markdown_str: &str) -> String {
     link_article_images(&html)
 }
 
+fn strip_leading_description(markdown: &str, description: &str) -> String {
+    let markdown = markdown.trim();
+    let description = description.trim();
+    if description.is_empty() {
+        return markdown.to_string();
+    }
+
+    let mut parts = markdown.splitn(2, "\n\n");
+    let first_block = parts.next().unwrap_or("").trim();
+    if first_block == description {
+        parts.next().unwrap_or("").trim().to_string()
+    } else {
+        markdown.to_string()
+    }
+}
+
 fn should_track_top_click(source: Option<&str>, is_logged_in: bool) -> bool {
     source == Some("top") && is_logged_in
 }
@@ -328,6 +344,11 @@ impl GetContent for WibbleRequest {
         };
 
         let public_article = c.published && !c.flagged;
+        let markdown = c.markdown.as_deref().ok_or(Error::NotFound(Some(format!(
+            "Markdown for content {} not found",
+            c.id
+        ))))?;
+        let rendered_body = markdown_to_html(&strip_leading_description(markdown, &c.description));
         let mut template = self.template("content").await;
         template
             .insert("id", &c.id)
@@ -336,13 +357,7 @@ impl GetContent for WibbleRequest {
             .insert("description", &c.description)
             .insert("image_id", &c.image_id.unwrap_or_default())
             .insert("title", &c.title)
-            .insert(
-                "body",
-                &markdown_to_html(&c.markdown.ok_or(Error::NotFound(Some(format!(
-                    "Markdown for content {} not found",
-                    c.id
-                ))))?),
-            )
+            .insert("body", &rendered_body)
             .insert(
                 "can_edit",
                 &self.auth_user.as_ref().is_some_and(|u| u.is_admin()),
@@ -379,6 +394,7 @@ mod tests {
     use super::{
         article_accepts_public_interactions, can_view_article, markdown_to_html,
         normalize_comment_body, normalize_comments_page, should_track_top_click,
+        strip_leading_description,
     };
     use crate::auth::AuthUser;
     use crate::entities::content;
@@ -484,6 +500,19 @@ mod tests {
         assert!(rendered.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
         assert!(rendered.contains(r#"href="/image_info/abc-123""#));
         assert!(rendered.contains(r#"src="/image/abc-123""#));
+    }
+
+    #[test]
+    fn strips_duplicate_standfirst_from_article_body() {
+        let markdown = "Opening paragraph.\n\n## Section\n\nMore detail.";
+        assert_eq!(
+            strip_leading_description(markdown, "Opening paragraph."),
+            "## Section\n\nMore detail."
+        );
+        assert_eq!(
+            strip_leading_description(markdown, "Something else"),
+            markdown
+        );
     }
 
     #[test]

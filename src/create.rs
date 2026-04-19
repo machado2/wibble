@@ -45,20 +45,20 @@ struct WaitSummary {
 fn create_prompt_presets() -> [PromptPreset; 4] {
     [
         PromptPreset {
-            label: "Tech Meltdown",
-            prompt: "A major tech company accidentally replaces its CEO with an overly enthusiastic AI intern during a product launch.",
+            label: "Policy Memo",
+            prompt: "A national transport ministry begins issuing emotional readiness bulletins alongside delay notices, and employers start asking staff to attach them to leave requests.",
         },
         PromptPreset {
-            label: "Town Hall",
-            prompt: "A sleepy coastal town becomes obsessed with electing a seagull as mayor after it solves one local problem too many.",
+            label: "Civic Desk",
+            prompt: "A borough council opens a formal inquiry after one unusually competent pigeon is repeatedly observed directing pedestrian traffic more effectively than the current signage.",
         },
         PromptPreset {
-            label: "Sports Chaos",
-            prompt: "A football match spirals into absurdity when every coach starts using motivational corporate jargon instead of tactics.",
+            label: "Sports Tribunal",
+            prompt: "A football federation releases a compliance review after every post-match interview starts sounding like a quarterly earnings call and supporters begin demanding clearer guidance.",
         },
         PromptPreset {
-            label: "Science Desk",
-            prompt: "Scientists announce a world-changing discovery, but the lab notes read like a group chat that got wildly out of hand.",
+            label: "Research Brief",
+            prompt: "A respected institute publishes a sober report concluding that the national mood is best classified as 'manageable, with nuggets', prompting immediate parliamentary interest.",
         },
     ]
 }
@@ -90,7 +90,7 @@ pub async fn render_create_page(
         .insert("title", "Create a new article")
         .insert(
             "description",
-            "Submit a prompt and let The Wibble generate a new satirical article.",
+            "Submit a brief and let The Wibble draft a straight-faced satirical report.",
         )
         .insert("robots", "noindex,nofollow")
         .insert("prompt", &prompt)
