@@ -7,7 +7,7 @@ use crate::auth::AuthUser;
 use crate::create::{render_wait_page, start_recover_article_for_slug};
 use crate::entities::{content, content_image, prelude::*};
 use crate::error::Error;
-use crate::tasklist::TaskResult;
+use crate::services::article_jobs::ArticleJobService;
 use crate::wibble_request::WibbleRequest;
 
 use super::policy::can_view_article;
@@ -145,6 +145,7 @@ pub async fn load_content_page_article(
 ) -> Result<ContentPageArticle, Error> {
     let state = &request.state;
     let db = &state.db;
+    let job_service = ArticleJobService::new(state.clone());
     let mut article = find_content_by_slug(db, slug).await?;
 
     if article.is_none() {
@@ -163,11 +164,7 @@ pub async fn load_content_page_article(
         return Ok(ContentPageArticle::Ready(Box::new(article)));
     }
 
-    let task_processing = matches!(
-        state.task_list.get(&article.id).await,
-        Ok(TaskResult::Processing)
-    );
-    if state.is_generation_active(&article.id).await || task_processing {
+    if job_service.is_job_processing(&article.id).await {
         event!(
             Level::INFO,
             slug = %slug,

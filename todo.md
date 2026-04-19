@@ -84,6 +84,7 @@ No release until every phase below is complete or explicitly removed from scope.
   - wait-page rendering
   - dead-link recovery
   - generation orchestration
+- [x] Add a create-flow job service layer so create, recovery, and wait handling no longer manipulate task state directly.
 - [x] Split `src/content.rs` into:
   - article query / load service
   - rendering helpers
@@ -439,7 +440,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 - [x] `src/create/`
   - split orchestration, wait logic, recovery, and form rendering
-- [ ] create flow job-oriented service layer
+- [x] create flow job-oriented service layer
 
 - [ ] `src/content.rs`
   - separate article loading, rendering, comments, and interaction policy

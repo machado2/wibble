@@ -1,13 +1,11 @@
-use std::sync::atomic::Ordering;
-
 use sea_orm::EntityTrait;
 use tracing::{event, Level};
-use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::entities::content;
 use crate::entities::prelude::*;
 use crate::error::Error;
+use crate::services::article_jobs::{ArticleJobService, ArticleJobTrace};
 
 use super::create_article;
 
@@ -28,22 +26,13 @@ pub async fn start_recover_article_for_slug(
     state: AppState,
     slug: String,
 ) -> Result<Option<String>, Error> {
+    let job_service = ArticleJobService::new(state.clone());
     let slug = slug.trim().to_string();
     if slug.is_empty() {
         return Ok(None);
     }
 
-    let permit = state
-        .article_generation_semaphore
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| {
-            event!(
-                Level::WARN,
-                "Rejected dead-link recovery due to concurrency limit (MAX_CONCURRENT_ARTICLE_GENERATIONS reached)",
-            );
-            Error::RateLimited
-        })?;
+    let permit = job_service.try_acquire_generation_slot("dead_link_recovery")?;
 
     let model = state
         .llm
@@ -52,7 +41,7 @@ pub async fn start_recover_article_for_slug(
         .ok_or_else(|| Error::Llm("No language model configured".to_string()))?
         .to_string();
 
-    let id = Uuid::new_v4().to_string();
+    let id = job_service.new_job_id();
     let return_id = id.clone();
     let prompt = recover_prompt_from_slug(&slug);
     let now = chrono::Utc::now().naive_local();
@@ -110,39 +99,38 @@ pub async fn start_recover_article_for_slug(
         return Ok(None);
     }
 
-    let active_counter = state.active_article_generations.clone();
-    state.mark_generation_started(&id).await;
-    state
-        .task_list
-        .clone()
-        .spawn_task(id.clone(), async move {
-            let _permit = permit;
-            let in_flight = active_counter.fetch_add(1, Ordering::SeqCst) + 1;
-            event!(
-                Level::INFO,
-                article_id = %id,
-                recovery_slug = %slug,
-                in_flight,
-                "Started dead-link recovery generation task"
-            );
-            let result = create_article(&state, id.clone(), prompt, None).await;
-            let in_flight_after = active_counter
-                .fetch_sub(1, Ordering::SeqCst)
-                .saturating_sub(1);
-            if result.is_err() {
-                let _ = Content::delete_by_id(id.clone()).exec(&state.db).await;
-            }
-            event!(
-                Level::INFO,
-                article_id = %id,
-                recovery_slug = %slug,
-                in_flight = in_flight_after,
-                "Finished dead-link recovery generation task"
-            );
-            state.mark_generation_finished(&id).await;
-            result
-        })
+    job_service
+        .spawn_generation_job(
+            id.clone(),
+            permit,
+            ArticleJobTrace::dead_link_recovery(slug.clone()),
+            async move {
+                let result = create_article(&state, id.clone(), prompt, None).await;
+                if result.is_err() {
+                    let _ = Content::delete_by_id(id.clone()).exec(&state.db).await;
+                }
+                result
+            },
+        )
         .await;
 
     Ok(Some(return_id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::recover_prompt_from_slug;
+
+    #[test]
+    fn recover_prompt_turns_slug_into_space_separated_topic() {
+        assert_eq!(
+            recover_prompt_from_slug("cabinet-shuffle_under-pressure"),
+            "cabinet shuffle under pressure"
+        );
+    }
+
+    #[test]
+    fn recover_prompt_falls_back_to_original_slug_when_topic_is_empty() {
+        assert_eq!(recover_prompt_from_slug("---"), "---");
+    }
 }

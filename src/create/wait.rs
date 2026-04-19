@@ -9,6 +9,7 @@ use crate::error::Error;
 use crate::image_status::{
     IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED, IMAGE_STATUS_PENDING, IMAGE_STATUS_PROCESSING,
 };
+use crate::services::article_jobs::ArticleJobService;
 use crate::tasklist::TaskResult;
 use crate::wibble_request::WibbleRequest;
 
@@ -130,7 +131,8 @@ pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<Strin
 }
 
 pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
-    let task = wr.state.task_list.get(id).await;
+    let job_service = ArticleJobService::new(wr.state.clone());
+    let task = job_service.task_result(id).await;
     match task {
         Ok(TaskResult::Success) => {
             let content = Content::find()
