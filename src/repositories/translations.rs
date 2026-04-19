@@ -9,15 +9,50 @@ use crate::llm::prompt_registry::{
     find_supported_translation_language, SupportedTranslationLanguage,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TranslationField {
+    Title,
+    Description,
+    Markdown,
+}
+
+impl TranslationField {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::Description => "description",
+            Self::Markdown => "markdown",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StoredTranslation {
-    pub source_hash: String,
+    pub cache_key: String,
     pub language: SupportedTranslationLanguage,
     pub text: String,
 }
 
 pub fn translation_source_hash(source_text: &str) -> String {
     format!("{:x}", Sha256::digest(source_text.as_bytes()))
+}
+
+pub fn translation_cache_key(
+    article_id: &str,
+    field: TranslationField,
+    source_text: &str,
+    prompt_version: i32,
+) -> String {
+    stable_identifier(
+        "translation-cache",
+        &format!(
+            "{}:{}:{}:{}",
+            article_id,
+            field.as_str(),
+            translation_source_hash(source_text),
+            prompt_version
+        ),
+    )
 }
 
 fn stable_identifier(namespace: &str, value: &str) -> String {
@@ -46,16 +81,16 @@ fn translation_row_id(source_hash: &str, language: SupportedTranslationLanguage)
     )
 }
 
-pub async fn find_translations_for_hashes(
+pub async fn find_translations_for_keys(
     db: &DatabaseConnection,
-    source_hashes: &[String],
+    cache_keys: &[String],
 ) -> Result<Vec<StoredTranslation>, Error> {
-    if source_hashes.is_empty() {
+    if cache_keys.is_empty() {
         return Ok(Vec::new());
     }
 
     let rows = Translation::find()
-        .filter(translation::Column::EnglishHash.is_in(source_hashes.iter().cloned()))
+        .filter(translation::Column::EnglishHash.is_in(cache_keys.iter().cloned()))
         .find_also_related(Language)
         .all(db)
         .await
@@ -67,7 +102,7 @@ pub async fn find_translations_for_hashes(
             let language = language?;
             let supported = find_supported_translation_language(&language.name)?;
             Some(StoredTranslation {
-                source_hash: translation.english_hash,
+                cache_key: translation.english_hash,
                 language: supported,
                 text: translation.translation,
             })
@@ -77,13 +112,12 @@ pub async fn find_translations_for_hashes(
 
 pub async fn save_translation(
     db: &DatabaseConnection,
-    source_text: &str,
+    cache_key: &str,
     language: SupportedTranslationLanguage,
     translated_text: &str,
 ) -> Result<(), Error> {
-    let source_hash = translation_source_hash(source_text);
     let language_id = language_row_id(language);
-    let translation_id = translation_row_id(&source_hash, language);
+    let translation_id = translation_row_id(cache_key, language);
 
     if Language::find_by_id(language_id.clone())
         .one(db)
@@ -107,7 +141,7 @@ pub async fn save_translation(
         .map_err(|e| Error::Database(format!("Error checking cached translation row: {}", e)))?
     {
         let mut active: translation::ActiveModel = existing.into();
-        active.english_hash = ActiveValue::set(source_hash);
+        active.english_hash = ActiveValue::set(cache_key.to_string());
         active.lang_id = ActiveValue::set(language_id);
         active.translation = ActiveValue::set(translated_text.to_string());
         active
@@ -117,7 +151,7 @@ pub async fn save_translation(
     } else {
         Translation::insert(translation::ActiveModel {
             id: ActiveValue::set(translation_id),
-            english_hash: ActiveValue::set(source_hash),
+            english_hash: ActiveValue::set(cache_key.to_string()),
             lang_id: ActiveValue::set(language_id),
             translation: ActiveValue::set(translated_text.to_string()),
         })
@@ -131,7 +165,9 @@ pub async fn save_translation(
 
 #[cfg(test)]
 mod tests {
-    use super::{stable_identifier, translation_source_hash};
+    use super::{
+        stable_identifier, translation_cache_key, translation_source_hash, TranslationField,
+    };
 
     #[test]
     fn translation_source_hash_is_stable() {
@@ -150,5 +186,24 @@ mod tests {
         assert_eq!(&id[13..14], "-");
         assert_eq!(&id[18..19], "-");
         assert_eq!(&id[23..24], "-");
+    }
+
+    #[test]
+    fn translation_cache_key_is_field_specific() {
+        let title_key = translation_cache_key("article-1", TranslationField::Title, "Same", 1);
+        let description_key =
+            translation_cache_key("article-1", TranslationField::Description, "Same", 1);
+
+        assert_ne!(title_key, description_key);
+    }
+
+    #[test]
+    fn translation_cache_key_changes_with_article_and_prompt_version() {
+        let base = translation_cache_key("article-1", TranslationField::Title, "Same", 1);
+        let other_article = translation_cache_key("article-2", TranslationField::Title, "Same", 1);
+        let other_prompt = translation_cache_key("article-1", TranslationField::Title, "Same", 2);
+
+        assert_ne!(base, other_article);
+        assert_ne!(base, other_prompt);
     }
 }

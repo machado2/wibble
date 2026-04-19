@@ -301,16 +301,16 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Use `language` / `translation` tables for actual runtime persistence.
 - [x] Add a translation service instead of leaving `src/llm/translate.rs` orphaned.
 - [x] Persist translations so repeat reads do not re-run the model.
-- [ ] Cache by:
+- [x] Cache by:
   - article id
   - source content revision / hash
   - target language
   - translation prompt version
-- [ ] Invalidate cached translations when the source article changes.
-- [ ] Decide whether translations are stored as:
-  - full rendered markdown/body copies
-  - title + description + markdown fields
-  - a dedicated translation aggregate that can support future per-locale metadata
+- [x] Invalidate cached translations when the source article changes.
+- [x] Decide whether translations are stored as:
+  - chosen approach: title + description + markdown fields
+  - not full rendered markdown/body copies
+  - not a dedicated translation aggregate yet
 
 ### 8.3 Background generation and resume behavior
 

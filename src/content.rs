@@ -173,11 +173,13 @@ impl GetContent for WibbleRequest {
                 article.id
             ))))?;
         let source_article = ArticleSourceText {
+            article_id: &article.id,
             title: &article.title,
             description: &article.description,
             markdown,
         };
         let owned_source_article = OwnedArticleSourceText {
+            article_id: article.id.clone(),
             title: article.title.clone(),
             description: article.description.clone(),
             markdown: markdown.to_string(),
@@ -216,7 +218,6 @@ impl GetContent for WibbleRequest {
         if language_selection.translation_requested && !language_selection.translation_available {
             spawn_missing_article_translation(
                 self.state.clone(),
-                article.id.clone(),
                 owned_source_article,
                 language_selection.preferred_language,
             )
