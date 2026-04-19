@@ -77,7 +77,8 @@ fn extract_placeholder_images(
                 max_images,
                 "Truncating placeholder image tags to MAX_IMAGES_PER_ARTICLE"
             );
-            break;
+            markdown = markdown.replacen(&capture[0], "", 1);
+            continue;
         }
 
         let prompt = capture[1].to_string();
@@ -141,5 +142,17 @@ mod tests {
         assert_eq!(placeholder_images.images.len(), 1);
         assert!(placeholder_images.markdown.contains("![storm](/image/"));
         assert!(placeholder_images.markdown.contains("\"A storm\")"));
+    }
+
+    #[test]
+    fn extract_placeholder_images_drops_overflow_tags_from_markdown() {
+        let placeholder_images = extract_placeholder_images(
+            "One\n\n<GeneratedImage prompt=\"storm\" alt=\"A storm\" />\n\n<GeneratedImage prompt=\"fog\" alt=\"Fog\" />",
+            1,
+        )
+        .unwrap();
+
+        assert_eq!(placeholder_images.images.len(), 1);
+        assert!(!placeholder_images.markdown.contains("<GeneratedImage"));
     }
 }

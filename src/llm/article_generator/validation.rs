@@ -68,9 +68,98 @@ pub fn ensure_generated_images_present(images: &[ImageGenerated]) -> Result<(), 
     Ok(())
 }
 
+pub fn ensure_title_present(title: &str) -> Result<(), Error> {
+    if title.trim().is_empty() {
+        return Err(Error::Llm("Generated article title is empty".to_string()));
+    }
+    Ok(())
+}
+
+pub fn ensure_no_forbidden_markup(markdown: &str) -> Result<(), Error> {
+    let normalized = markdown.to_ascii_lowercase();
+    for forbidden in [
+        "<script",
+        "<iframe",
+        "<object",
+        "<embed",
+        "<form",
+        "<style",
+        "<generatedimage",
+    ] {
+        if normalized.contains(forbidden) {
+            return Err(Error::Llm(format!(
+                "Generated article contains forbidden markup: {}",
+                forbidden
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn ensure_no_prompt_leakage(text: &str) -> Result<(), Error> {
+    let normalized = text.to_ascii_lowercase();
+    for leaked_phrase in [
+        "as an ai",
+        "language model",
+        "system prompt",
+        "user prompt",
+        "these instructions",
+        "i cannot comply",
+    ] {
+        if normalized.contains(leaked_phrase) {
+            return Err(Error::Llm(format!(
+                "Generated article leaked prompt scaffolding: {}",
+                leaked_phrase
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn ensure_deadpan_tone(title: &str, markdown: &str) -> Result<(), Error> {
+    let normalized = format!("{}\n{}", title, markdown).to_ascii_lowercase();
+    for tone_break in ["haha", "lol", "lmao", "this is satire", "this is parody"] {
+        if normalized.contains(tone_break) {
+            return Err(Error::Llm(format!(
+                "Generated article broke deadpan tone: {}",
+                tone_break
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn ensure_image_markdown_count(markdown: &str, expected_images: usize) -> Result<(), Error> {
+    let actual_images = markdown.matches("](/image/").count();
+    if actual_images != expected_images {
+        return Err(Error::Llm(format!(
+            "Generated article image count mismatch: expected {}, found {}",
+            expected_images, actual_images
+        )));
+    }
+    Ok(())
+}
+
+pub fn validate_article_output(
+    title: &str,
+    markdown: &str,
+    expected_images: usize,
+) -> Result<(), Error> {
+    ensure_title_present(title)?;
+    ensure_no_prompt_leakage(title)?;
+    ensure_no_prompt_leakage(markdown)?;
+    ensure_deadpan_tone(title, markdown)?;
+    ensure_no_forbidden_markup(markdown)?;
+    ensure_image_markdown_count(markdown, expected_images)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ensure_minimum_paragraph_count, parse_titled_markdown, split_paragraphs};
+    use super::{
+        ensure_minimum_paragraph_count, ensure_no_forbidden_markup, ensure_no_prompt_leakage,
+        parse_titled_markdown, split_paragraphs, validate_article_output,
+    };
 
     #[test]
     fn parse_titled_markdown_extracts_heading_and_body() {
@@ -101,5 +190,34 @@ mod tests {
             .to_string();
 
         assert!(err.contains("less than 4 paragraphs"));
+    }
+
+    #[test]
+    fn prompt_leakage_validation_rejects_meta_phrases() {
+        let err = ensure_no_prompt_leakage("As an AI language model, I regret")
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("prompt scaffolding"));
+    }
+
+    #[test]
+    fn forbidden_markup_validation_rejects_placeholder_tags() {
+        let err = ensure_no_forbidden_markup(
+            "Paragraph\n\n<GeneratedImage prompt=\"storm\" alt=\"Storm\" />",
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(err.contains("forbidden markup"));
+    }
+
+    #[test]
+    fn validate_article_output_rejects_wrong_image_count() {
+        let err = validate_article_output("Headline", "Paragraph\n\n![Image](/image/a \"A\")", 2)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("image count mismatch"));
     }
 }

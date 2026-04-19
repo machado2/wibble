@@ -50,7 +50,7 @@ pub async fn generate_placeholder_article_draft(
     parse_titled_markdown(&article)
 }
 
-async fn request_article_draft(
+pub async fn request_article_draft(
     llm: &Llm,
     instructions: &str,
     model: &str,

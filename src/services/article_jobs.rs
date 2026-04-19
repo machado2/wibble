@@ -8,6 +8,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, Condition, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect,
 };
+use serde_json::Value;
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::{event, Level};
 use uuid::Uuid;
@@ -222,14 +223,7 @@ impl ArticleJobService {
             phase: ActiveValue::set(ARTICLE_JOB_PHASE_QUEUED.to_string()),
             status: ActiveValue::set(ARTICLE_JOB_STATUS_QUEUED.to_string()),
             usage_counters: ActiveValue::set(Some(
-                serde_json::json!({
-                    "prompt_chars": prompt_chars,
-                    "image_total": 0,
-                    "image_completed": 0,
-                    "image_processing": 0,
-                    "image_failed": 0,
-                })
-                .to_string(),
+                default_usage_counters(prompt_chars).to_string(),
             )),
             preview_payload: ActiveValue::set(None),
             error_summary: ActiveValue::set(None),
@@ -243,6 +237,37 @@ impl ArticleJobService {
         .await
         .map_err(|e| Error::Database(format!("Error inserting article job: {}", e)))?;
 
+        Ok(())
+    }
+
+    pub async fn record_usage_snapshot(
+        &self,
+        id: &str,
+        phase: &str,
+        usage: Value,
+    ) -> Result<(), Error> {
+        let Some(job) = self.load_job(id).await? else {
+            return Err(Error::NotFound(Some(format!(
+                "Article job {} not found",
+                id
+            ))));
+        };
+
+        let was_queued = job.status == ARTICLE_JOB_STATUS_QUEUED;
+        let mut active: article_job::ActiveModel = job.into();
+        let reference_time = now();
+        active.usage_counters = ActiveValue::set(Some(usage.to_string()));
+        active.updated_at = ActiveValue::set(reference_time);
+        active.phase = ActiveValue::set(phase.to_string());
+        if was_queued {
+            active.status = ActiveValue::set(ARTICLE_JOB_STATUS_PROCESSING.to_string());
+        }
+        if active.started_at.is_not_set() {
+            active.started_at = ActiveValue::set(Some(reference_time));
+        }
+        active.update(&self.state.db).await.map_err(|e| {
+            Error::Database(format!("Error recording article job usage snapshot: {}", e))
+        })?;
         Ok(())
     }
 
@@ -485,8 +510,11 @@ impl ArticleJobService {
         active.status = ActiveValue::set(ARTICLE_JOB_STATUS_PROCESSING.to_string());
         active.preview_payload =
             ActiveValue::set(Some(build_job_preview_payload(article, progress)));
-        active.usage_counters =
-            ActiveValue::set(Some(build_job_usage_counters(&job.prompt, progress)));
+        active.usage_counters = ActiveValue::set(Some(merge_job_usage_counters(
+            job.usage_counters.as_deref(),
+            &job.prompt,
+            progress,
+        )));
         active.error_summary = ActiveValue::set(None);
         active.updated_at = ActiveValue::set(reference_time);
         if active.started_at.is_not_set() {
@@ -515,8 +543,11 @@ impl ArticleJobService {
         active.status = ActiveValue::set(ARTICLE_JOB_STATUS_COMPLETED.to_string());
         active.preview_payload =
             ActiveValue::set(Some(build_job_preview_payload(article, progress)));
-        active.usage_counters =
-            ActiveValue::set(Some(build_job_usage_counters(&job.prompt, progress)));
+        active.usage_counters = ActiveValue::set(Some(merge_job_usage_counters(
+            job.usage_counters.as_deref(),
+            &job.prompt,
+            progress,
+        )));
         active.error_summary = ActiveValue::set(None);
         active.finished_at = ActiveValue::set(Some(reference_time));
         active.updated_at = ActiveValue::set(reference_time);
@@ -765,15 +796,57 @@ fn requester_tier_label(requester_tier: RequesterTier) -> &'static str {
     }
 }
 
-fn build_job_usage_counters(prompt: &str, progress: &ImageProgress) -> String {
+fn default_usage_counters(prompt_chars: usize) -> Value {
     serde_json::json!({
-        "prompt_chars": prompt.chars().count(),
-        "image_total": progress.total,
-        "image_completed": progress.completed,
-        "image_processing": progress.processing,
-        "image_failed": progress.failed,
+        "prompt_chars": prompt_chars,
+        "agent_steps": 0,
+        "model_calls": 0,
+        "tool_calls": 0,
+        "searches": 0,
+        "sources": 0,
+        "fetched_content_chars": 0,
+        "image_total": 0,
+        "image_completed": 0,
+        "image_processing": 0,
+        "image_failed": 0,
     })
-    .to_string()
+}
+
+fn parse_usage_counters(existing: Option<&str>, prompt_chars: usize) -> Value {
+    existing
+        .and_then(|value| serde_json::from_str::<Value>(value).ok())
+        .filter(|value| value.is_object())
+        .unwrap_or_else(|| default_usage_counters(prompt_chars))
+}
+
+fn merge_job_usage_counters(
+    existing: Option<&str>,
+    prompt: &str,
+    progress: &ImageProgress,
+) -> String {
+    let prompt_chars = prompt.chars().count();
+    let mut value = parse_usage_counters(existing, prompt_chars);
+    let object = value
+        .as_object_mut()
+        .expect("usage counter payload must stay an object");
+    object.insert("prompt_chars".to_string(), Value::from(prompt_chars));
+    object.insert(
+        "image_total".to_string(),
+        Value::from(progress.total as u64),
+    );
+    object.insert(
+        "image_completed".to_string(),
+        Value::from(progress.completed as u64),
+    );
+    object.insert(
+        "image_processing".to_string(),
+        Value::from(progress.processing as u64),
+    );
+    object.insert(
+        "image_failed".to_string(),
+        Value::from(progress.failed as u64),
+    );
+    value.to_string()
 }
 
 fn build_job_preview_payload(article: &content::Model, progress: &ImageProgress) -> String {
@@ -829,11 +902,13 @@ fn log_job_transition(
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::{
-        build_job_usage_counters, is_in_progress_job_status, is_terminal_job_status, ImageProgress,
-        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, ARTICLE_JOB_PHASE_COMPLETED,
-        ARTICLE_JOB_PHASE_EDITING, ARTICLE_JOB_PHASE_FAILED, ARTICLE_JOB_PHASE_PLANNING,
-        ARTICLE_JOB_PHASE_QUEUED, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
+        default_usage_counters, is_in_progress_job_status, is_terminal_job_status,
+        merge_job_usage_counters, ImageProgress, ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
+        ARTICLE_JOB_PHASE_COMPLETED, ARTICLE_JOB_PHASE_EDITING, ARTICLE_JOB_PHASE_FAILED,
+        ARTICLE_JOB_PHASE_PLANNING, ARTICLE_JOB_PHASE_QUEUED, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
         ARTICLE_JOB_PHASE_RENDERING_IMAGES, ARTICLE_JOB_PHASE_RESEARCHING,
         ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING, ARTICLE_JOB_STATUS_COMPLETED,
         ARTICLE_JOB_STATUS_FAILED, ARTICLE_JOB_STATUS_PROCESSING, ARTICLE_JOB_STATUS_QUEUED,
@@ -869,8 +944,14 @@ mod tests {
     }
 
     #[test]
-    fn usage_counters_include_prompt_and_image_progress() {
-        let json = build_job_usage_counters(
+    fn usage_counters_include_runtime_and_image_progress() {
+        let mut usage = default_usage_counters(14);
+        usage
+            .as_object_mut()
+            .unwrap()
+            .insert("model_calls".to_string(), Value::from(2));
+        let json = merge_job_usage_counters(
+            Some(&usage.to_string()),
             "deadpan prompt",
             &ImageProgress {
                 total: 3,
@@ -882,6 +963,7 @@ mod tests {
         );
 
         assert!(json.contains("\"prompt_chars\":14"));
+        assert!(json.contains("\"model_calls\":2"));
         assert!(json.contains("\"image_total\":3"));
         assert!(json.contains("\"image_failed\":1"));
     }

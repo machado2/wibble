@@ -13,14 +13,14 @@ No release until every phase below is complete or explicitly removed from scope.
   - Translation jobs are now persisted and resume-safe, with queue priority, retry/backoff, and edit-triggered invalidation/refresh.
   - Remaining translation release work is about operational hardening and browser QA, not missing runtime plumbing.
 
-- [ ] **Bounded agent orchestration is still missing**
-  - Create and dead-link recovery jobs now use persisted `article_job` rows instead of `src/tasklist.rs`.
-  - Wait-page state and image-finalization state are resume-safe after restart and layered with in-memory active tracking.
-  - Agent flows still need bounded tool execution, preview/review states, and user-input pauses.
+- [ ] **Research-mode and edit-agent orchestration are still missing**
+  - The default generation path now uses a bounded runtime with structured steps, usage accounting, validation, and policy limits.
+  - Create and dead-link recovery jobs use persisted `article_job` rows instead of `src/tasklist.rs`.
+  - Research, preview/review editing, and user-input pause/resume still need dedicated orchestration.
 
 - [ ] **Abuse controls still need agent-specific hardening**
-  - `src/rate_limit.rs` now uses keyed, tiered quotas by capability.
-  - Remaining gaps are per-job cost accounting, explicit step budgets, and admin-facing abuse summaries.
+  - `src/rate_limit.rs` uses keyed, tiered quotas by capability, and generation jobs now persist per-job execution counters and hard budgets.
+  - Remaining gaps are admin-facing abuse summaries, moderation policy, and richer operational visibility.
 
 - [ ] **Key refactor hotspots**
   - `src/content.rs` still needs a final cleanup pass around richer article/job metadata.
@@ -159,8 +159,8 @@ No release until every phase below is complete or explicitly removed from scope.
   - anonymous: lowest
   - logged-in: normal
   - admin: elevated
-- [ ] Add server-side cost accounting per job.
-- [ ] Add upper bounds for prompt size, fetched content size, and number of agent steps.
+- [x] Add server-side cost accounting per job.
+- [x] Add upper bounds for prompt size, fetched content size, and number of agent steps.
 - [ ] Add abuse monitoring and audit summaries.
 
 ### 3.3 Login incentives
@@ -176,7 +176,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ## Phase 4: Agent Runtime Architecture
 
-- [ ] Add a bounded agent orchestration layer instead of embedding logic directly in handlers.
+- [x] Add a bounded agent orchestration layer instead of embedding logic directly in handlers.
 - [ ] Define structured tools available to the generation agent:
   - article planning
   - limited web search / fetch
@@ -188,20 +188,20 @@ No release until every phase below is complete or explicitly removed from scope.
   - apply requested change
   - summarize diff
   - propose title / dek / body edits
-- [ ] Build a strict execution policy:
+- [x] Build a strict execution policy:
   - no arbitrary URLs from anonymous users
   - no unbounded loops
   - capped search count
   - capped source count
   - no hidden mutation without preview
-- [ ] Add structured logs for every step the agent takes.
+- [x] Add structured logs for every step the agent takes.
 
 ## Phase 5: Agent-Based Article Generation
 
 ### 5.1 Default generation path
 
-- [ ] Keep a cheap default path for prompts that do not need browsing.
-- [ ] Use the current prompt-based generation as the baseline non-research path.
+- [x] Keep a cheap default path for prompts that do not need browsing.
+- [x] Use the current prompt-based generation as the baseline non-research path.
 - [x] Refactor `src/llm/article_generator.rs` into:
   - prompt builder
   - planning
@@ -236,7 +236,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 5.4 Output validation
 
-- [ ] Validate generated articles for:
+- [x] Validate generated articles for:
   - title present
   - minimum structure
   - deadpan tone rules

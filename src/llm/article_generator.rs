@@ -2,6 +2,7 @@ mod draft;
 mod image_briefs;
 mod planning;
 mod prompt_builder;
+mod runtime;
 mod validation;
 
 use crate::app_state::AppState;
@@ -14,11 +15,16 @@ use crate::repositories::{
     examples::get_examples,
 };
 
-use draft::generate_placeholder_article_draft;
 pub use draft::{generate_article_parts, ArticleData};
-use image_briefs::replace_placeholder_tags_with_markdown;
+use draft::{generate_placeholder_article_draft, request_article_draft};
+use image_briefs::{generate_image_briefs, replace_placeholder_tags_with_markdown};
 use planning::{compose_article_markdown, leading_paragraph};
-use validation::{ensure_generated_images_present, ensure_placeholder_images_present};
+use runtime::{BoundedGenerationRuntime, GenerationTool};
+use validation::{
+    ensure_generated_images_present, ensure_image_briefs_present, ensure_minimum_paragraph_count,
+    ensure_placeholder_images_present, parse_titled_markdown, split_paragraphs,
+    validate_article_output,
+};
 
 pub async fn create_article_using_placeholders(
     state: &AppState,
@@ -29,15 +35,35 @@ pub async fn create_article_using_placeholders(
     author_email: Option<String>,
 ) -> Result<(), Error> {
     let llm = &state.llm;
+    let mut runtime =
+        BoundedGenerationRuntime::new(state.clone(), id.clone(), &instructions).await?;
+    runtime
+        .begin_tool(GenerationTool::ArticlePlanning, false)
+        .await?;
     let examples = if use_examples {
         Some(get_examples(&state.db).await?)
     } else {
         None
     };
 
+    runtime
+        .begin_tool(GenerationTool::DraftWriter, true)
+        .await?;
     let article = generate_placeholder_article_draft(llm, &instructions, model, examples).await?;
+    runtime
+        .begin_tool(GenerationTool::ImageBriefPlanner, false)
+        .await?;
     let placeholder_images = replace_placeholder_tags_with_markdown(&article.body)?;
     ensure_placeholder_images_present(&placeholder_images.images)?;
+    runtime
+        .begin_tool(GenerationTool::PolicyCheck, false)
+        .await?;
+    validate_article_output(
+        &article.title,
+        &placeholder_images.markdown,
+        placeholder_images.images.len(),
+    )?;
+    runtime.mark_ready_for_review().await?;
 
     let description = leading_paragraph(&placeholder_images.markdown);
     let image_ids = placeholder_images
@@ -76,12 +102,32 @@ pub async fn create_article_attempt(
 ) -> Result<(), Error> {
     let db = &state.db;
     let start_time = chrono::Utc::now().naive_local();
-    let examples = get_examples(&state.db).await?;
-    let article = generate_article_parts(&state.llm, examples, &instructions, model).await?;
-    let images = generate_images(state, article.images).await?;
+    let mut runtime =
+        BoundedGenerationRuntime::new(state.clone(), id.clone(), &instructions).await?;
+    runtime
+        .begin_tool(GenerationTool::ArticlePlanning, false)
+        .await?;
+    runtime
+        .begin_tool(GenerationTool::DraftWriter, true)
+        .await?;
+    let article = request_article_draft(&state.llm, &instructions, model).await?;
+    let article = parse_titled_markdown(&article)?;
+    let paragraphs = split_paragraphs(&article.body);
+    ensure_minimum_paragraph_count(&paragraphs)?;
+    runtime
+        .begin_tool(GenerationTool::ImageBriefPlanner, true)
+        .await?;
+    let image_briefs = generate_image_briefs(&state.llm, &article.body, model).await?;
+    ensure_image_briefs_present(&image_briefs)?;
+    let images = generate_images(state, image_briefs).await?;
     ensure_generated_images_present(&images)?;
 
-    let markdown = compose_article_markdown(article.paragraphs, &images);
+    let markdown = compose_article_markdown(paragraphs, &images);
+    runtime
+        .begin_tool(GenerationTool::PolicyCheck, false)
+        .await?;
+    validate_article_output(&article.title, &markdown, images.len())?;
+    runtime.mark_ready_for_review().await?;
     let description = leading_paragraph(&markdown);
 
     save_article(
