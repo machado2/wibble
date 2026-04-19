@@ -127,7 +127,7 @@
             <p class="article-language-kicker">Edition Desk</p>
             <details class="article-language-menu"{% if article_language_menu_open %} open{% endif %}>
               <summary class="article-language-summary">
-                <span class="article-language-summary-label">Edition</span>
+                <span class="article-language-summary-label">Current edition</span>
                 <span class="article-language-summary-main">{{ page_language_name }}</span>
                 <span class="article-language-summary-note">
                   {% if article_translation_requested and not article_translation_available %}
@@ -145,8 +145,8 @@
               </summary>
               <div class="article-language-menu-body">
                 <p class="article-language-intro">
-                  Automatic mode follows your browser language when that edition is available.
-                  Manual selections apply to this article only.
+                  Automatic service follows your browser only when a prepared edition exists.
+                  Manual changes are filed for this article only.
                 </p>
                 {% if article_translation_requested and not article_translation_available %}
                 <div class="article-language-notice" role="status">
