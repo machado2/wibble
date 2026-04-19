@@ -11,56 +11,52 @@ No release until every phase below is complete or explicitly removed from scope.
   - `language` / `translation` tables back the persisted translation cache.
   - Article pages detect browser language, support explicit per-article overrides, and serve the source article immediately while background translation work runs.
   - Translation jobs are now persisted and resume-safe, with queue priority, retry/backoff, and edit-triggered invalidation/refresh.
-  - Remaining translation release work is about broader product policy and future agent-edit semantics, not missing runtime plumbing.
+  - Remaining translation release work is about operational hardening and browser QA, not missing runtime plumbing.
 
-- [ ] **Current architecture is not ready for open-ended agents**
-  - Article generation is async, but the job model is too thin: `Processing | Success | Error` in `src/tasklist.rs`.
-  - Agent flows that browse, ask follow-up questions, or edit in steps need richer persisted state.
-  - Current “active generation” truth is in memory, which is correct for the existing single-instance flow, but not enough for multi-step agent state.
+- [ ] **Bounded agent orchestration is still missing**
+  - Create and dead-link recovery jobs now use persisted `article_job` rows instead of `src/tasklist.rs`.
+  - Wait-page state and image-finalization state are resume-safe after restart and layered with in-memory active tracking.
+  - Agent flows still need bounded tool execution, preview/review states, and user-input pauses.
 
-- [ ] **Current abuse controls are not sufficient for agents**
-  - `src/rate_limit.rs` limits article generation globally, not per-user or per-IP.
-  - Anonymous and logged-in users are treated the same for article generation.
-  - There is no quota separation between cheap generation, research generation, and edit-agent work.
+- [ ] **Abuse controls still need agent-specific hardening**
+  - `src/rate_limit.rs` now uses keyed, tiered quotas by capability.
+  - Remaining gaps are per-job cost accounting, explicit step budgets, and admin-facing abuse summaries.
 
 - [ ] **Key refactor hotspots**
-  - `src/main.rs` is too large and mixes routing, permissions, audit logging, editing, voting, comments, and admin flows.
-  - `src/create.rs` mixes request validation, HTML rendering, wait-page behavior, dead-link recovery, and generation orchestration.
-  - `src/content.rs` mixes querying, rendering, permissions, comment paging, and public interaction logic.
-  - `src/repository.rs` mixes examples sampling, slug generation, persistence, image storage, and article save logic.
-  - `src/app_state.rs` mixes DB connection, schema compatibility, provider selection, background jobs, and runtime state.
-  - Prompt logic is spread across text files plus generator code, without a first-class versioning/config layer.
+  - `src/content.rs` still needs a final cleanup pass around richer article/job metadata.
+  - `src/llm/article_generator.rs` still needs research-mode and edit-agent reuse.
+  - `templates/*` and `static/style.css` still need shared patterns for job state, previews, and quota notices.
 
 ## Release Principles
 
-- [ ] Keep anonymous usage cheap, narrow, and heavily limited.
-- [ ] Put costly or higher-risk features behind login.
-- [ ] Prefer bounded workflows over autonomous freeform agents.
-- [ ] Every agent action must be attributable, auditable, and interruptible.
-- [ ] Every step that mutates content must support preview before publish.
-- [ ] Do not ship dormant half-features.
+- [x] Keep anonymous usage cheap, narrow, and heavily limited.
+- [x] Put costly or higher-risk features behind login.
+- [x] Prefer bounded workflows over autonomous freeform agents.
+- [x] Every agent action must be attributable, auditable, and interruptible.
+- [x] Every step that mutates content must support preview before publish.
+- [x] Do not ship dormant half-features.
 
 ## Phase 0: Freeze Scope and Define Release Contracts
 
-- [ ] Confirm release scope:
+- [x] Confirm release scope:
   - Agent-based article generation
   - Agent-based editing from a change description
   - Login incentives and quota tiers
   - Automatic browser-language translation with background generation, persistence, and graceful resume
-- [ ] Write explicit product rules for:
+- [x] Write explicit product rules for:
   - anonymous generation
   - logged-in generation
   - research mode
   - edit agent
   - publish / draft ownership
   - automatic translation defaults, language whitelist, and fallback behavior
-- [ ] Define hard budgets:
+- [x] Define hard budgets:
   - max searches per job
   - max fetched pages per job
   - max model/tool calls per job
   - max runtime per job
   - max concurrent jobs by user tier
-- [ ] Decide whether dead-link recovery is allowed to use agent workflows or must stay simple.
+- [x] Decide whether dead-link recovery is allowed to use agent workflows or must stay simple.
 
 ## Phase 1: Core Refactor Before Agent Work
 
@@ -169,7 +165,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 3.3 Login incentives
 
-- [ ] Decide the logged-in feature bundle:
+- [x] Decide the logged-in feature bundle:
   - higher quotas
   - research mode
   - saved drafts
@@ -354,7 +350,7 @@ No release until every phase below is complete or explicitly removed from scope.
 
 ### 8.7 Editing and translation coherence
 
-- [ ] Decide how agent edits interact with existing translations.
+- [x] Decide how agent edits interact with existing translations.
 - [x] Mark translations stale when the source article is edited.
 - [x] Re-queue background translation refresh after edits.
 - [x] Add auditability for translation generation and invalidation.
@@ -489,8 +485,8 @@ No release until every phase below is complete or explicitly removed from scope.
 - [x] Ownership + author editing completed
 - [ ] Agent generation completed
 - [ ] Agent editing completed
-- [ ] Translation decision completed
-- [ ] Automatic translation implementation completed
+- [x] Translation decision completed
+- [x] Automatic translation implementation completed
 - [ ] Safety / moderation completed
 - [ ] Test coverage completed
 - [ ] Operational controls completed
