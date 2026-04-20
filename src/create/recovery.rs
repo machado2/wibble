@@ -32,6 +32,15 @@ pub async fn start_recover_article_for_slug(
         return Ok(None);
     }
 
+    if state.dead_link_recovery_max_per_day == 0 {
+        event!(
+            Level::INFO,
+            slug = %slug,
+            "Dead-link recovery disabled; skipping"
+        );
+        return Ok(None);
+    }
+
     let permit = job_service.try_acquire_generation_slot("dead_link_recovery")?;
 
     let model = state
@@ -130,7 +139,12 @@ pub async fn start_recover_article_for_slug(
 
 #[cfg(test)]
 mod tests {
-    use super::recover_prompt_from_slug;
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+    use crate::entities::{content, prelude::*};
+    use crate::test_support::TestContext;
+
+    use super::{recover_prompt_from_slug, start_recover_article_for_slug};
 
     #[test]
     fn recover_prompt_turns_slug_into_space_separated_topic() {
@@ -143,5 +157,25 @@ mod tests {
     #[test]
     fn recover_prompt_falls_back_to_original_slug_when_topic_is_empty() {
         assert_eq!(recover_prompt_from_slug("---"), "---");
+    }
+
+    #[tokio::test]
+    async fn start_recover_article_for_slug_skips_when_disabled() {
+        let ctx = TestContext::new().await;
+
+        let result =
+            start_recover_article_for_slug(ctx.state.clone(), "missing-article".to_string())
+                .await
+                .expect("dead-link recovery should skip cleanly");
+
+        assert!(result.is_none());
+
+        let article = Content::find()
+            .filter(content::Column::Slug.eq("missing-article"))
+            .one(&ctx.state.db)
+            .await
+            .expect("query should succeed");
+
+        assert!(article.is_none());
     }
 }

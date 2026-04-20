@@ -182,7 +182,7 @@ pub async fn test_state_for(database_url: &str) -> AppState {
         active_generation_ids: Arc::new(AsyncMutex::new(HashSet::new())),
         active_image_generation_ids: Arc::new(AsyncMutex::new(HashSet::new())),
         active_translation_generation_ids: Arc::new(AsyncMutex::new(HashSet::new())),
-        dead_link_recovery_max_per_day: 5,
+        dead_link_recovery_max_per_day: 0,
         dead_link_recovery_timestamps: Arc::new(AsyncMutex::new(Vec::<Instant>::new())),
         jwks_client: JwksClient::new(),
     }

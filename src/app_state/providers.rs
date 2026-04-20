@@ -39,7 +39,7 @@ pub fn read_runtime_limits() -> RuntimeLimits {
             1,
         ),
         max_concurrent_translation_jobs: read_positive_usize("MAX_CONCURRENT_TRANSLATION_JOBS", 1),
-        dead_link_recovery_max_per_day: read_positive_usize("DEAD_LINK_RECOVERY_MAX_PER_DAY", 5),
+        dead_link_recovery_max_per_day: read_nonnegative_usize("DEAD_LINK_RECOVERY_MAX_PER_DAY", 0),
     }
 }
 
@@ -157,17 +157,34 @@ fn parse_bool_flag(value: &str) -> bool {
     matches!(value.as_str(), "1" | "true" | "yes" | "y" | "on")
 }
 
-fn read_positive_usize(var_name: &str, default: usize) -> usize {
-    env::var(var_name)
-        .ok()
+fn coerce_positive_usize(value: Option<&str>, default: usize) -> usize {
+    value
         .and_then(|value| value.parse::<usize>().ok())
         .filter(|value| *value > 0)
         .unwrap_or(default)
 }
 
+fn coerce_nonnegative_usize(value: Option<&str>, default: usize) -> usize {
+    value
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(default)
+}
+
+fn read_positive_usize(var_name: &str, default: usize) -> usize {
+    let value = env::var(var_name).ok();
+    coerce_positive_usize(value.as_deref(), default)
+}
+
+fn read_nonnegative_usize(var_name: &str, default: usize) -> usize {
+    let value = env::var(var_name).ok();
+    coerce_nonnegative_usize(value.as_deref(), default)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_bool_flag, read_positive_usize};
+    use super::{
+        coerce_nonnegative_usize, coerce_positive_usize, parse_bool_flag, read_positive_usize,
+    };
 
     #[test]
     fn parse_bool_flag_accepts_expected_truthy_values() {
@@ -181,6 +198,19 @@ mod tests {
         for value in ["", "0", "false", "no", "off", "maybe"] {
             assert!(!parse_bool_flag(value), "expected falsey: {value}");
         }
+    }
+
+    #[test]
+    fn coerce_positive_usize_rejects_zero() {
+        assert_eq!(coerce_positive_usize(Some("0"), 7), 7);
+        assert_eq!(coerce_positive_usize(Some("9"), 7), 9);
+    }
+
+    #[test]
+    fn coerce_nonnegative_usize_allows_zero() {
+        assert_eq!(coerce_nonnegative_usize(Some("0"), 7), 0);
+        assert_eq!(coerce_nonnegative_usize(Some("9"), 7), 9);
+        assert_eq!(coerce_nonnegative_usize(Some("invalid"), 7), 7);
     }
 
     #[test]
