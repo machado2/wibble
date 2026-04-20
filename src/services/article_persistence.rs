@@ -1,14 +1,16 @@
 use sea_orm::prelude::*;
-use sea_orm::{ColumnTrait, Condition, QueryFilter, QuerySelect};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Condition, DatabaseTransaction, EntityTrait, QueryFilter,
+    QuerySelect,
+};
 use slugify::slugify;
 use uuid::Uuid;
 
-use crate::entities::{content, prelude::*};
+use crate::entities::{content, content_image, prelude::*};
 use crate::error::Error;
 
-pub struct SavedContentInput {
+pub struct SaveContentRequest {
     pub id: String,
-    pub slug: String,
     pub markdown: String,
     pub prompt_version: i32,
     pub start_time: DateTime,
@@ -18,7 +20,17 @@ pub struct SavedContentInput {
     pub title: String,
     pub instructions: String,
     pub author_email: Option<String>,
-    pub recovered_from_dead_link: bool,
+}
+
+pub struct PreparedContentUpsert {
+    content: content::ActiveModel,
+    has_existing: bool,
+}
+
+struct SavedContentModelInput {
+    request: SaveContentRequest,
+    slug: String,
+    recovered_from_dead_link: bool,
 }
 
 pub async fn next_slug_for_title(db: &DatabaseConnection, title: &str) -> Result<String, Error> {
@@ -44,36 +56,105 @@ pub async fn next_slug_for_title(db: &DatabaseConnection, title: &str) -> Result
     Ok(next_available_slug(&base_slug, &existing_slugs))
 }
 
-pub fn build_saved_content_model(input: SavedContentInput, now: DateTime) -> content::Model {
-    let published = input.author_email.is_none();
+pub async fn prepare_content_upsert(
+    db: &DatabaseConnection,
+    request: SaveContentRequest,
+) -> Result<PreparedContentUpsert, Error> {
+    let existing = Content::find_by_id(request.id.clone())
+        .one(db)
+        .await
+        .map_err(|e| Error::Database(format!("Error checking existing article: {}", e)))?;
+    let slug = if let Some(existing) = &existing {
+        existing.slug.clone()
+    } else {
+        next_slug_for_title(db, &request.title)
+            .await
+            .unwrap_or_else(|_| request.id.clone())
+    };
+    let now = chrono::Utc::now().naive_local();
+    let recovered_from_dead_link = existing
+        .as_ref()
+        .map(|existing| existing.recovered_from_dead_link)
+        .unwrap_or(false);
+    let has_existing = existing.is_some();
+    let mut content = content::ActiveModel::from(build_saved_content_model(
+        SavedContentModelInput {
+            request,
+            slug,
+            recovered_from_dead_link,
+        },
+        now,
+    ));
+    if has_existing {
+        content = content.reset_all();
+    }
+
+    Ok(PreparedContentUpsert {
+        content,
+        has_existing,
+    })
+}
+
+pub async fn upsert_prepared_content(
+    tx: &DatabaseTransaction,
+    prepared: PreparedContentUpsert,
+) -> Result<(), Error> {
+    if prepared.has_existing {
+        Content::update(prepared.content)
+            .exec(tx)
+            .await
+            .map_err(|e| Error::Database(format!("Error updating content: {}", e)))?;
+    } else {
+        Content::insert(prepared.content)
+            .exec(tx)
+            .await
+            .map_err(|e| Error::Database(format!("Error inserting content: {}", e)))?;
+    }
+    Ok(())
+}
+
+pub async fn replace_content_images(
+    tx: &DatabaseTransaction,
+    content_id: &str,
+) -> Result<(), Error> {
+    ContentImage::delete_many()
+        .filter(content_image::Column::ContentId.eq(content_id))
+        .exec(tx)
+        .await
+        .map_err(|e| Error::Database(format!("Error deleting content images: {}", e)))?;
+    Ok(())
+}
+
+fn build_saved_content_model(input: SavedContentModelInput, now: DateTime) -> content::Model {
+    let published = input.request.author_email.is_none();
     content::Model {
-        id: input.id,
+        id: input.request.id,
         slug: input.slug,
-        content: Some(input.markdown.clone()),
+        content: Some(input.request.markdown.clone()),
         created_at: now,
         generating: false,
-        generation_started_at: Some(input.start_time),
+        generation_started_at: Some(input.request.start_time),
         generation_finished_at: Some(now),
         flagged: false,
-        model: input.model,
-        prompt_version: input.prompt_version,
+        model: input.request.model,
+        prompt_version: input.request.prompt_version,
         fail_count: 0,
-        description: input.description,
-        image_id: input.image_id,
-        title: input.title,
-        user_input: input.instructions,
+        description: input.request.description,
+        image_id: input.request.image_id,
+        title: input.request.title,
+        user_input: input.request.instructions,
         image_prompt: None,
         user_email: None,
         votes: 0,
         hot_score: 0.0,
         generation_time_ms: None,
         flarum_id: None,
-        markdown: Some(input.markdown),
+        markdown: Some(input.request.markdown),
         converted: false,
         longview_count: 0,
         impression_count: 0,
         click_count: 0,
-        author_email: input.author_email,
+        author_email: input.request.author_email,
         published,
         recovered_from_dead_link: input.recovered_from_dead_link,
     }
@@ -137,18 +218,20 @@ mod tests {
     #[test]
     fn build_saved_content_model_publishes_articles_without_author_email() {
         let model = build_saved_content_model(
-            SavedContentInput {
-                id: "article-id".to_string(),
+            SavedContentModelInput {
+                request: SaveContentRequest {
+                    id: "article-id".to_string(),
+                    markdown: "# Title\n\nBody".to_string(),
+                    prompt_version: 11,
+                    start_time: sample_time(),
+                    model: "test-model".to_string(),
+                    description: "desc".to_string(),
+                    image_id: Some("image-id".to_string()),
+                    title: "Title".to_string(),
+                    instructions: "prompt".to_string(),
+                    author_email: None,
+                },
                 slug: "article-slug".to_string(),
-                markdown: "# Title\n\nBody".to_string(),
-                prompt_version: 11,
-                start_time: sample_time(),
-                model: "test-model".to_string(),
-                description: "desc".to_string(),
-                image_id: Some("image-id".to_string()),
-                title: "Title".to_string(),
-                instructions: "prompt".to_string(),
-                author_email: None,
                 recovered_from_dead_link: false,
             },
             sample_time(),
@@ -160,18 +243,20 @@ mod tests {
     #[test]
     fn build_saved_content_model_creates_draft_for_authenticated_authors() {
         let model = build_saved_content_model(
-            SavedContentInput {
-                id: "article-id".to_string(),
+            SavedContentModelInput {
+                request: SaveContentRequest {
+                    id: "article-id".to_string(),
+                    markdown: "# Title\n\nBody".to_string(),
+                    prompt_version: 12,
+                    start_time: sample_time(),
+                    model: "test-model".to_string(),
+                    description: "desc".to_string(),
+                    image_id: None,
+                    title: "Title".to_string(),
+                    instructions: "prompt".to_string(),
+                    author_email: Some("author@example.com".to_string()),
+                },
                 slug: "article-slug".to_string(),
-                markdown: "# Title\n\nBody".to_string(),
-                prompt_version: 12,
-                start_time: sample_time(),
-                model: "test-model".to_string(),
-                description: "desc".to_string(),
-                image_id: None,
-                title: "Title".to_string(),
-                instructions: "prompt".to_string(),
-                author_email: Some("author@example.com".to_string()),
                 recovered_from_dead_link: false,
             },
             sample_time(),
@@ -183,18 +268,20 @@ mod tests {
     #[test]
     fn build_saved_content_model_preserves_dead_link_recovery_flag() {
         let model = build_saved_content_model(
-            SavedContentInput {
-                id: "article-id".to_string(),
+            SavedContentModelInput {
+                request: SaveContentRequest {
+                    id: "article-id".to_string(),
+                    markdown: "# Title\n\nBody".to_string(),
+                    prompt_version: 13,
+                    start_time: sample_time(),
+                    model: "test-model".to_string(),
+                    description: "desc".to_string(),
+                    image_id: None,
+                    title: "Title".to_string(),
+                    instructions: "prompt".to_string(),
+                    author_email: None,
+                },
                 slug: "article-slug".to_string(),
-                markdown: "# Title\n\nBody".to_string(),
-                prompt_version: 13,
-                start_time: sample_time(),
-                model: "test-model".to_string(),
-                description: "desc".to_string(),
-                image_id: None,
-                title: "Title".to_string(),
-                instructions: "prompt".to_string(),
-                author_email: None,
                 recovered_from_dead_link: true,
             },
             sample_time(),
@@ -206,18 +293,20 @@ mod tests {
     #[test]
     fn build_saved_content_model_preserves_prompt_version() {
         let model = build_saved_content_model(
-            SavedContentInput {
-                id: "article-id".to_string(),
+            SavedContentModelInput {
+                request: SaveContentRequest {
+                    id: "article-id".to_string(),
+                    markdown: "# Title\n\nBody".to_string(),
+                    prompt_version: 42,
+                    start_time: sample_time(),
+                    model: "test-model".to_string(),
+                    description: "desc".to_string(),
+                    image_id: None,
+                    title: "Title".to_string(),
+                    instructions: "prompt".to_string(),
+                    author_email: None,
+                },
                 slug: "article-slug".to_string(),
-                markdown: "# Title\n\nBody".to_string(),
-                prompt_version: 42,
-                start_time: sample_time(),
-                model: "test-model".to_string(),
-                description: "desc".to_string(),
-                image_id: None,
-                title: "Title".to_string(),
-                instructions: "prompt".to_string(),
-                author_email: None,
                 recovered_from_dead_link: false,
             },
             sample_time(),
