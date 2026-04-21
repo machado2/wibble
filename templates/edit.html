@@ -4,85 +4,105 @@
 <div class="edit-layout">
   <div class="workflow-header edit-header">
     <div class="workflow-header-copy">
-      <p class="home-eyebrow">Editorial desk</p>
-      <h1>Edit article</h1>
+      <p class="home-eyebrow">{{ ui.edit.eyebrow }}</p>
+      <h1>{{ ui.edit.title }}</h1>
     </div>
     <div class="workflow-actions edit-actions">
-      <a href="/content/{{ slug }}" class="btn btn-outline-secondary">View article</a>
+      {%- if images -%}
+      <a href="#images" class="btn btn-outline-secondary">{{ ui.edit.jump_to_images }}</a>
+      {%- endif -%}
+      <a href="/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit.view_article }}</a>
     </div>
   </div>
 
   <div class="card border-0 workflow-card">
     <div class="card-body">
       <div class="workflow-note workflow-note-muted mb-4" role="status">
-        This workspace is available to the article owner and admins. Signed-in authors can revise draft copy, replace images, and publish when ready.
+        {{ ui.edit.workspace_note }}
       </div>
       <div class="card border mb-4 workflow-card workflow-card-inset">
         <div class="card-body">
-          <h2 class="h4 mb-2">Agent edit</h2>
+          <h2 class="h4 mb-2">{{ ui.edit.agent_edit }}</h2>
           <p class="text-muted mb-3">
-            Describe the change in plain language. The agent will draft a revision, summarize it, and show a diff before anything is applied.
+            {{ ui.edit.agent_edit_body }}
           </p>
           <form method="post" action="/content/{{ slug }}/edit/agent">
             <div class="edit-form-group">
-              <label for="change_request" class="form-label">Change request</label>
+              <label for="change_request" class="form-label">{{ ui.edit.change_request }}</label>
               <textarea
                 class="form-control"
                 id="change_request"
                 name="change_request"
                 rows="5"
                 maxlength="{{ agent_edit_max_length }}"
-                placeholder="Example: tighten the opening, cut the third section by a third, and make the closing sound more like an official bulletin."
+                placeholder="{{ ui.edit.change_request_placeholder }}"
                 required></textarea>
             </div>
             <div class="create-form-footer mb-3">
-              <span class="text-muted small">Owners and admins only. Nothing is applied until you approve the preview.</span>
-              <span class="small text-muted">Max {{ agent_edit_max_length }} characters.</span>
+              <span class="text-muted small">{{ ui.edit.owners_only }}</span>
+              <span class="small text-muted">{{ max_chars_note }}</span>
             </div>
             <div class="edit-submit-bar">
-              <button type="submit" class="btn btn-primary">Preview agent revision</button>
+              <button type="submit" class="btn btn-primary">{{ ui.edit.preview_revision }}</button>
             </div>
           </form>
         </div>
       </div>
 
-      <h2 class="h4 mb-3">Manual editor</h2>
+      <h2 class="h4 mb-3">{{ ui.edit.manual_editor }}</h2>
       <form method="post" action="/content/{{ slug }}/edit">
         <div class="edit-form-group">
-          <label for="title" class="form-label">Title</label>
+          <label for="title" class="form-label">{{ ui.edit.title_label }}</label>
           <input type="text" class="form-control" id="title" name="title" value="{{ article_title }}" required>
         </div>
         <div class="edit-form-group">
-          <label for="description" class="form-label">Description</label>
+          <label for="description" class="form-label">{{ ui.edit.description_label }}</label>
           <input type="text" class="form-control" id="description" name="description" value="{{ article_description }}" required>
         </div>
         <div class="edit-form-group">
-          <label for="markdown" class="form-label">Content (Markdown)</label>
+          <label for="markdown" class="form-label">{{ ui.edit.content_label }}</label>
           <textarea class="form-control" id="markdown" name="markdown" rows="20" required>{{ article_markdown }}</textarea>
         </div>
         <div class="edit-submit-bar">
-          <button type="submit" class="btn btn-primary">Save changes</button>
-          <a href="/content/{{ slug }}" class="btn btn-outline-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary">{{ ui.edit.save_changes }}</button>
+          <a href="/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit.cancel }}</a>
         </div>
       </form>
       <p class="text-muted small mb-0">
-        Raw markdown editing remains available as the escape hatch if the agent preview is not precise enough.
+        {{ ui.edit.raw_markdown_note }}
       </p>
     </div>
   </div>
 
   {%- if images -%}
-  <div class="edit-images-section">
-    <h2>Images</h2>
+  <div id="images" class="edit-images-section">
+    <h2>{{ ui.edit.images_title }}</h2>
+    <p class="text-muted mb-3">
+      {{ ui.edit.images_body }}
+    </p>
     <div class="edit-images-grid">
       {%- for img in images -%}
       <div class="edit-image-card">
         <img src="/image/{{ img.id }}" alt="{{ img.alt_text }}">
         <div class="edit-image-card-body">
+          <p class="mb-2"><strong>{{ ui.edit.status_prefix }}</strong> {{ img.status_label }}</p>
+          <p class="text-muted small">{{ img.status_note }}</p>
+          {%- if img.last_error -%}
+          <p class="text-muted small">{{ ui.edit.last_error_prefix }} {{ img.last_error }}</p>
+          {%- endif -%}
           <p>{{ img.prompt }}</p>
           <form method="post" action="/content/{{ slug }}/images/{{ img.id }}" enctype="multipart/form-data">
-            <input type="file" class="form-control" name="image" accept="image/*" required>
-            <button type="submit" class="btn btn-sm btn-outline-warning">Replace image</button>
+            <input type="file" class="form-control" name="image" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
+            <p class="text-muted small">{{ ui.edit.accepted_formats }}</p>
+            <button type="submit" class="btn btn-sm btn-outline-warning">{{ ui.edit.replace_image }}</button>
+          </form>
+          <form method="post" action="/content/{{ slug }}/images/{{ img.id }}/regenerate">
+            <button
+              type="submit"
+              class="btn btn-sm btn-outline-secondary"
+              {% if not img.can_regenerate %}disabled{% endif %}>
+              {% if img.is_generating %}{{ ui.edit.regenerating }}{% else %}{{ ui.edit.regenerate_prompt }}{% endif %}
+            </button>
           </form>
         </div>
       </div>

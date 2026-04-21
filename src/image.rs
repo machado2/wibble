@@ -105,7 +105,7 @@ pub async fn get_image(
         return Ok(ImagePayload {
             bytes,
             content_type: "image/jpeg",
-            cache_control: "public, max-age=31536000, immutable",
+            cache_control: "public, max-age=0, must-revalidate",
         });
     }
 

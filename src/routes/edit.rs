@@ -1,7 +1,7 @@
 mod agent;
 mod service;
 
-use axum::extract::{Multipart, Path};
+use axum::extract::{DefaultBodyLimit, Multipart, Path};
 use axum::response::{Html, Redirect};
 use axum::routing::post;
 use axum::{Form, Router};
@@ -17,6 +17,8 @@ use self::service::{apply_article_edit, render_edit_page, require_editable_artic
 #[cfg(test)]
 use self::agent::{build_unified_diff, markdown_image_count, text_paragraphs};
 
+pub(super) const MAX_IMAGE_UPLOAD_BYTES: usize = 12 * 1024 * 1024;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
@@ -30,7 +32,11 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/content/{slug}/images/{image_id}",
-            post(post_replace_image),
+            post(post_replace_image).layer(DefaultBodyLimit::max(MAX_IMAGE_UPLOAD_BYTES)),
+        )
+        .route(
+            "/content/{slug}/images/{image_id}/regenerate",
+            post(post_regenerate_image),
         )
         .route("/content/{slug}/publish", post(post_toggle_publish))
 }
@@ -97,6 +103,13 @@ async fn post_replace_image(
     service::replace_article_image(wr, &slug, &image_id, multipart).await
 }
 
+async fn post_regenerate_image(
+    wr: WibbleRequest,
+    Path((slug, image_id)): Path<(String, String)>,
+) -> Result<Redirect, Error> {
+    service::regenerate_article_image(wr, &slug, &image_id).await
+}
+
 async fn post_toggle_publish(
     wr: WibbleRequest,
     Path(slug): Path<String>,
@@ -115,7 +128,11 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
-    use crate::entities::{content as content_entity, prelude::AuditLog, prelude::Content};
+    use crate::entities::{
+        content as content_entity, content_image, prelude::AuditLog, prelude::Content,
+        prelude::ContentImage,
+    };
+    use crate::image_status::{IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED, IMAGE_STATUS_PENDING};
     use crate::rate_limit::RequesterTier;
     use crate::services::site_text::default_site_language;
     use crate::test_support::{author_user, TestContext};
@@ -173,6 +190,34 @@ mod tests {
             site_language: default_site_language(),
             browser_translation_language: None,
             saved_article_language: None,
+        }
+    }
+
+    fn sample_image(content_id: &str, status: &str) -> content_image::ActiveModel {
+        let failed = status == IMAGE_STATUS_FAILED;
+        content_image::ActiveModel {
+            id: ActiveValue::set("img-1".to_string()),
+            content_id: ActiveValue::set(content_id.to_string()),
+            prompt_hash: ActiveValue::set(None),
+            prompt: ActiveValue::set("Prompt".to_string()),
+            alt_text: ActiveValue::set("Alt".to_string()),
+            created_at: ActiveValue::set(chrono::Utc::now().naive_utc()),
+            flagged: ActiveValue::set(false),
+            regenerate: ActiveValue::set(false),
+            fail_count: ActiveValue::set(2),
+            generator: ActiveValue::set(None),
+            model: ActiveValue::set(None),
+            seed: ActiveValue::set(None),
+            parameters: ActiveValue::set(Some("{\"style\":\"old\"}".to_string())),
+            view_count: ActiveValue::set(0),
+            status: ActiveValue::set(status.to_string()),
+            last_error: ActiveValue::set(failed.then(|| "old error".to_string())),
+            generation_started_at: ActiveValue::set(Some(chrono::Utc::now().naive_utc())),
+            generation_finished_at: ActiveValue::set(Some(chrono::Utc::now().naive_utc())),
+            provider_job_id: ActiveValue::set(failed.then(|| "provider-job".to_string())),
+            provider_job_url: ActiveValue::set(
+                failed.then(|| "https://example.test/job".to_string()),
+            ),
         }
     }
 
@@ -265,6 +310,65 @@ mod tests {
         assert!(html.contains("Tightened the copy and flattened the tone."));
         assert!(html.contains("Revised Bulletin"));
         assert!(html.contains("Prompt version: 1"));
+    }
+
+    #[tokio::test]
+    async fn edit_page_surfaces_image_replacement_controls() {
+        let ctx = TestContext::new().await;
+        sample_article("author@example.com")
+            .insert(&ctx.state.db)
+            .await
+            .unwrap();
+        sample_image("story-1", IMAGE_STATUS_COMPLETED)
+            .insert(&ctx.state.db)
+            .await
+            .unwrap();
+
+        let Html(html) = super::get_edit_article(
+            sample_request(ctx.state.clone(), "author@example.com"),
+            Path("story-slug".to_string()),
+        )
+        .await
+        .unwrap();
+
+        assert!(html.contains("Jump to images"));
+        assert!(html.contains("id=\"images\""));
+        assert!(html.contains("Accepted formats: JPG, JPEG, PNG. Maximum size: 12 MB."));
+        assert!(html.contains("accept=\".jpg,.jpeg,.png,image/jpeg,image/png\""));
+        assert!(html.contains("Regenerate from prompt"));
+        assert!(html.contains("Current stored image."));
+    }
+
+    #[tokio::test]
+    async fn regeneration_reset_clears_transient_image_state() {
+        let ctx = TestContext::new().await;
+        sample_article("author@example.com")
+            .insert(&ctx.state.db)
+            .await
+            .unwrap();
+        let image = sample_image("story-1", IMAGE_STATUS_FAILED)
+            .insert(&ctx.state.db)
+            .await
+            .unwrap();
+
+        super::service::mark_image_pending_for_regeneration(&ctx.state.db, image)
+            .await
+            .unwrap();
+
+        let refreshed = ContentImage::find_by_id("img-1")
+            .one(&ctx.state.db)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(refreshed.status, IMAGE_STATUS_PENDING);
+        assert_eq!(refreshed.last_error, None);
+        assert_eq!(refreshed.parameters, None);
+        assert_eq!(refreshed.generation_started_at, None);
+        assert_eq!(refreshed.generation_finished_at, None);
+        assert_eq!(refreshed.provider_job_id, None);
+        assert_eq!(refreshed.provider_job_url, None);
+        assert!(refreshed.regenerate);
     }
 
     #[tokio::test]

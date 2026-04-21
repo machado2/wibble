@@ -76,6 +76,7 @@ async fn mark_failed(
 ) -> Result<(), Error> {
     let mut active = content_image::ActiveModel::from(image.clone());
     active.status = ActiveValue::set(IMAGE_STATUS_FAILED.to_string());
+    active.regenerate = ActiveValue::set(false);
     active.last_error = ActiveValue::set(Some(err.to_string()));
     active.fail_count = ActiveValue::set(image.fail_count + 1);
     active.generation_finished_at = ActiveValue::set(Some(chrono::Utc::now().naive_local()));
@@ -93,6 +94,7 @@ async fn mark_completed(
 ) -> Result<(), Error> {
     let mut active = content_image::ActiveModel::from(image);
     active.status = ActiveValue::set(IMAGE_STATUS_COMPLETED.to_string());
+    active.regenerate = ActiveValue::set(false);
     active.last_error = ActiveValue::set(None);
     active.parameters = ActiveValue::set(Some(parameters));
     active.generation_finished_at = ActiveValue::set(Some(chrono::Utc::now().naive_local()));
