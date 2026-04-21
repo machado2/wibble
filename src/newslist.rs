@@ -3,16 +3,25 @@
 
 use axum::response::Html;
 use chrono::TimeDelta;
+use futures::stream::{self, StreamExt};
 use sea_orm::sea_query::Expr;
 use sea_orm::ColumnTrait;
 use sea_orm::EntityTrait;
 use sea_orm::QueryFilter;
 use sea_orm::{prelude::*, FromQueryResult, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use url::form_urlencoded::Serializer;
 
 use crate::entities::{content, prelude::*};
 use crate::error::Error;
+use crate::llm::prompt_registry::SupportedTranslationLanguage;
+use crate::llm::translate::Translate;
+use crate::services::article_language::article_source_language;
+use crate::services::article_translations::{
+    ensure_cached_article_summary_translation, load_cached_article_summary_translations,
+    OwnedArticleSummarySourceText,
+};
 use crate::services::site_text::SiteText;
 use crate::wibble_request::WibbleRequest;
 
@@ -156,6 +165,89 @@ fn format_headline(h: Headline) -> FormattedHeadline {
     }
 }
 
+fn summary_source_text(headline: &Headline) -> OwnedArticleSummarySourceText {
+    OwnedArticleSummarySourceText {
+        article_id: headline.id.clone(),
+        title: headline.title.clone(),
+        description: headline.description.clone(),
+    }
+}
+
+async fn localize_headlines_with_translator<T>(
+    translator: T,
+    db: DatabaseConnection,
+    items: Vec<Headline>,
+    target_language: SupportedTranslationLanguage,
+) -> Result<Vec<FormattedHeadline>, Error>
+where
+    T: Translate + Clone + Send + Sync + 'static,
+{
+    if items.is_empty() || target_language.code == article_source_language().code {
+        return Ok(items.into_iter().map(format_headline).collect());
+    }
+
+    let sources = items.iter().map(summary_source_text).collect::<Vec<_>>();
+    let mut translations =
+        load_cached_article_summary_translations(&db, &sources, target_language).await?;
+    let missing_sources = sources
+        .iter()
+        .filter(|source| !translations.contains_key(&source.article_id))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let newly_translated = stream::iter(missing_sources.into_iter().map(|source| {
+        let translator = translator.clone();
+        let db = db.clone();
+        async move {
+            let article_id = source.article_id.clone();
+            let translation = ensure_cached_article_summary_translation(
+                &translator,
+                &db,
+                source.as_ref(),
+                target_language,
+            )
+            .await;
+            (article_id, translation)
+        }
+    }))
+    .buffer_unordered(4)
+    .collect::<Vec<_>>()
+    .await;
+
+    for (article_id, translation) in newly_translated {
+        match translation {
+            Ok(translation) => {
+                translations.insert(article_id, translation);
+            }
+            Err(err) => {
+                warn!(
+                    article_id = article_id,
+                    target_language = target_language.code,
+                    error = %err,
+                    "front-page summary translation failed"
+                );
+            }
+        }
+    }
+
+    Ok(items
+        .into_iter()
+        .map(|headline| {
+            let original_title = headline.title.clone();
+            let original_description = headline.description.clone();
+            let mut formatted = format_headline(headline);
+            if let Some(translation) = translations.get(&formatted.id) {
+                formatted.title = translation.title.clone();
+                formatted.description = translation.description.clone();
+            } else {
+                formatted.title = original_title;
+                formatted.description = original_description;
+            }
+            formatted
+        })
+        .collect())
+}
+
 fn build_index_url(
     root_path: &str,
     search: Option<&str>,
@@ -257,7 +349,13 @@ impl NewsList for WibbleRequest {
                 .await
                 .map_err(|e| Error::Database(format!("Error updating impressions: {}", e)))?;
         }
-        let mut items: Vec<_> = items.into_iter().map(format_headline).collect();
+        let mut items = localize_headlines_with_translator(
+            self.state.llm.clone(),
+            self.state.db.clone(),
+            items,
+            self.site_language,
+        )
+        .await?;
         let has_results = !items.is_empty();
         let lead_item = if items.is_empty() {
             None
@@ -323,9 +421,30 @@ impl NewsList for WibbleRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_index_url, public_sort_column};
+    use super::{
+        build_index_url, localize_headlines_with_translator, public_sort_column, Headline,
+    };
     use crate::entities::content;
+    use crate::error::Error;
+    use crate::llm::translate::Translate;
+    use crate::services::article_translations::{
+        load_cached_article_summary_translations, OwnedArticleSummarySourceText,
+    };
+    use crate::test_support::{preferred_language, TestContext};
     use std::mem::discriminant;
+
+    #[derive(Clone, Default)]
+    struct FakeTranslator;
+
+    impl Translate for FakeTranslator {
+        async fn translate(
+            &self,
+            text: &str,
+            target_language: crate::llm::prompt_registry::SupportedTranslationLanguage,
+        ) -> Result<String, Error> {
+            Ok(format!("[{}] {}", target_language.code, text))
+        }
+    }
 
     #[test]
     fn hot_sort_uses_hot_score() {
@@ -356,5 +475,48 @@ mod tests {
             "/pt/?search=space+mayor&t=week&sort=hot&afterId=abc"
         );
         assert_eq!(build_index_url("/pt/", None, None, None, None), "/pt/");
+    }
+
+    #[tokio::test]
+    async fn localize_headlines_translates_and_caches_visible_summaries() {
+        let ctx = TestContext::new().await;
+        let items = vec![Headline {
+            id: "story-1".to_string(),
+            slug: "story-1".to_string(),
+            created_at: chrono::NaiveDate::from_ymd_opt(2026, 4, 20)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap(),
+            description: "Brief summary".to_string(),
+            image_id: None,
+            title: "Report".to_string(),
+        }];
+
+        let localized = localize_headlines_with_translator(
+            FakeTranslator,
+            ctx.state.db.clone(),
+            items,
+            preferred_language("es"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(localized[0].title, "[es] Report");
+        assert_eq!(localized[0].description, "[es] Brief summary");
+
+        let cached = load_cached_article_summary_translations(
+            &ctx.state.db,
+            &[OwnedArticleSummarySourceText {
+                article_id: "story-1".to_string(),
+                title: "Report".to_string(),
+                description: "Brief summary".to_string(),
+            }],
+            preferred_language("es"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(cached["story-1"].title, "[es] Report");
+        assert_eq!(cached["story-1"].description, "[es] Brief summary");
     }
 }

@@ -22,12 +22,26 @@ pub struct ArticleSourceText<'a> {
     pub markdown: &'a str,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ArticleSummarySourceText<'a> {
+    pub article_id: &'a str,
+    pub title: &'a str,
+    pub description: &'a str,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OwnedArticleSourceText {
     pub article_id: String,
     pub title: String,
     pub description: String,
     pub markdown: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OwnedArticleSummarySourceText {
+    pub article_id: String,
+    pub title: String,
+    pub description: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -38,11 +52,24 @@ pub struct CachedArticleTranslation {
     pub markdown: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CachedArticleSummaryTranslation {
+    pub language: SupportedTranslationLanguage,
+    pub title: String,
+    pub description: String,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct CachedArticleTranslationFields {
     title: Option<String>,
     description: Option<String>,
     markdown: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CachedArticleSummaryTranslationFields {
+    title: Option<String>,
+    description: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -52,6 +79,12 @@ struct MissingArticleTranslationFields {
     markdown: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct MissingArticleSummaryTranslationFields {
+    title: bool,
+    description: bool,
+}
+
 impl OwnedArticleSourceText {
     pub fn as_ref(&self) -> ArticleSourceText<'_> {
         ArticleSourceText {
@@ -59,6 +92,16 @@ impl OwnedArticleSourceText {
             title: &self.title,
             description: &self.description,
             markdown: &self.markdown,
+        }
+    }
+}
+
+impl OwnedArticleSummarySourceText {
+    pub fn as_ref(&self) -> ArticleSummarySourceText<'_> {
+        ArticleSummarySourceText {
+            article_id: &self.article_id,
+            title: &self.title,
+            description: &self.description,
         }
     }
 }
@@ -77,6 +120,39 @@ pub fn article_translation_job_key(
     language: SupportedTranslationLanguage,
 ) -> String {
     format!("{}:{}", article_id, language.code)
+}
+
+pub async fn load_cached_article_summary_translations(
+    db: &DatabaseConnection,
+    sources: &[OwnedArticleSummarySourceText],
+    language: SupportedTranslationLanguage,
+) -> Result<HashMap<String, CachedArticleSummaryTranslation>, Error> {
+    if sources.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let keys_by_article = sources
+        .iter()
+        .map(|source| {
+            (
+                source.article_id.clone(),
+                summary_cache_keys(source.as_ref()).to_vec(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let cache_keys = keys_by_article
+        .iter()
+        .flat_map(|(_, keys)| keys.iter().cloned())
+        .collect::<Vec<_>>();
+    let translations = find_translations_for_keys(db, &cache_keys).await?;
+
+    Ok(keys_by_article
+        .into_iter()
+        .filter_map(|(article_id, keys)| {
+            assemble_cached_article_summary_translation(&keys, &translations, language)
+                .map(|translation| (article_id, translation))
+        })
+        .collect())
 }
 
 pub async fn cached_translation_languages(
@@ -102,6 +178,43 @@ pub async fn load_cached_article_translation(
         &translations,
         language,
     ))
+}
+
+pub async fn ensure_cached_article_summary_translation<T: Translate>(
+    translator: &T,
+    db: &DatabaseConnection,
+    source: ArticleSummarySourceText<'_>,
+    language: SupportedTranslationLanguage,
+) -> Result<CachedArticleSummaryTranslation, Error> {
+    let cache_keys = summary_cache_keys(source);
+    let translations = find_translations_for_keys(db, &cache_keys).await?;
+    let cached_fields = cached_summary_translation_fields(&cache_keys, &translations, language);
+    let missing_fields = MissingArticleSummaryTranslationFields {
+        title: cached_fields.title.is_none(),
+        description: cached_fields.description.is_none(),
+    };
+
+    let title = match cached_fields.title {
+        Some(title) => title,
+        None => translator.translate(source.title, language).await?,
+    };
+    let description = match cached_fields.description {
+        Some(description) => description,
+        None => translator.translate(source.description, language).await?,
+    };
+    let writes = missing_summary_translation_writes(
+        &cache_keys,
+        language,
+        &missing_fields,
+        [&title, &description],
+    );
+    save_translations(db, &writes).await?;
+
+    Ok(CachedArticleSummaryTranslation {
+        language,
+        title,
+        description,
+    })
 }
 
 pub async fn ensure_cached_article_translation<T: Translate>(
@@ -181,6 +294,23 @@ fn cache_keys(source: ArticleSourceText<'_>) -> Vec<String> {
     ]
 }
 
+fn summary_cache_keys(source: ArticleSummarySourceText<'_>) -> [String; 2] {
+    [
+        translation_cache_key(
+            source.article_id,
+            TranslationField::Title,
+            source.title,
+            translation_prompt_version(),
+        ),
+        translation_cache_key(
+            source.article_id,
+            TranslationField::Description,
+            source.description,
+            translation_prompt_version(),
+        ),
+    ]
+}
+
 fn complete_cached_languages(
     cache_keys: &[String],
     translations: &[StoredTranslation],
@@ -228,6 +358,27 @@ fn cached_translation_fields(
     }
 }
 
+fn cached_summary_translation_fields(
+    cache_keys: &[String],
+    translations: &[StoredTranslation],
+    language: SupportedTranslationLanguage,
+) -> CachedArticleSummaryTranslationFields {
+    let translation_map = translations
+        .iter()
+        .filter(|translation| translation.language.code == language.code)
+        .map(|translation| (translation.cache_key.as_str(), translation.text.as_str()))
+        .collect::<HashMap<_, _>>();
+
+    CachedArticleSummaryTranslationFields {
+        title: translation_map
+            .get(cache_keys[0].as_str())
+            .map(|text| (*text).to_string()),
+        description: translation_map
+            .get(cache_keys[1].as_str())
+            .map(|text| (*text).to_string()),
+    }
+}
+
 fn missing_translation_writes(
     cache_keys: &[String],
     language: SupportedTranslationLanguage,
@@ -239,6 +390,26 @@ fn missing_translation_writes(
         missing_fields.description,
         missing_fields.markdown,
     ];
+    cache_keys
+        .iter()
+        .zip(translated_texts)
+        .zip(missing)
+        .filter(|((_, _), missing)| *missing)
+        .map(|((cache_key, text), _)| TranslationWrite {
+            cache_key: cache_key.clone(),
+            language,
+            text: text.to_string(),
+        })
+        .collect()
+}
+
+fn missing_summary_translation_writes(
+    cache_keys: &[String],
+    language: SupportedTranslationLanguage,
+    missing_fields: &MissingArticleSummaryTranslationFields,
+    translated_texts: [&str; 2],
+) -> Vec<TranslationWrite> {
+    let missing = [missing_fields.title, missing_fields.description];
     cache_keys
         .iter()
         .zip(translated_texts)
@@ -267,6 +438,22 @@ fn assemble_cached_article_translation(
         title,
         description,
         markdown,
+    })
+}
+
+fn assemble_cached_article_summary_translation(
+    cache_keys: &[String],
+    translations: &[StoredTranslation],
+    language: SupportedTranslationLanguage,
+) -> Option<CachedArticleSummaryTranslation> {
+    let cached_fields = cached_summary_translation_fields(cache_keys, translations, language);
+    let title = cached_fields.title?;
+    let description = cached_fields.description?;
+
+    Some(CachedArticleSummaryTranslation {
+        language,
+        title,
+        description,
     })
 }
 
