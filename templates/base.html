@@ -53,7 +53,7 @@
                             <span class="brand-accent">The</span>
                             <span class="brand-strong">Wibble</span>
                         </a>
-                        <p class="brand-note">Daily bulletin of public affairs and avoidable concern</p>
+                        <p class="brand-note">{{ ui.base.brand_note }}</p>
                     </div>
                     <div class="nav-actions">
                         <div class="nav-primary">
@@ -61,7 +61,7 @@
                                 {%- block nav_context_actions -%}{%- endblock nav_context_actions -%}
                             </div>
                             <a class="btn btn-primary" href="/create">
-                                {{ text_create_new_article }}
+                                {{ ui.base.create_article }}
                             </a>
                         </div>
                         <div class="nav-utility">
@@ -71,16 +71,16 @@
                                 target="_blank"
                                 rel="noreferrer noopener"
                             >
-                                Discord
+                                {{ ui.base.discord }}
                             </a>
                             {%- if auth_user -%}
                             {%- if is_admin -%}
-                            <a class="nav-text-link" href="/admin/articles">Admin</a>
+                            <a class="nav-text-link" href="/admin/articles">{{ ui.base.admin }}</a>
                             {%- endif -%}
                             <span class="nav-user">{{ auth_user.name }}</span>
-                            <a class="nav-text-link" href="/logout">Logout</a>
+                            <a class="nav-text-link" href="/logout">{{ ui.base.logout }}</a>
                             {%- else -%}
-                            <a class="nav-text-link" href="/login">Login</a>
+                            <a class="nav-text-link" href="/login">{{ ui.base.login }}</a>
                             {%- endif -%}
                         </div>
                     </div>
@@ -94,7 +94,7 @@
 
         <footer class="site-footer">
             <div class="container">
-                <p class="mb-0">© The Wibble</p>
+                <p class="mb-0">{{ ui.base.footer }}</p>
             </div>
         </footer>
     </body>

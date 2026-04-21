@@ -59,6 +59,7 @@ pub(super) async fn render_agent_edit_preview(
     slug: &str,
     data: &super::AgentEditRequestData,
 ) -> Result<Html<String>, Error> {
+    let text = wr.site_text();
     let change_request = normalize_agent_edit_request(&data.change_request)?;
     let (auth_user, article) = require_editable_article(&wr, slug).await?;
     let current_markdown = article.markdown.as_deref().unwrap_or("");
@@ -105,7 +106,7 @@ pub(super) async fn render_agent_edit_preview(
 
     wr.template("edit_agent_preview")
         .await
-        .insert("title", &format!("Agent edit preview: {}", article.title))
+        .insert("title", &text.edit_preview_meta_title(&article.title))
         .insert("robots", "noindex,nofollow")
         .insert("slug", slug)
         .insert("change_request", &change_request)
@@ -122,8 +123,16 @@ pub(super) async fn render_agent_edit_preview(
             &build_unified_diff(
                 &article.title,
                 &proposal.title,
-                "current title",
-                "proposed title",
+                if text.language().code == "pt" {
+                    "título atual"
+                } else {
+                    "current title"
+                },
+                if text.language().code == "pt" {
+                    "título proposto"
+                } else {
+                    "proposed title"
+                },
             ),
         )
         .insert(
@@ -131,8 +140,16 @@ pub(super) async fn render_agent_edit_preview(
             &build_unified_diff(
                 &article.description,
                 &proposal.description,
-                "current description",
-                "proposed description",
+                if text.language().code == "pt" {
+                    "descrição atual"
+                } else {
+                    "current description"
+                },
+                if text.language().code == "pt" {
+                    "descrição proposta"
+                } else {
+                    "proposed description"
+                },
             ),
         )
         .insert(
@@ -140,8 +157,16 @@ pub(super) async fn render_agent_edit_preview(
             &build_unified_diff(
                 current_markdown,
                 &proposal.markdown,
-                "current markdown",
-                "proposed markdown",
+                if text.language().code == "pt" {
+                    "markdown atual"
+                } else {
+                    "current markdown"
+                },
+                if text.language().code == "pt" {
+                    "markdown proposto"
+                } else {
+                    "proposed markdown"
+                },
             ),
         )
         .render()

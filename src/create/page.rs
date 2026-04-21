@@ -13,34 +13,17 @@ struct PromptPreset {
     prompt: &'static str,
 }
 
-fn create_prompt_presets() -> [PromptPreset; 4] {
-    [
-        PromptPreset {
-            label: "Policy Memo",
-            prompt: "A national transport ministry begins issuing emotional readiness bulletins alongside delay notices, and employers start asking staff to attach them to leave requests.",
-        },
-        PromptPreset {
-            label: "Civic Desk",
-            prompt: "A borough council opens a formal inquiry after one unusually competent pigeon is repeatedly observed directing pedestrian traffic more effectively than the current signage.",
-        },
-        PromptPreset {
-            label: "Sports Tribunal",
-            prompt: "A football federation releases a compliance review after every post-match interview starts sounding like a quarterly earnings call and supporters begin demanding clearer guidance.",
-        },
-        PromptPreset {
-            label: "Research Brief",
-            prompt: "A respected institute publishes a sober report concluding that the national mood is best classified as 'manageable, with nuggets', prompting immediate parliamentary interest.",
-        },
-    ]
-}
-
 pub async fn render_create_page(
     wr: &WibbleRequest,
     prompt: &str,
     error_message: Option<&str>,
     selected_mode: CreateModeSelection,
 ) -> Result<Html<String>, Error> {
-    let presets = create_prompt_presets();
+    let text = wr.site_text();
+    let ui = text.template_strings();
+    let presets = text
+        .create_prompt_presets()
+        .map(|(label, prompt)| PromptPreset { label, prompt });
     let logged_in = wr.auth_user.is_some();
     let standard_quota = RateLimitState::quota_summary_for(
         RateLimitCapability::PlainArticleGeneration,
@@ -67,18 +50,55 @@ pub async fn render_create_page(
         RequesterTier::Authenticated,
     );
     let mut template = wr.template("create").await;
-    template
-        .insert("title", "Create a new article")
-        .insert(
-            "description",
-            "Submit a brief and let The Wibble draft a straight-faced satirical report.",
+    let owner_editing_note = ui["create"]["owner_editing_note"]
+        .as_str()
+        .unwrap_or_default()
+        .replace(
+            "%EDIT_HOURLY%",
+            &authenticated_edit_quota.hourly.to_string(),
+        );
+    let research_lane_note = ui["create"]["research_lane_note"]
+        .as_str()
+        .unwrap_or_default()
+        .replace("%RESEARCH_HOURLY%", &research_quota.hourly.to_string())
+        .replace("%RESEARCH_DAILY%", &research_quota.daily.to_string());
+    let translation_lane_note = ui["create"]["translation_lane_note"]
+        .as_str()
+        .unwrap_or_default()
+        .replace(
+            "%TRANSLATION_HOURLY%",
+            &authenticated_translation_quota.hourly.to_string(),
+        );
+    let login_upsell_note = ui["create"]["login_upsell"]
+        .as_str()
+        .unwrap_or_default()
+        .replace(
+            "%STANDARD_HOURLY%",
+            &authenticated_standard_quota.hourly.to_string(),
         )
+        .replace(
+            "%RESEARCH_HOURLY%",
+            &authenticated_research_quota.hourly.to_string(),
+        );
+    let research_quota_note = ui["create"]["mode_research_quota"]
+        .as_str()
+        .unwrap_or_default()
+        .replace("%RESEARCH_HOURLY%", &research_quota.hourly.to_string())
+        .replace("%RESEARCH_DAILY%", &research_quota.daily.to_string());
+    template
+        .insert("title", text.create_meta_title())
+        .insert("description", text.create_meta_description())
         .insert("robots", "noindex,nofollow")
         .insert("prompt", &prompt)
         .insert("prompt_max_length", &MAX_PROMPT_CHARS)
         .insert("prompt_presets", &presets)
         .insert("logged_in", &logged_in)
         .insert("selected_create_mode", selected_mode.as_str())
+        .insert("owner_editing_note", &owner_editing_note)
+        .insert("research_lane_note", &research_lane_note)
+        .insert("translation_lane_note", &translation_lane_note)
+        .insert("login_upsell_note", &login_upsell_note)
+        .insert("research_quota_note", &research_quota_note)
         .insert("standard_quota", &standard_quota)
         .insert("research_quota", &research_quota)
         .insert(

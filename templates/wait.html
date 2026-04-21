@@ -11,33 +11,33 @@
   <div class="card wait-shell workflow-shell border-0">
     <div class="card-body wait-shell-body">
       <div class="wait-shell-copy">
-        <p class="home-eyebrow">Generation status</p>
+        <p class="home-eyebrow">{{ ui.wait.eyebrow }}</p>
         <h1 class="card-title">{{ wait_summary.stage_title }}</h1>
         <p class="text-muted">{{ wait_summary.stage_description }}</p>
         {% if wait_summary.article_title %}
-        <p class="wait-article-title">Working on: <strong>{{ wait_summary.article_title }}</strong></p>
+        <p class="wait-article-title">{{ ui.wait.working_on }} <strong>{{ wait_summary.article_title }}</strong></p>
         {% endif %}
       </div>
 
       <div class="wait-spinner-wrap">
         {% if wait_summary.clarification_question %}
         <div class="workflow-note workflow-note-warning text-start mb-0" role="status">
-          <strong>Clarification needed.</strong>
+          <strong>{{ ui.wait.clarification_needed }}</strong>
           {{ wait_summary.clarification_question }}
           {% if wait_summary.clarification_deadline %}
           <div class="small text-muted mt-2">
-            If nobody answers by {{ wait_summary.clarification_deadline }}, the job resumes with a conservative fallback.
+            {{ wait_summary.clarification_deadline_note }}
           </div>
           {% endif %}
         </div>
         {% else %}
         <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Loading...</span>
+          <span class="visually-hidden">{{ ui.wait.loading }}</span>
         </div>
         {% endif %}
       </div>
 
-      <div class="wait-metrics status-chip-grid" aria-label="Generation progress">
+      <div class="wait-metrics status-chip-grid" aria-label="{{ ui.wait.progress_aria }}">
         {% for item in wait_summary.phase_items %}
         <div class="image-meta-chip">
           <span class="image-meta-label">{{ item.label }}</span>
@@ -45,19 +45,19 @@
         </div>
         {% endfor %}
         <div class="image-meta-chip">
-          <span class="image-meta-label">Images planned</span>
+          <span class="image-meta-label">{{ ui.wait.images_planned }}</span>
           <strong>{{ wait_summary.image_total }}</strong>
         </div>
         <div class="image-meta-chip">
-          <span class="image-meta-label">Completed</span>
+          <span class="image-meta-label">{{ ui.wait.completed }}</span>
           <strong>{{ wait_summary.image_completed }}</strong>
         </div>
         <div class="image-meta-chip">
-          <span class="image-meta-label">In progress</span>
+          <span class="image-meta-label">{{ ui.wait.in_progress }}</span>
           <strong>{{ wait_summary.image_processing }}</strong>
         </div>
         <div class="image-meta-chip">
-          <span class="image-meta-label">Failed</span>
+          <span class="image-meta-label">{{ ui.wait.failed }}</span>
           <strong>{{ wait_summary.image_failed }}</strong>
         </div>
       </div>
@@ -70,14 +70,14 @@
       <div class="wait-actions">
         {% if wait_summary.clarification_question %}
         <form method="post" action="/wait/{{ id }}/clarify" class="w-100">
-          <label class="form-label" for="clarification-answer">Answer the missing detail</label>
+          <label class="form-label" for="clarification-answer">{{ ui.wait.answer_label }}</label>
           <textarea id="clarification-answer" class="form-control mb-3" name="answer" rows="3" maxlength="200" required></textarea>
-          <button type="submit" class="btn btn-primary">Resume drafting</button>
+          <button type="submit" class="btn btn-primary">{{ ui.wait.resume }}</button>
         </form>
         {% else %}
-        <a href="/wait/{{ id }}" class="btn btn-outline-primary">Refresh now</a>
+        <a href="/wait/{{ id }}" class="btn btn-outline-primary">{{ ui.wait.refresh }}</a>
         {% if wait_summary.slug %}
-        <a href="/content/{{ wait_summary.slug }}" class="btn btn-outline-secondary">Open article</a>
+        <a href="/content/{{ wait_summary.slug }}" class="btn btn-outline-secondary">{{ ui.wait.open_article }}</a>
         {% endif %}
         {% endif %}
       </div>

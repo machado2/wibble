@@ -4,36 +4,36 @@
 <section class="edit-layout">
   <div class="workflow-header edit-header">
     <div class="workflow-header-copy">
-      <p class="home-eyebrow">Editorial desk</p>
-      <h1>Agent edit preview</h1>
+      <p class="home-eyebrow">{{ ui.edit_preview.eyebrow }}</p>
+      <h1>{{ ui.edit_preview.title }}</h1>
     </div>
     <div class="workflow-actions edit-actions">
-      <a href="/content/{{ slug }}/edit" class="btn btn-outline-secondary">Back to editor</a>
-      <a href="/content/{{ slug }}" class="btn btn-outline-secondary">View article</a>
+      <a href="/content/{{ slug }}/edit" class="btn btn-outline-secondary">{{ ui.edit_preview.back_to_editor }}</a>
+      <a href="/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit_preview.view_article }}</a>
     </div>
   </div>
 
   <div class="card border-0 mb-4 workflow-card">
     <div class="card-body">
       <div class="workflow-note workflow-note-muted mb-3" role="status">
-        <strong>Requested change:</strong> {{ change_request }}
+        <strong>{{ ui.edit_preview.requested_change }}</strong> {{ change_request }}
       </div>
-      <p class="mb-2"><strong>Agent summary:</strong> {{ summary }}</p>
-      <p class="text-muted small mb-0">Prompt version: {{ prompt_version }}</p>
+      <p class="mb-2"><strong>{{ ui.edit_preview.agent_summary }}</strong> {{ summary }}</p>
+      <p class="text-muted small mb-0">{{ ui.edit_preview.prompt_version }} {{ prompt_version }}</p>
     </div>
   </div>
 
   <div class="card border-0 mb-4 workflow-card">
     <div class="card-body">
-      <h2 class="h4 mb-3">Field preview</h2>
+      <h2 class="h4 mb-3">{{ ui.edit_preview.field_preview }}</h2>
       <div class="row g-4">
         <div class="col-md-6">
-          <h3 class="h6 text-muted">Current</h3>
+          <h3 class="h6 text-muted">{{ ui.edit_preview.current }}</h3>
           <p><strong>{{ current_title }}</strong></p>
           <p>{{ current_description }}</p>
         </div>
         <div class="col-md-6">
-          <h3 class="h6 text-muted">Proposed</h3>
+          <h3 class="h6 text-muted">{{ ui.edit_preview.proposed }}</h3>
           <p><strong>{{ proposed_title }}</strong></p>
           <p>{{ proposed_description }}</p>
         </div>
@@ -43,18 +43,18 @@
 
   <div class="card border-0 mb-4 workflow-card">
     <div class="card-body">
-      <h2 class="h4 mb-3">Diff</h2>
+      <h2 class="h4 mb-3">{{ ui.edit_preview.diff }}</h2>
       <div class="diff-stack">
         <div class="diff-block">
-          <h3 class="h6 text-muted">Title</h3>
+          <h3 class="h6 text-muted">{{ ui.edit_preview.title_label }}</h3>
           <pre class="mb-0">{{ title_diff }}</pre>
         </div>
         <div class="diff-block">
-          <h3 class="h6 text-muted">Description</h3>
+          <h3 class="h6 text-muted">{{ ui.edit_preview.description_label }}</h3>
           <pre class="mb-0">{{ description_diff }}</pre>
         </div>
         <div class="diff-block">
-          <h3 class="h6 text-muted">Markdown</h3>
+          <h3 class="h6 text-muted">{{ ui.edit_preview.markdown_label }}</h3>
           <pre class="mb-0">{{ markdown_diff }}</pre>
         </div>
       </div>
@@ -63,7 +63,7 @@
 
   <div class="card border-0 workflow-card">
     <div class="card-body">
-      <h2 class="h4 mb-3">Apply revision</h2>
+      <h2 class="h4 mb-3">{{ ui.edit_preview.apply_revision }}</h2>
       <form method="post" action="/content/{{ slug }}/edit/agent/apply">
         <input type="hidden" name="title" value="{{ proposed_title }}">
         <input type="hidden" name="description" value="{{ proposed_description }}">
@@ -72,8 +72,8 @@
         <input type="hidden" name="prompt_version" value="{{ prompt_version }}">
         <textarea class="d-none" name="markdown">{{ proposed_markdown }}</textarea>
         <div class="edit-submit-bar">
-          <button type="submit" class="btn btn-primary">Apply agent revision</button>
-          <a href="/content/{{ slug }}/edit" class="btn btn-outline-secondary">Discard preview</a>
+          <button type="submit" class="btn btn-primary">{{ ui.edit_preview.apply_revision }}</button>
+          <a href="/content/{{ slug }}/edit" class="btn btn-outline-secondary">{{ ui.edit_preview.discard_preview }}</a>
         </div>
       </form>
     </div>

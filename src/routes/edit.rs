@@ -117,6 +117,7 @@ mod tests {
 
     use crate::entities::{content as content_entity, prelude::AuditLog, prelude::Content};
     use crate::rate_limit::RequesterTier;
+    use crate::services::site_text::default_site_language;
     use crate::test_support::{author_user, TestContext};
     use crate::wibble_request::WibbleRequest;
 
@@ -169,6 +170,7 @@ mod tests {
             auth_user: Some(author_user(email)),
             requester_tier: RequesterTier::Authenticated,
             rate_limit_key: format!("user:{}", email),
+            site_language: default_site_language(),
             browser_translation_language: None,
             saved_article_language: None,
         }

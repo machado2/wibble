@@ -53,35 +53,28 @@ pub async fn handle_error(
 
     match response.status() {
         StatusCode::INTERNAL_SERVER_ERROR => {
+            let text = wr.site_text();
             let image_url = format!("/error{}.jpg", rand::rng().random_range(1..=8));
             wr.template("error")
                 .await
-                .insert("title", "Server error")
-                .insert(
-                    "description",
-                    "An unexpected server error occurred while loading this page.",
-                )
+                .insert("title", text.server_error_title())
+                .insert("description", text.server_error_description())
                 .insert("robots", "noindex,nofollow")
                 .insert("image_url", &image_url)
-                .insert(
-                    "error_message",
-                    "Oops! Something went wrong. Please try again later.",
-                )
+                .insert("error_message", text.server_error_message())
                 .render()
                 .into_response()
         }
         StatusCode::NOT_FOUND => {
+            let text = wr.site_text();
             let image_url = format!("/notfound{}.jpg", rand::rng().random_range(1..=4));
             wr.template("error")
                 .await
-                .insert("title", "Page not found")
-                .insert("description", "The requested page could not be found.")
+                .insert("title", text.not_found_title())
+                .insert("description", text.not_found_description())
                 .insert("robots", "noindex,nofollow")
                 .insert("image_url", &image_url)
-                .insert(
-                    "error_message",
-                    "The page you are looking for does not exist.",
-                )
+                .insert("error_message", text.not_found_message())
                 .render()
                 .into_response()
         }

@@ -8,22 +8,22 @@
 
   <article class="image-info-panel card">
     <div class="card-body image-info-body">
-      <p class="image-info-kicker">Image prompt</p>
+      <p class="image-info-kicker">{{ ui.image_info.kicker }}</p>
       <h1 class="image-info-title">{{title}}</h1>
       <p class="image-info-prompt">{{prompt}}</p>
 
-      <div class="image-info-meta" aria-label="Image metadata">
+      <div class="image-info-meta" aria-label="{{ ui.image_info.metadata_aria }}">
         <div class="image-meta-chip">
-          <span class="image-meta-label">Status</span>
+          <span class="image-meta-label">{{ ui.image_info.status }}</span>
           <strong>{{status}}</strong>
         </div>
         <div class="image-meta-chip">
-          <span class="image-meta-label">Created</span>
+          <span class="image-meta-label">{{ ui.image_info.created }}</span>
           <strong><time>{{created_at}}</time></strong>
         </div>
         {% if model %}
         <div class="image-meta-chip">
-          <span class="image-meta-label">Model</span>
+          <span class="image-meta-label">{{ ui.image_info.model }}</span>
           <strong>{{model}}</strong>
         </div>
         {% endif %}
@@ -31,13 +31,13 @@
 
       {% if last_error %}
       <div class="image-info-alert" role="alert">
-        <span class="image-info-alert-label">Last error</span>
+        <span class="image-info-alert-label">{{ ui.image_info.last_error }}</span>
         <p class="mb-0">{{last_error}}</p>
       </div>
       {% endif %}
 
       <div class="image-info-footer">
-        <p class="image-info-article-label">Used in</p>
+        <p class="image-info-article-label">{{ ui.image_info.used_in }}</p>
         <a href="/content/{{slug}}" class="image-info-article-link">"{{content_title}}"</a>
       </div>
     </div>

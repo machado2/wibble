@@ -18,6 +18,7 @@ use crate::services::article_jobs::{
     ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING, ARTICLE_JOB_STATUS_COMPLETED,
     ARTICLE_JOB_STATUS_FAILED,
 };
+use crate::services::site_text::SiteText;
 use crate::wibble_request::WibbleRequest;
 
 #[derive(Serialize)]
@@ -34,6 +35,7 @@ struct WaitSummary {
     image_failed: usize,
     clarification_question: Option<String>,
     clarification_deadline: Option<String>,
+    clarification_deadline_note: Option<String>,
     phase_items: Vec<WaitPhaseItem>,
 }
 
@@ -51,64 +53,25 @@ pub enum WaitResponse {
     NotFound,
 }
 
-fn publication_copy(is_logged_in: bool) -> (String, String) {
-    if is_logged_in {
-        (
-            "Destination: draft".to_string(),
-            "Signed-in articles stay private until you review and publish them.".to_string(),
-        )
-    } else {
-        (
-            "Destination: public".to_string(),
-            "Anonymous articles publish immediately and are not tied to an editable owner account."
-                .to_string(),
-        )
-    }
+fn publication_copy(text: SiteText, is_logged_in: bool) -> (String, String) {
+    text.wait_publication_copy(is_logged_in)
 }
 
-fn queued_stage_copy(phase: Option<&str>) -> (String, String) {
-    match phase.unwrap_or(ARTICLE_JOB_PHASE_WRITING) {
-        ARTICLE_JOB_PHASE_QUEUED => (
-            "Queued for generation".to_string(),
-            "The prompt is waiting for a generation slot before drafting starts.".to_string(),
-        ),
-        ARTICLE_JOB_PHASE_RESEARCHING => (
-            "Researching the brief".to_string(),
-            "The job is gathering bounded context before the draft is written.".to_string(),
-        ),
-        ARTICLE_JOB_PHASE_TRANSLATING => (
-            "Translating the draft".to_string(),
-            "The article text is being transformed into a new language variant.".to_string(),
-        ),
-        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT => (
-            "Waiting for clarification".to_string(),
-            "The draft is paused because the brief is still ambiguous enough to change the article materially.".to_string(),
-        ),
-        ARTICLE_JOB_PHASE_READY_FOR_REVIEW => (
-            "Preparing review".to_string(),
-            "The draft is being packaged for a final review pass.".to_string(),
-        ),
-        ARTICLE_JOB_PHASE_RENDERING_IMAGES => (
-            "Rendering illustrations".to_string(),
-            "The story draft is ready and the image queue is actively rendering art.".to_string(),
-        ),
-        _ => (
-            "Drafting the story".to_string(),
-            "The headline, angle, and article body are still being assembled.".to_string(),
-        ),
-    }
+fn queued_stage_copy(text: SiteText, phase: Option<&str>) -> (String, String) {
+    text.wait_stage_copy(phase)
 }
 
 fn build_wait_phase_items(
+    text: SiteText,
     phase: Option<&str>,
     clarification_requested: bool,
 ) -> Vec<WaitPhaseItem> {
     let steps = [
-        (ARTICLE_JOB_PHASE_QUEUED, "Queued"),
-        (ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, "Clarify"),
-        (ARTICLE_JOB_PHASE_WRITING, "Write"),
-        (ARTICLE_JOB_PHASE_RENDERING_IMAGES, "Images"),
-        (ARTICLE_JOB_PHASE_READY_FOR_REVIEW, "Review"),
+        ARTICLE_JOB_PHASE_QUEUED,
+        ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
+        ARTICLE_JOB_PHASE_WRITING,
+        ARTICLE_JOB_PHASE_RENDERING_IMAGES,
+        ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
     ];
 
     let phase_rank = match phase.unwrap_or(ARTICLE_JOB_PHASE_QUEUED) {
@@ -141,28 +104,28 @@ fn build_wait_phase_items(
 
     steps
         .into_iter()
-        .filter(|(step_phase, _)| {
+        .filter(|step_phase| {
             clarification_requested || *step_phase != ARTICLE_JOB_PHASE_AWAITING_USER_INPUT
         })
-        .map(|(_step_phase, label)| {
-            let step_rank = match label {
-                "Queued" => 0,
-                "Clarify" => 1,
-                "Write" => {
+        .map(|step_phase| {
+            let step_rank = match step_phase {
+                ARTICLE_JOB_PHASE_QUEUED => 0,
+                ARTICLE_JOB_PHASE_AWAITING_USER_INPUT => 1,
+                ARTICLE_JOB_PHASE_WRITING => {
                     if clarification_requested {
                         2
                     } else {
                         1
                     }
                 }
-                "Images" => {
+                ARTICLE_JOB_PHASE_RENDERING_IMAGES => {
                     if clarification_requested {
                         3
                     } else {
                         2
                     }
                 }
-                "Review" => {
+                ARTICLE_JOB_PHASE_READY_FOR_REVIEW => {
                     if clarification_requested {
                         4
                     } else {
@@ -179,7 +142,7 @@ fn build_wait_phase_items(
                 "pending"
             };
             WaitPhaseItem {
-                label: label.to_string(),
+                label: text.wait_phase_label(step_phase).to_string(),
                 state: state.to_string(),
             }
         })
@@ -187,19 +150,23 @@ fn build_wait_phase_items(
 }
 
 async fn build_wait_summary(
+    text: SiteText,
     state: &AppState,
     id: &str,
     is_logged_in: bool,
     job_phase: Option<&str>,
     job_preview_payload: Option<&str>,
 ) -> Result<WaitSummary, Error> {
-    let fallback_publication_copy = publication_copy(is_logged_in);
+    let fallback_publication_copy = publication_copy(text, is_logged_in);
     let clarification = parse_clarification_request(job_preview_payload);
     let clarification_question = clarification.as_ref().map(|value| value.question.clone());
     let clarification_deadline = clarification
         .as_ref()
         .and_then(|value| value.formatted_deadline());
-    let phase_items = build_wait_phase_items(job_phase, clarification_question.is_some());
+    let clarification_deadline_note = clarification_deadline
+        .as_ref()
+        .map(|deadline| text.wait_clarification_deadline_note(deadline));
+    let phase_items = build_wait_phase_items(text, job_phase, clarification_question.is_some());
     let article = Content::find()
         .filter(content::Column::Id.eq(id))
         .one(&state.db)
@@ -228,36 +195,16 @@ async fn build_wait_summary(
             .iter()
             .filter(|img| img.status == IMAGE_STATUS_FAILED)
             .count();
-        let (stage_title, stage_description) = if image_total == 0 && article.markdown.is_none() {
-            (
-                "Drafting the story".to_string(),
-                "The headline, angle, and article body are still being assembled.".to_string(),
-            )
-        } else if image_total == 0 {
-            (
-                "Preparing the article".to_string(),
-                "The story draft is ready and the page is being finalized.".to_string(),
-            )
-        } else if image_processing > 0 {
-            (
-                "Rendering illustrations".to_string(),
-                "The story is ready and the image queue is actively rendering art.".to_string(),
-            )
-        } else if image_failed > 0 && image_completed < image_total {
-            (
-                "Recovering the image set".to_string(),
-                "Some illustrations failed and the article is waiting on the remaining results."
-                    .to_string(),
-            )
-        } else {
-            (
-                "Finalizing the article".to_string(),
-                "The draft is complete and the page is about to go live.".to_string(),
-            )
-        };
+        let (stage_title, stage_description) = text.wait_image_stage_copy(
+            image_total,
+            image_completed,
+            image_processing,
+            image_failed,
+            article.markdown.is_some(),
+        );
 
         let (publication_title, publication_note) =
-            publication_copy(article.author_email.is_some());
+            publication_copy(text, article.author_email.is_some());
         Ok(WaitSummary {
             article_title: Some(article.title),
             slug: Some(article.slug),
@@ -271,10 +218,11 @@ async fn build_wait_summary(
             image_failed,
             clarification_question: None,
             clarification_deadline: None,
+            clarification_deadline_note: None,
             phase_items,
         })
     } else {
-        let (stage_title, stage_description) = queued_stage_copy(job_phase);
+        let (stage_title, stage_description) = queued_stage_copy(text, job_phase);
         Ok(WaitSummary {
             article_title: None,
             slug: None,
@@ -288,16 +236,19 @@ async fn build_wait_summary(
             image_failed: 0,
             clarification_question,
             clarification_deadline,
+            clarification_deadline_note,
             phase_items,
         })
     }
 }
 
 pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<String>, Error> {
+    let text = wr.site_text();
     let job = ArticleJobService::new(wr.state.clone())
         .load_job(id)
         .await?;
     let wait_summary = build_wait_summary(
+        text,
         &wr.state,
         id,
         wr.auth_user.is_some(),
@@ -308,11 +259,8 @@ pub async fn render_wait_page(wr: &WibbleRequest, id: &str) -> Result<Html<Strin
     wr.template("wait")
         .await
         .insert("id", id)
-        .insert("title", "Generating article")
-        .insert(
-            "description",
-            "The article is still being generated and this page auto-refreshes.",
-        )
+        .insert("title", text.wait_meta_title())
+        .insert("description", text.wait_meta_description())
         .insert("robots", "noindex,nofollow")
         .insert(
             "wait_auto_refresh",
@@ -356,10 +304,15 @@ mod tests {
     use crate::services::article_jobs::{
         ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, ARTICLE_JOB_PHASE_RESEARCHING,
     };
+    use crate::services::site_text::{default_site_language, site_text};
 
     #[test]
     fn wait_phase_items_include_clarify_step_when_question_is_pending() {
-        let items = build_wait_phase_items(Some(ARTICLE_JOB_PHASE_AWAITING_USER_INPUT), true);
+        let items = build_wait_phase_items(
+            site_text(default_site_language()),
+            Some(ARTICLE_JOB_PHASE_AWAITING_USER_INPUT),
+            true,
+        );
 
         assert_eq!(items.len(), 5);
         assert_eq!(items[1].label, "Clarify");
@@ -368,7 +321,10 @@ mod tests {
 
     #[test]
     fn queued_stage_copy_describes_research_phase() {
-        let (title, description) = queued_stage_copy(Some(ARTICLE_JOB_PHASE_RESEARCHING));
+        let (title, description) = queued_stage_copy(
+            site_text(default_site_language()),
+            Some(ARTICLE_JOB_PHASE_RESEARCHING),
+        );
 
         assert!(title.contains("Researching"));
         assert!(description.contains("bounded context"));

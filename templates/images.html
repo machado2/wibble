@@ -2,9 +2,9 @@
 
 {% block content %}
 <header class="mb-4">
-  <p class="home-eyebrow">Illustration archive</p>
-  <h1 class="display-5 mb-2">Generated Image Gallery</h1>
-  <p class="text-muted mb-0">Browse the visual side of Wibble stories and jump straight into the articles they belong to.</p>
+  <p class="home-eyebrow">{{ ui.images.eyebrow }}</p>
+  <h1 class="display-5 mb-2">{{ ui.images.title }}</h1>
+  <p class="text-muted mb-0">{{ ui.images.summary }}</p>
 </header>
 
 {% if items | length > 0 %}
@@ -16,7 +16,7 @@
     </a>
     <div class="card-body gallery-card-body">
       <p class="gallery-card-caption">{{ item.alt_text }}</p>
-      <a href="/content/{{ item.article_slug }}" class="gallery-card-link">Used in "{{ item.article_title }}"</a>
+      <a href="/content/{{ item.article_slug }}" class="gallery-card-link">{{ ui.images.used_in }} "{{ item.article_title }}"</a>
     </div>
   </article>
   {% endfor %}
@@ -24,14 +24,14 @@
 
 {% if next_page_url %}
 <div class="text-center mt-4">
-  <a href="{{ next_page_url }}" class="btn btn-primary">Next Page</a>
+  <a href="{{ next_page_url }}" class="btn btn-primary">{{ ui.images.next_page }}</a>
 </div>
 {% endif %}
 {% else %}
 <section class="empty-state card border-0">
   <div class="card-body">
-    <h2 class="mb-2">No gallery images yet</h2>
-    <p class="text-muted mb-0">Once articles finish rendering, their illustrations will show up here.</p>
+    <h2 class="mb-2">{{ ui.images.empty_title }}</h2>
+    <p class="text-muted mb-0">{{ ui.images.empty_body }}</p>
   </div>
 </section>
 {% endif %}

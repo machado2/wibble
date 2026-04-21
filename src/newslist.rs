@@ -13,6 +13,7 @@ use url::form_urlencoded::Serializer;
 
 use crate::entities::{content, prelude::*};
 use crate::error::Error;
+use crate::services::site_text::SiteText;
 use crate::wibble_request::WibbleRequest;
 
 #[derive(Default, Deserialize, Debug, Clone)]
@@ -182,41 +183,41 @@ fn build_index_url(
     }
 }
 
-fn sort_options(params: &ContentListParams) -> [FilterOption; 2] {
+fn sort_options(params: &ContentListParams, text: SiteText) -> [FilterOption; 2] {
     let search = params.search.as_deref();
     let t = params.t.as_deref();
     let current_sort = params.sort.as_deref().unwrap_or("new");
     [
         FilterOption {
-            label: "Newest",
+            label: text.sort_label_newest(),
             url: build_index_url(search, t, None, None),
             active: current_sort != "hot",
         },
         FilterOption {
-            label: "Hot",
+            label: text.sort_label_hot(),
             url: build_index_url(search, t, Some("hot"), None),
             active: current_sort == "hot",
         },
     ]
 }
 
-fn time_options(params: &ContentListParams) -> [FilterOption; 3] {
+fn time_options(params: &ContentListParams, text: SiteText) -> [FilterOption; 3] {
     let search = params.search.as_deref();
     let sort = params.sort.as_deref();
     let current_time = params.t.as_deref().unwrap_or("");
     [
         FilterOption {
-            label: "Any time",
+            label: text.time_label_any(),
             url: build_index_url(search, None, sort, None),
             active: current_time.is_empty(),
         },
         FilterOption {
-            label: "This week",
+            label: text.time_label_week(),
             url: build_index_url(search, Some("week"), sort, None),
             active: current_time == "week",
         },
         FilterOption {
-            label: "This month",
+            label: text.time_label_month(),
             url: build_index_url(search, Some("month"), sort, None),
             active: current_time == "month",
         },
@@ -230,6 +231,7 @@ pub trait NewsList {
 
 impl NewsList for WibbleRequest {
     async fn news_list(&self, params: ContentListParams) -> Result<Html<String>, Error> {
+        let text = self.site_text();
         let db = &self.state.db;
         let search = params.search.clone();
         let has_filters = params.afterId.is_some()
@@ -262,26 +264,34 @@ impl NewsList for WibbleRequest {
             Some(items.remove(0))
         };
         let mut template = self.template("index").await;
-        let title = match search {
-            Some(search) if !search.trim().is_empty() => format!("Search results for {}", search),
-            _ => "Latest Wibble News".to_string(),
-        };
-        let description =
-            "Dry official bulletins on civic confusion, institutional overreaction, and preventable emergencies.";
+        let title = text.index_meta_title(search.as_deref());
+        let description = text.index_meta_description();
         let load_more_url = build_index_url(
             params.search.as_deref(),
             params.t.as_deref(),
             params.sort.as_deref(),
             next_after_id.as_deref(),
         );
-        let sort_options = sort_options(&params);
-        let time_options = time_options(&params);
+        let sort_options = sort_options(&params, text);
+        let time_options = time_options(&params, text);
+        let search_heading = match params
+            .search
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            Some(search) if text.language().code == "pt" => {
+                format!("Resultados arquivados para \"{}\"", search)
+            }
+            Some(search) => format!("Filed results for \"{}\"", search),
+            None => String::new(),
+        };
         template
             .insert("items", &items)
             .insert("load_more_url", &load_more_url)
             .insert("has_more", &next_after_id.is_some())
             .insert("title", &title)
             .insert("description", description)
+            .insert("search_heading", &search_heading)
             .insert("current_search", &params.search.clone().unwrap_or_default())
             .insert(
                 "current_sort_key",

@@ -5,35 +5,35 @@
   <div class="card create-shell workflow-shell">
     <div class="card-body create-shell-body">
       <div class="create-intro">
-        <p class="home-eyebrow">Prompt studio</p>
-        <h1 class="card-title">Issue a matter for review</h1>
+        <p class="home-eyebrow">{{ ui.create.eyebrow }}</p>
+        <h1 class="card-title">{{ ui.create.title }}</h1>
         <p class="card-text">
-          Submit a scene, policy failure, administrative memo, or civic incident. The model works best when the premise is specific, official-sounding, and treated as entirely routine.
+          {{ ui.create.summary }}
         </p>
         <div class="workflow-note-stack">
           <div class="workflow-note workflow-note-muted" role="status">
             {% if logged_in %}
-            Signed-in filings open as private drafts under your account. You can revise the copy, replace images, and publish when ready.
+            {{ ui.create.logged_in_note }}
             {% else %}
-            Anonymous filings publish immediately if they succeed. Log in if you want an editable draft and explicit publish control.
+            {{ ui.create.anonymous_note }}
             {% endif %}
           </div>
           <div class="workflow-note workflow-note-compact" role="note">
-            <strong>Desk quota:</strong>
+            <strong>{{ ui.create.desk_quota }}</strong>
             {{ standard_quota.hourly }} filings per hour / {{ standard_quota.daily }} per day on your current tier.
             {% if logged_in %}
-            Owner editing is capped separately at {{ authenticated_edit_quota.hourly }} edit-agent previews per hour.
-            Research-backed filings run on their own desk at {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
-            Background translation refreshes stay on their own lane at {{ authenticated_translation_quota.hourly }} per hour.
+            {{ owner_editing_note }}
+            {{ research_lane_note }}
+            {{ translation_lane_note }}
             {% else %}
-            Login raises the standard desk to {{ authenticated_standard_quota.hourly }} per hour, opens a bounded research desk at {{ authenticated_research_quota.hourly }} per hour, keeps results private as drafts, and unlocks the edit desk.
+            {{ login_upsell_note }}
             {% endif %}
           </div>
         </div>
         <div class="create-tips">
-          <span class="badge badge-info">Write it like a memo, not a punchline</span>
-          <span class="badge badge-info">One absurd policy is enough</span>
-          <span class="badge badge-info">Treat the impossible as procedure</span>
+          <span class="badge badge-info">{{ ui.create.tip_one }}</span>
+          <span class="badge badge-info">{{ ui.create.tip_two }}</span>
+          <span class="badge badge-info">{{ ui.create.tip_three }}</span>
         </div>
       </div>
 
@@ -45,32 +45,32 @@
 
       <form action="/create" method="post" class="create-form">
         <fieldset class="mode-card-fieldset">
-          <legend class="form-label">Desk mode</legend>
+          <legend class="form-label">{{ ui.create.desk_mode }}</legend>
           <div class="mode-card-grid">
             <label class="mode-card" for="mode-auto">
               <input class="mode-card-input" type="radio" name="mode" id="mode-auto" value="auto"{% if selected_create_mode == "auto" %} checked{% endif %}>
               <span class="mode-card-copy">
-                <span class="mode-card-title">Automatic</span>
-                <span class="mode-card-note">Use the cheap drafting path unless the brief clearly needs public-source grounding and you are signed in.</span>
+                <span class="mode-card-title">{{ ui.create.mode_auto }}</span>
+                <span class="mode-card-note">{{ ui.create.mode_auto_note }}</span>
               </span>
             </label>
             <label class="mode-card" for="mode-standard">
               <input class="mode-card-input" type="radio" name="mode" id="mode-standard" value="standard"{% if selected_create_mode == "standard" %} checked{% endif %}>
               <span class="mode-card-copy">
-                <span class="mode-card-title">Standard</span>
-                <span class="mode-card-note">No browsing, fastest queue, best for invented institutions and generic bureaucratic collapse.</span>
+                <span class="mode-card-title">{{ ui.create.mode_standard }}</span>
+                <span class="mode-card-note">{{ ui.create.mode_standard_note }}</span>
               </span>
             </label>
             <label class="mode-card" for="mode-research">
               <input class="mode-card-input" type="radio" name="mode" id="mode-research" value="research"{% if selected_create_mode == "research" %} checked{% endif %}{% if not logged_in %} disabled{% endif %}>
               <span class="mode-card-copy">
-                <span class="mode-card-title">Research desk</span>
+                <span class="mode-card-title">{{ ui.create.mode_research }}</span>
                 <span class="mode-card-note">
-                  Bounded public-source lookup for real institutions, policies, organizations, and public figures.
+                  {{ ui.create.mode_research_note }}
                   {% if logged_in %}
-                  Separate quota: {{ research_quota.hourly }} per hour / {{ research_quota.daily }} per day.
+                  {{ research_quota_note }}
                   {% else %}
-                  <a href="/login">Log in</a> to enable it.
+                  <a href="/login">{{ ui.create.mode_research_login_prefix }}</a> {{ ui.create.mode_research_login_suffix }}
                   {% endif %}
                 </span>
               </span>
@@ -78,21 +78,21 @@
           </div>
         </fieldset>
         <div class="mb-3">
-          <label class="form-label" for="prompt">Case brief</label>
-          <textarea id="prompt" class="form-control create-textarea" name="prompt" placeholder="Example: A metropolitan transit authority begins issuing formal emotional support updates alongside train delays, and commuters quickly start citing them in workplace absence forms." rows="9" maxlength="{{ prompt_max_length }}" required autofocus>{{ prompt }}</textarea>
+          <label class="form-label" for="prompt">{{ ui.create.case_brief }}</label>
+          <textarea id="prompt" class="form-control create-textarea" name="prompt" placeholder="{{ ui.create.case_brief_placeholder }}" rows="9" maxlength="{{ prompt_max_length }}" required autofocus>{{ prompt }}</textarea>
           <div class="create-form-footer">
-            <span class="text-muted small">Name the institution, the failure mode, and the public reaction.</span>
+            <span class="text-muted small">{{ ui.create.case_brief_help }}</span>
             <span id="prompt-counter" class="small text-muted">{{ prompt | length }}/{{ prompt_max_length }}</span>
           </div>
         </div>
         <div class="create-submit-row">
-          <button type="submit" class="btn btn-primary">Draft report</button>
+          <button type="submit" class="btn btn-primary">{{ ui.create.draft_report }}</button>
           <span class="text-muted small">
-            Typical wait: a few seconds to a minute, depending on the image queue and the severity of the incident.
+            {{ ui.create.wait_time }}
             {% if logged_in %}
-            Result: private draft with the same background translation fallback rules as public stories.
+            {{ ui.create.result_private }}
             {% else %}
-            Result: immediate public article. Login keeps the filing private until you approve it.
+            {{ ui.create.result_public }}
             {% endif %}
           </span>
         </div>
@@ -100,12 +100,12 @@
     </div>
   </div>
 
-  <section class="card create-presets">
-    <div class="card-body">
-      <div class="create-presets-header">
-        <h2 class="mb-2">Sample filings</h2>
-        <p class="text-muted mb-0">Tap a preset to load a straight-faced newsroom brief, then adjust the facts as required.</p>
-      </div>
+<section class="card create-presets">
+  <div class="card-body">
+    <div class="create-presets-header">
+      <h2 class="mb-2">{{ ui.create.sample_filings }}</h2>
+      <p class="text-muted mb-0">{{ ui.create.sample_filings_body }}</p>
+    </div>
       <div class="preset-grid">
         {% for preset in prompt_presets %}
         <button type="button" class="preset-card" data-prompt="{{ preset.prompt }}">

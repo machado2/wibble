@@ -4,19 +4,19 @@
 <section class="front-page-shell">
   <div class="front-page-header">
     <div class="front-page-intro">
-      <p class="home-eyebrow">{% if has_active_search %}Search Docket{% else %}Front Page{% endif %}</p>
+      <p class="home-eyebrow">{% if has_active_search %}{{ ui.index.search_eyebrow }}{% else %}{{ ui.index.front_page_eyebrow }}{% endif %}</p>
       <h1 class="front-page-title">
         {% if has_active_search %}
-        Filed results for "{{ current_search }}"
+        {{ search_heading }}
         {% else %}
-        Latest bulletins, notices, and administrative disturbances
+        {{ ui.index.front_page_title }}
         {% endif %}
       </h1>
       <p class="front-page-summary">
         {% if has_active_search %}
-        Review the current file of reports matching that term, then clear filters to return to the general state of concern.
+        {{ ui.index.search_summary }}
         {% else %}
-        A straight-faced record of civic confusion, institutional overreaction, and matters requiring no immediate improvement.
+        {{ ui.index.front_page_summary }}
         {% endif %}
       </p>
     </div>
@@ -29,21 +29,21 @@
       <input type="hidden" name="t" value="{{ current_time_key }}">
       {% endif %}
       <div class="front-page-search-row">
-        <label class="visually-hidden" for="search">Search articles</label>
-        <input id="search" class="form-control front-page-search-input" type="search" name="search" value="{{ current_search }}" placeholder="Search by department, incident, or headline">
+        <label class="visually-hidden" for="search">{{ ui.index.search_button }}</label>
+        <input id="search" class="form-control front-page-search-input" type="search" name="search" value="{{ current_search }}" placeholder="{{ ui.index.search_placeholder }}">
         <div class="front-page-search-actions">
-          <button type="submit" class="btn btn-primary">Search</button>
+          <button type="submit" class="btn btn-primary">{{ ui.index.search_button }}</button>
           {% if has_active_search %}
-          <a href="{{ reset_filters_url }}" class="btn btn-outline-secondary">Clear</a>
+          <a href="{{ reset_filters_url }}" class="btn btn-outline-secondary">{{ ui.index.clear_button }}</a>
           {% endif %}
         </div>
       </div>
     </form>
   </div>
 
-  <div class="front-page-toolbar" aria-label="Feed controls">
+  <div class="front-page-toolbar" aria-label="{{ ui.index.toolbar_aria }}">
     <div class="front-page-toolbar-group">
-      <span class="front-page-toolbar-label">Order</span>
+      <span class="front-page-toolbar-label">{{ ui.index.toolbar_order }}</span>
       <div class="front-page-toolbar-options">
         {% for option in sort_options %}
         <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
@@ -51,7 +51,7 @@
       </div>
     </div>
     <div class="front-page-toolbar-group">
-      <span class="front-page-toolbar-label">Window</span>
+      <span class="front-page-toolbar-label">{{ ui.index.toolbar_window }}</span>
       <div class="front-page-toolbar-options">
         {% for option in time_options %}
         <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
@@ -71,7 +71,7 @@
       </div>
       {% endif %}
       <div class="lead-story-copy">
-        <p class="story-kicker">Lead Report</p>
+        <p class="story-kicker">{{ ui.index.lead_report }}</p>
         <h2 class="lead-story-title">{{ lead_item.title }}</h2>
         <p class="lead-story-date">{{ lead_item.created_at }}</p>
         <p class="lead-story-dek">{{ lead_item.description }}</p>
@@ -83,8 +83,8 @@
   {% if secondary_items | length > 0 %}
   <section class="briefing-section">
     <div class="section-heading">
-      <p class="home-eyebrow">Further Notices</p>
-      <h2 class="mb-0">Additional reports from the desk</h2>
+      <p class="home-eyebrow">{{ ui.index.further_notices }}</p>
+      <h2 class="mb-0">{{ ui.index.additional_reports }}</h2>
     </div>
     <div class="briefing-grid">
       {% for i in secondary_items %}
@@ -107,22 +107,22 @@
 
   {% if has_more %}
   <div class="text-center mt-5">
-    <a href="{{ load_more_url }}" class="btn btn-outline-primary">Load more reports</a>
+    <a href="{{ load_more_url }}" class="btn btn-outline-primary">{{ ui.index.load_more }}</a>
   </div>
   {% endif %}
 {% else %}
 <section class="empty-state card border-0">
   <div class="card-body">
     {% if has_active_search %}
-    <h2 class="mb-2">No filed reports matched that search</h2>
-    <p class="text-muted mb-3">Try a broader term, return to newest, or clear the current docket and resume normal monitoring.</p>
+    <h2 class="mb-2">{{ ui.index.empty_search_title }}</h2>
+    <p class="text-muted mb-3">{{ ui.index.empty_search_body }}</p>
     {% else %}
-    <h2 class="mb-2">No public bulletins have been issued yet</h2>
-    <p class="text-muted mb-3">The front page is presently calm. File a report and correct that condition.</p>
-    <a href="/create" class="btn btn-primary">Draft the first article</a>
+    <h2 class="mb-2">{{ ui.index.empty_home_title }}</h2>
+    <p class="text-muted mb-3">{{ ui.index.empty_home_body }}</p>
+    <a href="/create" class="btn btn-primary">{{ ui.index.empty_home_cta }}</a>
     {% endif %}
     {% if has_active_search %}
-    <a href="{{ reset_filters_url }}" class="btn btn-primary">Reset front page</a>
+    <a href="{{ reset_filters_url }}" class="btn btn-primary">{{ ui.index.reset_front_page }}</a>
     {% endif %}
   </div>
 </section>

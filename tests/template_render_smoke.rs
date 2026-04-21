@@ -1,5 +1,9 @@
+#![recursion_limit = "256"]
+
 use serde_json::{json, Map, Value};
 use tera::{Context, Tera};
+use wibble::llm::prompt_registry::find_supported_translation_language;
+use wibble::services::site_text::site_text;
 
 fn render_context(extra: Value) -> Context {
     let mut object = Map::new();
@@ -8,6 +12,12 @@ fn render_context(extra: Value) -> Context {
     object.insert(
         "canonical_url".to_string(),
         Value::from("https://example.test/current"),
+    );
+    object.insert("page_language_code".to_string(), Value::from("en"));
+    object.insert("page_language_name".to_string(), Value::from("English"));
+    object.insert(
+        "ui".to_string(),
+        site_text(find_supported_translation_language("en").unwrap()).template_strings(),
     );
     object.insert(
         "text_create_new_article".to_string(),
@@ -47,7 +57,12 @@ fn create_template_renders_research_mode_form() {
             "authenticated_standard_quota": {"hourly": 20, "daily": 40},
             "authenticated_research_quota": {"hourly": 5, "daily": 10},
             "authenticated_edit_quota": {"hourly": 10, "daily": 20},
-            "authenticated_translation_quota": {"hourly": 40, "daily": 100}
+            "authenticated_translation_quota": {"hourly": 40, "daily": 100},
+            "owner_editing_note": "Owner editing is capped separately at 10 edit-agent previews per hour.",
+            "research_lane_note": "Research-backed filings run on their own desk at 5 per hour / 10 per day.",
+            "translation_lane_note": "Background translation refreshes stay on their own lane at 40 per hour.",
+            "login_upsell_note": "Login raises the standard desk to 20 per hour, opens a bounded research desk at 5 per hour, keeps results private as drafts, and unlocks the edit desk.",
+            "research_quota_note": "Separate quota: 5 per hour / 10 per day."
         }),
     );
 
@@ -80,6 +95,7 @@ fn wait_template_renders_clarification_state() {
                 "image_failed": 0,
                 "clarification_question": "Which ministry issued the notice?",
                 "clarification_deadline": "2026-04-20 12:00",
+                "clarification_deadline_note": "If nobody answers by 2026-04-20 12:00, the job resumes with a conservative fallback.",
                 "phase_items": [
                     {"label": "Queued", "state": "done"},
                     {"label": "Clarify", "state": "active"},
@@ -154,11 +170,14 @@ fn content_template_renders_research_and_language_metadata() {
                 }
             ],
             "article_language_menu_open": false,
+            "article_language_summary_note": "Original edition",
+            "article_language_notice": "Portuguese was requested. This page is currently showing the original English edition while that translation is prepared.",
             "article_research_metadata_present": true,
             "article_research_metadata": {
                 "mode_label": "Requested research desk",
                 "source_count": 3
             },
+            "article_research_note": "Requested research desk. This filing was grounded against 3 public-source briefs before drafting. The source trace is kept off-page so the article body stays deadpan.",
             "can_edit": true,
             "can_publish": true,
             "is_published": false,
@@ -168,6 +187,7 @@ fn content_template_renders_research_and_language_metadata() {
             "user_vote": "up",
             "comments": [],
             "comment_count": 0,
+            "comment_count_label": "0 comments",
             "comments_open": true,
             "can_comment": true,
             "comment_pager": {
@@ -177,11 +197,14 @@ fn content_template_renders_research_and_language_metadata() {
                 "has_next": false,
                 "prev_page": 1,
                 "next_page": 1
-            }
+            },
+            "comment_page_label": "Page 1 / 1"
         }),
     );
 
     assert!(html.contains("Requested research desk"));
     assert!(html.contains("Edition Desk"));
     assert!(html.contains("Comments"));
+    assert!(html.contains("/content/story-slug/edit#images"));
+    assert!(html.contains("Edit article"));
 }

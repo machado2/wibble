@@ -18,12 +18,12 @@ pub struct CommentView {
 
 #[derive(Serialize)]
 pub struct CommentPager {
-    current_page: u64,
-    total_pages: u64,
-    has_prev: bool,
-    has_next: bool,
-    prev_page: u64,
-    next_page: u64,
+    pub current_page: u64,
+    pub total_pages: u64,
+    pub has_prev: bool,
+    pub has_next: bool,
+    pub prev_page: u64,
+    pub next_page: u64,
 }
 
 pub struct CommentPage {

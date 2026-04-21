@@ -107,17 +107,15 @@ pub async fn get_images(
     wr: WibbleRequest,
     Query(params): Query<GetImagesParams>,
 ) -> Result<Html<String>, Error> {
+    let text = wr.site_text();
     let gallery_page = get_gallery_page(&wr.state.db, params.after_id.clone()).await?;
     let next_page_url = build_next_page_url(gallery_page.next_after_id.as_deref());
     let mut template = wr.template("images").await;
     template
         .insert("items", &gallery_page.items)
         .insert("next_page_url", &next_page_url)
-        .insert("title", "Generated image gallery")
-        .insert(
-            "description",
-            "A browsable gallery of AI-generated images used in Wibble stories.",
-        );
+        .insert("title", text.image_gallery_meta_title())
+        .insert("description", text.image_gallery_meta_description());
     if params.after_id.is_some() {
         template.insert("robots", "noindex,follow");
     } else {

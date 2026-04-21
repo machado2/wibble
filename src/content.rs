@@ -70,6 +70,7 @@ mod tests {
         ArticleJobService, ARTICLE_JOB_PHASE_COMPLETED, ARTICLE_JOB_STATUS_COMPLETED,
     };
     use crate::services::article_language::resolve_article_language;
+    use crate::services::site_text::{default_site_language, site_text};
     use crate::test_support::{preferred_language, TestContext};
     use crate::wibble_request::WibbleRequest;
 
@@ -125,6 +126,7 @@ mod tests {
             auth_user: None,
             requester_tier: RequesterTier::Anonymous,
             rate_limit_key: "anon:test".to_string(),
+            site_language: default_site_language(),
             browser_translation_language: None,
             saved_article_language: None,
         }
@@ -145,6 +147,7 @@ mod tests {
 
         let options = build_article_language_options(
             "story-slug",
+            site_text(default_site_language()),
             selection,
             find_supported_translation_language("pt"),
         );
@@ -158,7 +161,12 @@ mod tests {
         let selection =
             resolve_article_language(find_supported_translation_language("pt"), None, None, &[]);
 
-        let options = build_article_language_options("story-slug", selection, None);
+        let options = build_article_language_options(
+            "story-slug",
+            site_text(default_site_language()),
+            selection,
+            None,
+        );
         let portuguese = options
             .iter()
             .find(|option| option.label == "Portuguese")
@@ -179,6 +187,7 @@ mod tests {
 
         let options = build_article_language_options(
             "story-slug",
+            site_text(default_site_language()),
             selection,
             find_supported_translation_language("fr"),
         );
@@ -202,6 +211,7 @@ mod tests {
 
         let options = build_article_language_options(
             "story-slug",
+            site_text(default_site_language()),
             selection,
             find_supported_translation_language("fr"),
         );
@@ -216,9 +226,10 @@ mod tests {
 
     #[test]
     fn research_metadata_parses_manual_mode_and_source_count() {
-        let metadata = parse_article_research_metadata(Some(
-            r#"{"research":{"mode":"manual","source_count":3}}"#,
-        ))
+        let metadata = parse_article_research_metadata(
+            site_text(default_site_language()),
+            Some(r#"{"research":{"mode":"manual","source_count":3}}"#),
+        )
         .unwrap();
 
         assert_eq!(metadata.mode_label, "Requested research desk");
@@ -227,9 +238,10 @@ mod tests {
 
     #[test]
     fn research_metadata_ignores_missing_sources() {
-        assert!(parse_article_research_metadata(Some(
-            r#"{"research":{"mode":"auto","source_count":0}}"#,
-        ))
+        assert!(parse_article_research_metadata(
+            site_text(default_site_language()),
+            Some(r#"{"research":{"mode":"auto","source_count":0}}"#,)
+        )
         .is_none());
     }
 

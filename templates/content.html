@@ -2,16 +2,21 @@
 
 {% block nav_context_actions %}
 {%- if can_edit -%}
+{%- if image_id -%}
 <a
-  class="btn btn-outline-secondary nav-icon-btn"
-  href="/content/{{ slug }}/edit"
-  aria-label="Edit article"
-  title="Edit article"
+  class="btn btn-outline-secondary"
+  href="/content/{{ slug }}/edit#images"
 >
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M12 20h9"></path>
-    <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-  </svg>
+  {{ ui.content.images }}
+</a>
+{%- endif -%}
+<a
+  class="btn btn-outline-secondary"
+  href="/content/{{ slug }}/edit"
+  aria-label="{{ ui.content.edit_article }}"
+  title="{{ ui.content.edit_article }}"
+>
+  {{ ui.content.edit_article }}
 </a>
 {%- endif -%}
 {%- if can_publish -%}
@@ -43,20 +48,20 @@
   <div class="card-body article-content">
     {%- if not is_published -%}
     <div class="alert alert-warning mb-4" role="status">
-      This article is unpublished and hidden from the public feed and sitemap.
+      {{ ui.content.unpublished_warning }}
     </div>
     {%- endif -%}
 
     <header class="article-header">
       <div class="article-header-top">
         <div class="article-header-copy">
-          <p class="article-kicker">Filed Report</p>
+          <p class="article-kicker">{{ ui.content.filed_report }}</p>
           <h1 class="display-4 mb-0">{{ title }}</h1>
           <p class="article-standfirst mb-0">{{ description }}</p>
         </div>
 
         <aside class="article-header-side">
-          <div id="article-voting" class="article-vote-cluster" aria-label="Article score">
+          <div id="article-voting" class="article-vote-cluster" aria-label="{{ ui.content.article_score }}">
             {%- if voting_open -%}
               {%- if can_vote -%}
               <form method="post" action="/content/{{ slug }}/vote" class="article-vote-form">
@@ -67,14 +72,14 @@
                 <button
                   type="submit"
                   class="article-vote-arrow is-up{% if user_vote == "up" %} active{% endif %}"
-                  aria-label="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
-                  title="{% if user_vote == "up" %}Clear upvote{% else %}Upvote{% endif %}"
+                  aria-label="{% if user_vote == "up" %}{{ ui.content.clear_upvote }}{% else %}{{ ui.content.upvote }}{% endif %}"
+                  title="{% if user_vote == "up" %}{{ ui.content.clear_upvote }}{% else %}{{ ui.content.upvote }}{% endif %}"
                 >
                   ▲
                 </button>
               </form>
               {%- else -%}
-              <a href="/login" class="article-vote-arrow is-up" aria-label="Log in to upvote" title="Log in to upvote">▲</a>
+              <a href="/login" class="article-vote-arrow is-up" aria-label="{{ ui.content.login_to_upvote }}" title="{{ ui.content.login_to_upvote }}">▲</a>
               {%- endif -%}
             {%- else -%}
             <span class="article-vote-arrow is-disabled">▲</span>
@@ -92,14 +97,14 @@
                 <button
                   type="submit"
                   class="article-vote-arrow is-down{% if user_vote == "down" %} active{% endif %}"
-                  aria-label="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
-                  title="{% if user_vote == "down" %}Clear downvote{% else %}Downvote{% endif %}"
+                  aria-label="{% if user_vote == "down" %}{{ ui.content.clear_downvote }}{% else %}{{ ui.content.downvote }}{% endif %}"
+                  title="{% if user_vote == "down" %}{{ ui.content.clear_downvote }}{% else %}{{ ui.content.downvote }}{% endif %}"
                 >
                   ▼
                 </button>
               </form>
               {%- else -%}
-              <a href="/login" class="article-vote-arrow is-down" aria-label="Log in to downvote" title="Log in to downvote">▼</a>
+              <a href="/login" class="article-vote-arrow is-down" aria-label="{{ ui.content.login_to_downvote }}" title="{{ ui.content.login_to_downvote }}">▼</a>
               {%- endif -%}
             {%- else -%}
             <span class="article-vote-arrow is-disabled">▼</span>
@@ -108,16 +113,16 @@
 
           <dl class="article-meta-list">
             <div class="article-meta-item">
-              <dt class="article-meta-term">Filed</dt>
+              <dt class="article-meta-term">{{ ui.content.filed }}</dt>
               <dd class="article-meta-value"><time>{{ created_at }}</time></dd>
             </div>
             <div class="article-meta-item">
-              <dt class="article-meta-term">Status</dt>
+              <dt class="article-meta-term">{{ ui.content.status }}</dt>
               <dd class="article-meta-value">
                 {% if is_published %}
-                Public
+                {{ ui.content.public }}
                 {% else %}
-                Draft
+                {{ ui.content.draft }}
                 {% endif %}
               </dd>
             </div>
@@ -125,40 +130,23 @@
 
           {% if article_research_metadata_present %}
           <div class="workflow-note workflow-note-compact mb-3" role="note">
-            <strong>{{ article_research_metadata.mode_label }}.</strong>
-            This filing was grounded against {{ article_research_metadata.source_count }} public-source brief{% if article_research_metadata.source_count != 1 %}s{% endif %} before drafting. The source trace is kept off-page so the article body stays deadpan.
+            {{ article_research_note }}
           </div>
           {% endif %}
 
           <div class="article-language-panel">
-            <p class="article-language-kicker">Edition Desk</p>
+            <p class="article-language-kicker">{{ ui.content.edition_desk }}</p>
             <details class="article-language-menu"{% if article_language_menu_open %} open{% endif %}>
               <summary class="article-language-summary">
-                <span class="article-language-summary-label">Current edition</span>
+                <span class="article-language-summary-label">{{ ui.content.current_edition }}</span>
                 <span class="article-language-summary-main">{{ page_language_name }}</span>
-                <span class="article-language-summary-note">
-                  {% if article_translation_requested and not article_translation_available %}
-                  Requested {{ preferred_article_language_name }}
-                  {% elif preferred_article_language_source == "explicit" %}
-                  Manual selection
-                  {% elif preferred_article_language_source == "cookie" %}
-                  Saved selection
-                  {% elif preferred_article_language_source == "browser" %}
-                  Automatic
-                  {% else %}
-                  Original edition
-                  {% endif %}
-                </span>
+                <span class="article-language-summary-note">{{ article_language_summary_note }}</span>
               </summary>
               <div class="article-language-menu-body">
-                <p class="article-language-intro">
-                  Automatic service follows your browser only when a prepared edition exists.
-                  If a requested edition is still being prepared, the source article stays readable immediately and the translation continues in the background.
-                  Manual changes are filed for this article only.
-                </p>
+                <p class="article-language-intro">{{ ui.content.edition_intro }}</p>
                 {% if article_translation_requested and not article_translation_available %}
                 <div class="article-language-notice" role="status">
-                  {{ preferred_article_language_name }} was requested. This page is currently showing the original {{ article_source_language_name }} edition while that translation is prepared.
+                  {{ article_language_notice }}
                 </div>
                 {% endif %}
                 <div class="article-language-options">
@@ -186,30 +174,30 @@
   <div class="card-body">
     <div class="comments-header">
       <div>
-        <p class="article-kicker comments-kicker">Public Response</p>
-        <h2 class="comments-title">Comments</h2>
+        <p class="article-kicker comments-kicker">{{ ui.content.public_response }}</p>
+        <h2 class="comments-title">{{ ui.content.comments }}</h2>
       </div>
-      <span class="comments-count">{{ comment_count }} {% if comment_count == 1 %}comment{% else %}comments{% endif %}</span>
+      <span class="comments-count">{{ comment_count_label }}</span>
     </div>
 
     {%- if comments_open and can_comment -%}
     <form method="post" action="/content/{{ slug }}/comments" class="mb-4">
       <div class="mb-3">
-        <label for="comment-body" class="form-label">Add a comment</label>
+        <label for="comment-body" class="form-label">{{ ui.content.add_comment }}</label>
         <textarea id="comment-body" name="body" class="form-control" rows="4" maxlength="5000" required></textarea>
       </div>
       {% if article_language_override_code %}
       <input type="hidden" name="lang" value="{{ article_language_override_code }}">
       {% endif %}
-      <button type="submit" class="btn btn-primary">Post comment</button>
+      <button type="submit" class="btn btn-primary">{{ ui.content.post_comment }}</button>
     </form>
     {%- elif comments_open -%}
     <div class="alert alert-light border mb-4">
-      <a href="/login">Log in</a> to join the discussion.
+      <a href="/login">{{ ui.content.join_discussion_prefix }}</a> {{ ui.content.join_discussion_suffix }}
     </div>
     {%- else -%}
     <div class="alert alert-light border mb-4">
-      Comments open on published articles.
+      {{ ui.content.comments_closed }}
     </div>
     {%- endif -%}
 
@@ -228,20 +216,20 @@
     {%- if comment_pager.total_pages > 1 -%}
     <div class="comments-pager">
       {%- if comment_pager.has_prev -%}
-      <a href="/content/{{ slug }}?comments_page={{ comment_pager.prev_page }}{% if article_language_override_code %}&lang={{ article_language_override_code }}{% endif %}#comments" class="btn btn-outline-primary btn-sm">Newer comments</a>
+      <a href="/content/{{ slug }}?comments_page={{ comment_pager.prev_page }}{% if article_language_override_code %}&lang={{ article_language_override_code }}{% endif %}#comments" class="btn btn-outline-primary btn-sm">{{ ui.content.newer_comments }}</a>
       {%- else -%}
       <span></span>
       {%- endif -%}
-      <span class="text-muted small">Page {{ comment_pager.current_page }} / {{ comment_pager.total_pages }}</span>
+      <span class="text-muted small">{{ comment_page_label }}</span>
       {%- if comment_pager.has_next -%}
-      <a href="/content/{{ slug }}?comments_page={{ comment_pager.next_page }}{% if article_language_override_code %}&lang={{ article_language_override_code }}{% endif %}#comments" class="btn btn-outline-primary btn-sm">Older comments</a>
+      <a href="/content/{{ slug }}?comments_page={{ comment_pager.next_page }}{% if article_language_override_code %}&lang={{ article_language_override_code }}{% endif %}#comments" class="btn btn-outline-primary btn-sm">{{ ui.content.older_comments }}</a>
       {%- else -%}
       <span></span>
       {%- endif -%}
     </div>
     {%- endif -%}
     {%- elif comments_open -%}
-    <p class="text-muted mb-0">No comments yet.</p>
+    <p class="text-muted mb-0">{{ ui.content.no_comments }}</p>
     {%- endif -%}
   </div>
 </section>

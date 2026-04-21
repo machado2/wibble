@@ -20,6 +20,7 @@ use crate::llm::prompt_registry::SupportedTranslationLanguage;
 use crate::llm::translate::detect_browser_translation_language;
 use crate::rate_limit::RequesterTier;
 use crate::services::article_language::resolve_supported_language_preference;
+use crate::services::site_text::{resolve_site_language, site_text, SiteText};
 
 const ARTICLE_LANGUAGE_COOKIE_NAME: &str = "__article_lang";
 
@@ -34,6 +35,7 @@ where
     pub auth_user: Option<AuthUser>,
     pub requester_tier: RequesterTier,
     pub rate_limit_key: String,
+    pub site_language: SupportedTranslationLanguage,
     pub browser_translation_language: Option<SupportedTranslationLanguage>,
     pub saved_article_language: Option<SupportedTranslationLanguage>,
 }
@@ -98,10 +100,16 @@ impl WibbleRequest {
             .unwrap_or(style);
         let site_url = Self::get_site_url();
         let canonical_url = format!("{}{}", site_url, self.request_path);
+        let ui = site_text(self.site_language).template_strings();
         context.insert("style", &busted_style);
         context.insert("site_url", &site_url);
         context.insert("canonical_url", &canonical_url);
-        context.insert("text_create_new_article", "Draft article");
+        context.insert("page_language_code", self.site_language.code);
+        context.insert("page_language_name", self.site_language.name);
+        context.insert("ui", &ui);
+        if let Some(text_create_new_article) = ui["base"]["create_article"].as_str() {
+            context.insert("text_create_new_article", text_create_new_article);
+        }
         if let Some(language) = self.browser_translation_language {
             context.insert("browser_translation_language_code", language.code);
             context.insert("browser_translation_language_name", language.name);
@@ -116,6 +124,10 @@ impl WibbleRequest {
             tera: Arc::clone(&self.state.tera),
             auto_reload: self.state.template_auto_reload,
         }
+    }
+
+    pub fn site_text(&self) -> SiteText {
+        site_text(self.site_language)
     }
 
     fn browser_translation_language_from_headers(
@@ -198,6 +210,7 @@ where
         let state = AppState::from_ref(state);
         let browser_translation_language =
             WibbleRequest::browser_translation_language_from_headers(&parts.headers);
+        let site_language = resolve_site_language(browser_translation_language);
         let saved_article_language =
             WibbleRequest::saved_article_language_from_headers(&parts.headers);
         let auth_user = if let Some(token) = extract_auth_token(parts) {
@@ -217,6 +230,7 @@ where
             auth_user,
             requester_tier,
             rate_limit_key,
+            site_language,
             browser_translation_language,
             saved_article_language,
         })

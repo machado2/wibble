@@ -11,6 +11,7 @@ pub async fn get_image_info_handler(
     wr: WibbleRequest,
     Path(id): Path<String>,
 ) -> Result<Html<String>, Error> {
+    let text = wr.site_text();
     let db = &wr.state.db;
     let (info, article) = ContentImage::find_by_id(id.clone())
         .find_also_related(Content)
@@ -41,10 +42,7 @@ pub async fn get_image_info_handler(
         .insert("status", &info.status)
         .insert("last_error", &info.last_error)
         .insert("model", &info.model)
-        .insert(
-            "description",
-            "Generation details for an image used in a Wibble article.",
-        )
+        .insert("description", text.image_info_description())
         .insert("robots", "noindex,nofollow")
         .render()
 }
