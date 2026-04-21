@@ -90,7 +90,9 @@ pub(super) async fn apply_article_edit(
         }
     }
 
-    Ok(Redirect::to(&format!("/content/{}", slug)))
+    Ok(Redirect::to(
+        &wr.localized_path(&format!("/content/{}", slug)),
+    ))
 }
 
 pub(super) async fn render_edit_page(
@@ -189,7 +191,9 @@ pub(super) async fn replace_article_image(
     )
     .await?;
 
-    Ok(Redirect::to(&format!("/content/{}/edit#images", slug)))
+    Ok(Redirect::to(
+        &wr.localized_path(&format!("/content/{}/edit#images", slug)),
+    ))
 }
 
 pub(super) async fn regenerate_article_image(
@@ -213,7 +217,9 @@ pub(super) async fn regenerate_article_image(
     }
 
     if wr.state.is_image_generation_active(image_id).await {
-        return Ok(Redirect::to(&format!("/content/{}/edit#images", slug)));
+        return Ok(Redirect::to(
+            &wr.localized_path(&format!("/content/{}/edit#images", slug)),
+        ));
     }
 
     mark_image_pending_for_regeneration(db, image).await?;
@@ -229,7 +235,9 @@ pub(super) async fn regenerate_article_image(
     )
     .await?;
 
-    Ok(Redirect::to(&format!("/content/{}/edit#images", slug)))
+    Ok(Redirect::to(
+        &wr.localized_path(&format!("/content/{}/edit#images", slug)),
+    ))
 }
 
 fn map_multipart_error(err: MultipartError) -> Error {
@@ -304,5 +312,7 @@ pub(super) async fn toggle_publish(wr: WibbleRequest, slug: &str) -> Result<Redi
     )
     .await?;
 
-    Ok(Redirect::to(&format!("/content/{}", slug)))
+    Ok(Redirect::to(
+        &wr.localized_path(&format!("/content/{}", slug)),
+    ))
 }

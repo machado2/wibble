@@ -15,6 +15,15 @@ fn render_context(extra: Value) -> Context {
     );
     object.insert("page_language_code".to_string(), Value::from("en"));
     object.insert("page_language_name".to_string(), Value::from("English"));
+    object.insert("locale_prefix".to_string(), Value::from("/en"));
+    object.insert("locale_home_url".to_string(), Value::from("/en/"));
+    object.insert(
+        "alternate_locale_urls".to_string(),
+        json!([
+            {"code": "en", "href": "https://example.test/en/current"},
+            {"code": "pt", "href": "https://example.test/pt/current"}
+        ]),
+    );
     object.insert(
         "ui".to_string(),
         site_text(find_supported_translation_language("en").unwrap()).template_strings(),
@@ -163,7 +172,7 @@ fn content_template_renders_research_and_language_metadata() {
             "article_translation_available": true,
             "article_language_options": [
                 {
-                    "href": "/content/story-slug?lang=auto",
+                    "href": "/en/content/story-slug?lang=auto",
                     "label": "Automatic",
                     "note": "Original edition: English",
                     "active": true
@@ -205,6 +214,6 @@ fn content_template_renders_research_and_language_metadata() {
     assert!(html.contains("Requested research desk"));
     assert!(html.contains("Edition Desk"));
     assert!(html.contains("Comments"));
-    assert!(html.contains("/content/story-slug/edit#images"));
+    assert!(html.contains("&#x2F;en/content/story-slug/edit"));
     assert!(html.contains("Edit article"));
 }

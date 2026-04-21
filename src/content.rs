@@ -135,8 +135,12 @@ mod tests {
     #[test]
     fn article_language_href_uses_query_param_when_override_exists() {
         assert_eq!(
-            article_language_href("story-slug", Some("pt")),
-            "/content/story-slug?lang=pt"
+            article_language_href(
+                find_supported_translation_language("en").unwrap(),
+                "story-slug",
+                Some("pt"),
+            ),
+            "/en/content/story-slug?lang=pt"
         );
     }
 
@@ -148,6 +152,7 @@ mod tests {
         let options = build_article_language_options(
             "story-slug",
             site_text(default_site_language()),
+            default_site_language(),
             selection,
             find_supported_translation_language("pt"),
         );
@@ -164,6 +169,7 @@ mod tests {
         let options = build_article_language_options(
             "story-slug",
             site_text(default_site_language()),
+            default_site_language(),
             selection,
             None,
         );
@@ -188,6 +194,7 @@ mod tests {
         let options = build_article_language_options(
             "story-slug",
             site_text(default_site_language()),
+            default_site_language(),
             selection,
             find_supported_translation_language("fr"),
         );
@@ -212,6 +219,7 @@ mod tests {
         let options = build_article_language_options(
             "story-slug",
             site_text(default_site_language()),
+            default_site_language(),
             selection,
             find_supported_translation_language("fr"),
         );
@@ -287,7 +295,7 @@ mod tests {
             Some(r#"{"research":{"mode":"manual","source_count":3}}"#)
         );
 
-        let Html(html) = sample_request(ctx.state.clone(), "/content/research-bulletin")
+        let Html(html) = sample_request(ctx.state.clone(), "/en/content/research-bulletin")
             .get_content(
                 "research-bulletin",
                 None,
@@ -315,7 +323,7 @@ mod tests {
             .await
             .unwrap();
 
-        let Html(html) = sample_request(ctx.state.clone(), "/content/stale-bulletin")
+        let Html(html) = sample_request(ctx.state.clone(), "/en/content/stale-bulletin")
             .get_content("stale-bulletin", None, None, None)
             .await
             .unwrap();

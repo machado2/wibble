@@ -21,7 +21,7 @@
       </p>
     </div>
 
-    <form action="/" method="get" class="front-page-search" role="search">
+    <form action="{{ home_url }}" method="get" class="front-page-search" role="search">
       {% if current_sort_key == "hot" %}
       <input type="hidden" name="sort" value="hot">
       {% endif %}
@@ -64,7 +64,7 @@
 {% if has_results %}
   {% if lead_item is defined %}
   <section class="lead-story card border-0">
-    <a href="/content/{{ lead_item.slug }}?source=top" class="lead-story-link{% if not lead_item.image_id %} no-media{% endif %}">
+    <a href="{{ locale_prefix }}/content/{{ lead_item.slug }}?source=top" class="lead-story-link{% if not lead_item.image_id %} no-media{% endif %}">
       {% if lead_item.image_id %}
       <div class="lead-story-media">
         <img src="/image/{{ lead_item.image_id }}" class="lead-story-image" alt="{{ lead_item.title }}">
@@ -89,7 +89,7 @@
     <div class="briefing-grid">
       {% for i in secondary_items %}
       <article class="card border-0 briefing-card">
-        <a href="/content/{{ i.slug }}{% if loop.index0 < 2 %}?source=top{% endif %}" class="briefing-link stretched-link">
+        <a href="{{ locale_prefix }}/content/{{ i.slug }}{% if loop.index0 < 2 %}?source=top{% endif %}" class="briefing-link stretched-link">
           {% if i.image_id %}
           <img src="/image/{{ i.image_id }}" class="briefing-image" alt="{{ i.title }}">
           {% endif %}
@@ -119,7 +119,7 @@
     {% else %}
     <h2 class="mb-2">{{ ui.index.empty_home_title }}</h2>
     <p class="text-muted mb-3">{{ ui.index.empty_home_body }}</p>
-    <a href="/create" class="btn btn-primary">{{ ui.index.empty_home_cta }}</a>
+    <a href="{{ locale_prefix }}/create" class="btn btn-primary">{{ ui.index.empty_home_cta }}</a>
     {% endif %}
     {% if has_active_search %}
     <a href="{{ reset_filters_url }}" class="btn btn-primary">{{ ui.index.reset_front_page }}</a>

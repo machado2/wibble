@@ -1,21 +1,28 @@
 use std::env;
 
 use crate::llm::prompt_registry::SupportedTranslationLanguage;
+use crate::services::site_paths::localized_path;
 
 const ARTICLE_LANGUAGE_COOKIE_NAME: &str = "__article_lang";
 
-pub(super) fn content_location(slug: &str, lang: Option<&str>, anchor: Option<&str>) -> String {
-    content_location_with_query(slug, None, None, lang, anchor)
+pub(super) fn content_location(
+    site_language: SupportedTranslationLanguage,
+    slug: &str,
+    lang: Option<&str>,
+    anchor: Option<&str>,
+) -> String {
+    content_location_with_query(site_language, slug, None, None, lang, anchor)
 }
 
 pub(super) fn content_location_with_query(
+    site_language: SupportedTranslationLanguage,
     slug: &str,
     source: Option<&str>,
     comments_page: Option<u64>,
     lang: Option<&str>,
     anchor: Option<&str>,
 ) -> String {
-    let mut path = format!("/content/{}", slug);
+    let mut path = localized_path(site_language, &format!("/content/{}", slug));
     let mut query = Vec::new();
     if let Some(source) = source {
         query.push(format!("source={}", source));
@@ -37,11 +44,16 @@ pub(super) fn content_location_with_query(
     path
 }
 
-fn article_language_cookie_path(slug: &str) -> String {
-    format!("/content/{}", slug)
+fn article_language_cookie_path(site_language: SupportedTranslationLanguage, slug: &str) -> String {
+    localized_path(site_language, &format!("/content/{}", slug))
 }
 
-fn article_language_cookie(slug: &str, value: &str, max_age: u64) -> String {
+fn article_language_cookie(
+    site_language: SupportedTranslationLanguage,
+    slug: &str,
+    value: &str,
+    max_age: u64,
+) -> String {
     let secure = if env::var("SITE_URL")
         .unwrap_or_else(|_| "http://localhost:8000".to_string())
         .starts_with("https://")
@@ -54,17 +66,21 @@ fn article_language_cookie(slug: &str, value: &str, max_age: u64) -> String {
         "{}={}; Path={}; SameSite=Lax{}; Max-Age={}",
         ARTICLE_LANGUAGE_COOKIE_NAME,
         value,
-        article_language_cookie_path(slug),
+        article_language_cookie_path(site_language, slug),
         secure,
         max_age
     )
 }
 
-fn clear_article_language_cookie(slug: &str) -> String {
-    article_language_cookie(slug, "", 0)
+fn clear_article_language_cookie(
+    site_language: SupportedTranslationLanguage,
+    slug: &str,
+) -> String {
+    article_language_cookie(site_language, slug, "", 0)
 }
 
 pub(super) fn article_language_cookie_header(
+    site_language: SupportedTranslationLanguage,
     slug: &str,
     requested_language: Option<SupportedTranslationLanguage>,
     automatic_language_code: &str,
@@ -75,12 +91,13 @@ pub(super) fn article_language_cookie_header(
     }
 
     match requested_language {
-        None => Some(clear_article_language_cookie(slug)),
+        None => Some(clear_article_language_cookie(site_language, slug)),
         Some(language) => {
             if language.code == automatic_language_code {
-                Some(clear_article_language_cookie(slug))
+                Some(clear_article_language_cookie(site_language, slug))
             } else {
                 Some(article_language_cookie(
+                    site_language,
                     slug,
                     language.code,
                     30 * 24 * 60 * 60,

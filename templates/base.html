@@ -15,6 +15,9 @@
         <meta name="description" content="{{ description }}" />
         <meta name="robots" content="{{ robots | default(value='index,follow') }}" />
         <link rel="canonical" href="{{ canonical_url }}" />
+        {%- for alternate in alternate_locale_urls -%}
+        <link rel="alternate" hreflang="{{ alternate.code }}" href="{{ alternate.href }}" />
+        {%- endfor -%}
         <meta property="og:type" content="website" />
         <meta property="og:url" content="{{ canonical_url }}" />
         <meta property="og:title" content="{{ pagetitle }}" />
@@ -49,7 +52,7 @@
             <div class="container">
                 <div class="nav-inner">
                     <div class="brand-lockup">
-                        <a class="brand" href="/">
+                        <a class="brand" href="{{ locale_home_url }}">
                             <span class="brand-accent">The</span>
                             <span class="brand-strong">Wibble</span>
                         </a>
@@ -60,7 +63,7 @@
                             <div class="nav-context-actions">
                                 {%- block nav_context_actions -%}{%- endblock nav_context_actions -%}
                             </div>
-                            <a class="btn btn-primary" href="/create">
+                            <a class="btn btn-primary" href="{{ locale_prefix }}/create">
                                 {{ ui.base.create_article }}
                             </a>
                         </div>
@@ -75,12 +78,12 @@
                             </a>
                             {%- if auth_user -%}
                             {%- if is_admin -%}
-                            <a class="nav-text-link" href="/admin/articles">{{ ui.base.admin }}</a>
+                            <a class="nav-text-link" href="{{ locale_prefix }}/admin/articles">{{ ui.base.admin }}</a>
                             {%- endif -%}
                             <span class="nav-user">{{ auth_user.name }}</span>
-                            <a class="nav-text-link" href="/logout">{{ ui.base.logout }}</a>
+                            <a class="nav-text-link" href="{{ locale_prefix }}/logout">{{ ui.base.logout }}</a>
                             {%- else -%}
-                            <a class="nav-text-link" href="/login">{{ ui.base.login }}</a>
+                            <a class="nav-text-link" href="{{ locale_prefix }}/login">{{ ui.base.login }}</a>
                             {%- endif -%}
                         </div>
                     </div>

@@ -11,12 +11,12 @@
 <div class="gallery-grid">
   {% for item in items %}
   <article class="gallery-card card border-0 hover-shadow">
-    <a href="/image_info/{{ item.id }}" class="text-decoration-none">
+    <a href="{{ locale_prefix }}/image_info/{{ item.id }}" class="text-decoration-none">
       <img src="/image/{{ item.id }}" class="gallery-card-image" alt="{{ item.alt_text }}">
     </a>
     <div class="card-body gallery-card-body">
       <p class="gallery-card-caption">{{ item.alt_text }}</p>
-      <a href="/content/{{ item.article_slug }}" class="gallery-card-link">{{ ui.images.used_in }} "{{ item.article_title }}"</a>
+      <a href="{{ locale_prefix }}/content/{{ item.article_slug }}" class="gallery-card-link">{{ ui.images.used_in }} "{{ item.article_title }}"</a>
     </div>
   </article>
   {% endfor %}

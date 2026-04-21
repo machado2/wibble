@@ -69,15 +69,15 @@
 
       <div class="wait-actions">
         {% if wait_summary.clarification_question %}
-        <form method="post" action="/wait/{{ id }}/clarify" class="w-100">
+        <form method="post" action="{{ locale_prefix }}/wait/{{ id }}/clarify" class="w-100">
           <label class="form-label" for="clarification-answer">{{ ui.wait.answer_label }}</label>
           <textarea id="clarification-answer" class="form-control mb-3" name="answer" rows="3" maxlength="200" required></textarea>
           <button type="submit" class="btn btn-primary">{{ ui.wait.resume }}</button>
         </form>
         {% else %}
-        <a href="/wait/{{ id }}" class="btn btn-outline-primary">{{ ui.wait.refresh }}</a>
+        <a href="{{ locale_prefix }}/wait/{{ id }}" class="btn btn-outline-primary">{{ ui.wait.refresh }}</a>
         {% if wait_summary.slug %}
-        <a href="/content/{{ wait_summary.slug }}" class="btn btn-outline-secondary">{{ ui.wait.open_article }}</a>
+        <a href="{{ locale_prefix }}/content/{{ wait_summary.slug }}" class="btn btn-outline-secondary">{{ ui.wait.open_article }}</a>
         {% endif %}
         {% endif %}
       </div>

@@ -1,6 +1,6 @@
 use std::env;
 
-use axum::extract::{Query, State};
+use axum::extract::Query;
 use axum::http::header::SET_COOKIE;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
@@ -10,12 +10,17 @@ use url::form_urlencoded::Serializer;
 
 use crate::app_state::AppState;
 use crate::error::Error;
+use crate::wibble_request::WibbleRequest;
 
-pub fn router() -> Router<AppState> {
+pub fn localized_router() -> Router<AppState> {
     Router::new()
         .route("/auth/callback", get(auth_callback))
         .route("/login", get(login))
         .route("/logout", get(logout))
+}
+
+pub fn global_callback_router() -> Router<AppState> {
+    Router::new().route("/auth/callback", get(auth_callback))
 }
 
 #[derive(Deserialize)]
@@ -44,7 +49,7 @@ fn auth_cookie(token: &str, max_age: u64) -> String {
     )
 }
 
-fn sanitize_redirect_target(raw: Option<String>) -> String {
+fn sanitize_redirect_target(raw: Option<String>) -> Option<String> {
     let site_url = site_url_from_env();
 
     raw.and_then(|target| {
@@ -61,29 +66,30 @@ fn sanitize_redirect_target(raw: Option<String>) -> String {
             None
         }
     })
-    .unwrap_or_else(|| "/".to_string())
 }
 
 async fn auth_callback(
-    State(state): State<AppState>,
+    wr: WibbleRequest,
     Query(params): Query<AuthCallbackParams>,
 ) -> Result<Response, Error> {
     let token = params
         .token
         .ok_or_else(|| Error::Auth("Missing token".to_string()))?;
-    let _user = state.jwks_client.validate_token(&token).await?;
+    let _user = wr.state.jwks_client.validate_token(&token).await?;
     let cookie = auth_cookie(&token, 30 * 24 * 60 * 60);
-    let redirect_url = sanitize_redirect_target(params.redirect);
+    let redirect_url =
+        sanitize_redirect_target(params.redirect).unwrap_or_else(|| wr.localized_root_path());
 
     Ok(([(SET_COOKIE, cookie)], Redirect::to(&redirect_url)).into_response())
 }
 
-async fn login() -> Redirect {
+async fn login(wr: WibbleRequest) -> Redirect {
     let auth_url =
         env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "https://auth.fbmac.net".to_string());
     let callback_url = format!(
-        "{}/auth/callback",
-        site_url_from_env().trim_end_matches('/')
+        "{}{}",
+        site_url_from_env().trim_end_matches('/'),
+        wr.localized_path("/auth/callback")
     );
     let query = Serializer::new(String::new())
         .append_pair("redirect", &callback_url)
@@ -93,10 +99,10 @@ async fn login() -> Redirect {
     Redirect::to(&format!("{}/login?{}", auth_url, query))
 }
 
-async fn logout() -> Response {
+async fn logout(wr: WibbleRequest) -> Response {
     let auth_url =
         env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "https://auth.fbmac.net".to_string());
-    let our_url = site_url_from_env();
+    let our_url = format!("{}{}", site_url_from_env(), wr.localized_root_path());
     let cookie = auth_cookie("", 0);
     let query = Serializer::new(String::new())
         .append_pair("redirect", &our_url)

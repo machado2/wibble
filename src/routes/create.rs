@@ -10,9 +10,10 @@ use crate::create as create_page;
 use crate::create::clarify::normalize_clarification_answer;
 use crate::error::Error;
 use crate::services::article_jobs::{spawn_due_article_jobs, ArticleJobService};
+use crate::services::site_paths::localized_path;
 use crate::wibble_request::WibbleRequest;
 
-pub fn router() -> Router<AppState> {
+pub fn localized_router() -> Router<AppState> {
     Router::new()
         .route("/wait/{id}", get(get_wait))
         .route(
@@ -28,10 +29,13 @@ struct WaitClarificationData {
 }
 
 async fn get_wait(wr: WibbleRequest, Path(id): Path<String>) -> Response {
+    let site_language = wr.site_language;
     match create_page::wait(wr, &id).await {
-        create_page::WaitResponse::Redirect(slug) => {
-            Redirect::to(&format!("/content/{}", slug)).into_response()
-        }
+        create_page::WaitResponse::Redirect(slug) => Redirect::to(&localized_path(
+            site_language,
+            &format!("/content/{}", slug),
+        ))
+        .into_response(),
         create_page::WaitResponse::Html(html) => html.into_response(),
         create_page::WaitResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
         create_page::WaitResponse::InternalError => {
@@ -90,7 +94,7 @@ async fn create_article(
     )
     .await
     {
-        Ok(id) => Redirect::to(&format!("/wait/{}", id)).into_response(),
+        Ok(id) => Redirect::to(&wr.localized_path(&format!("/wait/{}", id))).into_response(),
         Err(Error::BadRequest(message)) | Err(Error::Auth(message)) => {
             match create_page::render_create_page(&wr, &prompt, Some(&message), selected_mode).await
             {
@@ -120,7 +124,7 @@ async fn post_wait_clarification(
     match service.submit_clarification_answer(&id, &answer).await {
         Ok(Some(_)) => {
             spawn_due_article_jobs(wr.state.clone()).await;
-            Redirect::to(&format!("/wait/{}", id)).into_response()
+            Redirect::to(&wr.localized_path(&format!("/wait/{}", id))).into_response()
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => e.into_response(),

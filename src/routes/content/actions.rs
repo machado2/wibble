@@ -123,6 +123,7 @@ pub(super) async fn post_comment(
     log_audit(db, auth_user, "create_comment", "content", &slug, None).await?;
 
     Ok(Redirect::to(&content_location(
+        wr.site_language,
         &slug,
         resolve_requested_article_language(data.lang.as_deref())
             .flatten()
@@ -274,6 +275,7 @@ pub(super) async fn post_vote(
     .await?;
 
     Ok(Redirect::to(&content_location(
+        wr.site_language,
         &slug,
         resolve_requested_article_language(data.lang.as_deref())
             .flatten()

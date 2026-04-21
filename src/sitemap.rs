@@ -9,6 +9,7 @@ use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use crate::app_state::AppState;
 use crate::entities::{content, prelude::*};
 use crate::error::Error;
+use crate::services::site_paths::{localized_root_path, supported_site_languages};
 
 fn site_url() -> String {
     env::var("SITE_URL")
@@ -45,17 +46,25 @@ pub async fn get_sitemap(State(state): State<AppState>) -> Result<impl IntoRespo
     let mut xml = String::with_capacity(items.len() * 128 + 512);
     xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
     xml.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">");
-    xml.push_str("<url><loc>");
-    xml.push_str(&xml_escape(&format!("{}/", site_url)));
-    xml.push_str("</loc></url>");
+    for language in supported_site_languages() {
+        xml.push_str("<url><loc>");
+        xml.push_str(&xml_escape(&format!(
+            "{}{}",
+            site_url,
+            localized_root_path(language)
+        )));
+        xml.push_str("</loc></url>");
+    }
 
     for (slug, created_at) in items {
-        let loc = format!("{}/content/{}", site_url, slug);
-        xml.push_str("<url><loc>");
-        xml.push_str(&xml_escape(&loc));
-        xml.push_str("</loc><lastmod>");
-        xml.push_str(&created_at.format("%F").to_string());
-        xml.push_str("</lastmod></url>");
+        for language in supported_site_languages() {
+            let loc = format!("{}/{}/content/{}", site_url, language.code, slug);
+            xml.push_str("<url><loc>");
+            xml.push_str(&xml_escape(&loc));
+            xml.push_str("</loc><lastmod>");
+            xml.push_str(&created_at.format("%F").to_string());
+            xml.push_str("</lastmod></url>");
+        }
     }
     xml.push_str("</urlset>");
 

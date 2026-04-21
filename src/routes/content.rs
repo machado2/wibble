@@ -23,7 +23,7 @@ use self::navigation::{article_language_cookie_header, content_location_with_que
 #[cfg(test)]
 use self::navigation::content_location;
 
-pub fn router() -> Router<AppState> {
+pub fn localized_router() -> Router<AppState> {
     Router::new()
         .route("/content/{slug}", get(get_content))
         .route("/content/{slug}/vote", post(post_vote))
@@ -59,6 +59,7 @@ async fn get_content(
         let canonical_language = requested_language.map(requested_article_language_query_value);
         if canonical_language != Some(raw_language) {
             return Ok(axum::response::Redirect::to(&content_location_with_query(
+                wr.site_language,
                 &slug,
                 query.source.as_deref(),
                 query.comments_page,
@@ -72,6 +73,7 @@ async fn get_content(
     let automatic_selection =
         resolve_article_language(None, None, wr.browser_translation_language, &[]);
     let cookie_header = article_language_cookie_header(
+        wr.site_language,
         &slug,
         requested_language,
         automatic_selection.preferred_language.code,
@@ -105,16 +107,26 @@ mod tests {
     #[test]
     fn content_location_preserves_language_query() {
         assert_eq!(
-            content_location("test-story", Some("pt"), None),
-            "/content/test-story?lang=pt"
+            content_location(
+                find_supported_translation_language("en").unwrap(),
+                "test-story",
+                Some("pt"),
+                None,
+            ),
+            "/en/content/test-story?lang=pt"
         );
     }
 
     #[test]
     fn content_location_appends_anchor_after_language_query() {
         assert_eq!(
-            content_location("test-story", Some("pt"), Some("comments")),
-            "/content/test-story?lang=pt#comments"
+            content_location(
+                find_supported_translation_language("en").unwrap(),
+                "test-story",
+                Some("pt"),
+                Some("comments"),
+            ),
+            "/en/content/test-story?lang=pt#comments"
         );
     }
 
@@ -122,19 +134,21 @@ mod tests {
     fn content_location_with_query_preserves_existing_params() {
         assert_eq!(
             content_location_with_query(
+                find_supported_translation_language("pt").unwrap(),
                 "test-story",
                 Some("top"),
                 Some(3),
                 Some("pt"),
                 Some("comments"),
             ),
-            "/content/test-story?source=top&comments_page=3&lang=pt#comments"
+            "/pt/content/test-story?source=top&comments_page=3&lang=pt#comments"
         );
     }
 
     #[test]
     fn article_language_cookie_header_sets_manual_article_cookie() {
         let cookie = article_language_cookie_header(
+            find_supported_translation_language("pt").unwrap(),
             "test-story",
             find_supported_translation_language("pt"),
             "en",
@@ -143,12 +157,19 @@ mod tests {
         .unwrap();
 
         assert!(cookie.contains("__article_lang=pt"));
-        assert!(cookie.contains("Path=/content/test-story"));
+        assert!(cookie.contains("Path=/pt/content/test-story"));
     }
 
     #[test]
     fn article_language_cookie_header_clears_cookie_for_automatic_mode() {
-        let cookie = article_language_cookie_header("test-story", None, "en", true).unwrap();
+        let cookie = article_language_cookie_header(
+            find_supported_translation_language("en").unwrap(),
+            "test-story",
+            None,
+            "en",
+            true,
+        )
+        .unwrap();
 
         assert!(cookie.contains("__article_lang="));
         assert!(cookie.contains("Max-Age=0"));
@@ -156,12 +177,20 @@ mod tests {
 
     #[test]
     fn article_language_cookie_header_skips_cookie_when_no_query_was_provided() {
-        assert!(article_language_cookie_header("test-story", None, "en", false).is_none());
+        assert!(article_language_cookie_header(
+            find_supported_translation_language("en").unwrap(),
+            "test-story",
+            None,
+            "en",
+            false,
+        )
+        .is_none());
     }
 
     #[test]
     fn article_language_cookie_header_clears_cookie_when_choice_matches_automatic_language() {
         let cookie = article_language_cookie_header(
+            find_supported_translation_language("pt").unwrap(),
             "test-story",
             find_supported_translation_language("pt"),
             "pt",

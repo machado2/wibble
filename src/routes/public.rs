@@ -12,17 +12,21 @@ use crate::error::Error;
 use crate::newslist::{ContentListParams, NewsList};
 use crate::wibble_request::WibbleRequest;
 
-pub fn router() -> Router<AppState> {
+pub fn localized_router() -> Router<AppState> {
     Router::new()
         .route("/", get(get_index))
-        .route("/sitemap.xml", get(crate::sitemap::get_sitemap))
-        .route("/robots.txt", get(crate::sitemap::get_robots_txt))
-        .route("/image/{id}", get(get_image))
         .route(
             "/image_info/{id}",
             get(crate::image_info::get_image_info_handler),
         )
         .route("/images", get(crate::get_images::get_images))
+}
+
+pub fn global_router() -> Router<AppState> {
+    Router::new()
+        .route("/sitemap.xml", get(crate::sitemap::get_sitemap))
+        .route("/robots.txt", get(crate::sitemap::get_robots_txt))
+        .route("/image/{id}", get(get_image))
 }
 
 async fn get_index(

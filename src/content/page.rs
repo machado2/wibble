@@ -35,8 +35,12 @@ pub(super) struct ArticleResearchMetadata {
     pub(super) source_count: usize,
 }
 
-pub(super) fn article_language_href(slug: &str, lang: Option<&str>) -> String {
-    let mut path = format!("/content/{}", slug);
+pub(super) fn article_language_href(
+    site_language: SupportedTranslationLanguage,
+    slug: &str,
+    lang: Option<&str>,
+) -> String {
+    let mut path = format!("/{}/content/{}", site_language.code, slug);
     if let Some(lang) = lang {
         path.push_str("?lang=");
         path.push_str(lang);
@@ -47,6 +51,7 @@ pub(super) fn article_language_href(slug: &str, lang: Option<&str>) -> String {
 pub(super) fn build_article_language_options(
     slug: &str,
     text: SiteText,
+    site_language: SupportedTranslationLanguage,
     selection: ArticleLanguageSelection,
     browser_language: Option<SupportedTranslationLanguage>,
 ) -> Vec<ArticleLanguageOption> {
@@ -54,13 +59,13 @@ pub(super) fn build_article_language_options(
         text.article_language_automatic_note(browser_language, selection.source_language);
     let mut options = vec![
         ArticleLanguageOption {
-            href: article_language_href(slug, Some("auto")),
+            href: article_language_href(site_language, slug, Some("auto")),
             label: text.article_language_automatic_label().to_string(),
             note: automatic_note,
             active: !uses_manual_article_language_preference(selection.preferred_language_source),
         },
         ArticleLanguageOption {
-            href: article_language_href(slug, Some(selection.source_language.code)),
+            href: article_language_href(site_language, slug, Some(selection.source_language.code)),
             label: text.article_language_original_label(
                 text.translation_language_name(selection.source_language),
             ),
@@ -94,7 +99,7 @@ pub(super) fn build_article_language_options(
                 };
 
                 ArticleLanguageOption {
-                    href: article_language_href(slug, Some(language.code)),
+                    href: article_language_href(site_language, slug, Some(language.code)),
                     label: text.translation_language_name(language).to_string(),
                     note,
                     active: manually_selected,
@@ -234,13 +239,14 @@ pub(super) async fn render_content_page(
     let rendered_markdown = translated_article
         .as_ref()
         .map_or(markdown, |translation| translation.markdown.as_str());
-    let rendered_body = render::markdown_to_html(&render::strip_leading_description(
-        rendered_markdown,
-        rendered_description,
-    ));
+    let rendered_body = render::markdown_to_html(
+        &render::strip_leading_description(rendered_markdown, rendered_description),
+        &request.locale_prefix(),
+    );
     let language_options = build_article_language_options(
         &article.slug,
         text,
+        request.site_language,
         language_selection,
         request.browser_translation_language,
     );

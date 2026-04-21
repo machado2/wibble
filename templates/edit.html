@@ -11,7 +11,7 @@
       {%- if images -%}
       <a href="#images" class="btn btn-outline-secondary">{{ ui.edit.jump_to_images }}</a>
       {%- endif -%}
-      <a href="/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit.view_article }}</a>
+      <a href="{{ locale_prefix }}/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit.view_article }}</a>
     </div>
   </div>
 
@@ -26,7 +26,7 @@
           <p class="text-muted mb-3">
             {{ ui.edit.agent_edit_body }}
           </p>
-          <form method="post" action="/content/{{ slug }}/edit/agent">
+          <form method="post" action="{{ locale_prefix }}/content/{{ slug }}/edit/agent">
             <div class="edit-form-group">
               <label for="change_request" class="form-label">{{ ui.edit.change_request }}</label>
               <textarea
@@ -50,7 +50,7 @@
       </div>
 
       <h2 class="h4 mb-3">{{ ui.edit.manual_editor }}</h2>
-      <form method="post" action="/content/{{ slug }}/edit">
+      <form method="post" action="{{ locale_prefix }}/content/{{ slug }}/edit">
         <div class="edit-form-group">
           <label for="title" class="form-label">{{ ui.edit.title_label }}</label>
           <input type="text" class="form-control" id="title" name="title" value="{{ article_title }}" required>
@@ -65,7 +65,7 @@
         </div>
         <div class="edit-submit-bar">
           <button type="submit" class="btn btn-primary">{{ ui.edit.save_changes }}</button>
-          <a href="/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit.cancel }}</a>
+          <a href="{{ locale_prefix }}/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit.cancel }}</a>
         </div>
       </form>
       <p class="text-muted small mb-0">
@@ -91,12 +91,12 @@
           <p class="text-muted small">{{ ui.edit.last_error_prefix }} {{ img.last_error }}</p>
           {%- endif -%}
           <p>{{ img.prompt }}</p>
-          <form method="post" action="/content/{{ slug }}/images/{{ img.id }}" enctype="multipart/form-data">
+          <form method="post" action="{{ locale_prefix }}/content/{{ slug }}/images/{{ img.id }}" enctype="multipart/form-data">
             <input type="file" class="form-control" name="image" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
             <p class="text-muted small">{{ ui.edit.accepted_formats }}</p>
             <button type="submit" class="btn btn-sm btn-outline-warning">{{ ui.edit.replace_image }}</button>
           </form>
-          <form method="post" action="/content/{{ slug }}/images/{{ img.id }}/regenerate">
+          <form method="post" action="{{ locale_prefix }}/content/{{ slug }}/images/{{ img.id }}/regenerate">
             <button
               type="submit"
               class="btn btn-sm btn-outline-secondary"

@@ -157,6 +157,7 @@ fn format_headline(h: Headline) -> FormattedHeadline {
 }
 
 fn build_index_url(
+    root_path: &str,
     search: Option<&str>,
     t: Option<&str>,
     sort: Option<&str>,
@@ -177,48 +178,48 @@ fn build_index_url(
     }
     let query = serializer.finish();
     if query.is_empty() {
-        "/".to_string()
+        root_path.to_string()
     } else {
-        format!("/?{}", query)
+        format!("{}?{}", root_path, query)
     }
 }
 
-fn sort_options(params: &ContentListParams, text: SiteText) -> [FilterOption; 2] {
+fn sort_options(params: &ContentListParams, text: SiteText, root_path: &str) -> [FilterOption; 2] {
     let search = params.search.as_deref();
     let t = params.t.as_deref();
     let current_sort = params.sort.as_deref().unwrap_or("new");
     [
         FilterOption {
             label: text.sort_label_newest(),
-            url: build_index_url(search, t, None, None),
+            url: build_index_url(root_path, search, t, None, None),
             active: current_sort != "hot",
         },
         FilterOption {
             label: text.sort_label_hot(),
-            url: build_index_url(search, t, Some("hot"), None),
+            url: build_index_url(root_path, search, t, Some("hot"), None),
             active: current_sort == "hot",
         },
     ]
 }
 
-fn time_options(params: &ContentListParams, text: SiteText) -> [FilterOption; 3] {
+fn time_options(params: &ContentListParams, text: SiteText, root_path: &str) -> [FilterOption; 3] {
     let search = params.search.as_deref();
     let sort = params.sort.as_deref();
     let current_time = params.t.as_deref().unwrap_or("");
     [
         FilterOption {
             label: text.time_label_any(),
-            url: build_index_url(search, None, sort, None),
+            url: build_index_url(root_path, search, None, sort, None),
             active: current_time.is_empty(),
         },
         FilterOption {
             label: text.time_label_week(),
-            url: build_index_url(search, Some("week"), sort, None),
+            url: build_index_url(root_path, search, Some("week"), sort, None),
             active: current_time == "week",
         },
         FilterOption {
             label: text.time_label_month(),
-            url: build_index_url(search, Some("month"), sort, None),
+            url: build_index_url(root_path, search, Some("month"), sort, None),
             active: current_time == "month",
         },
     ]
@@ -266,14 +267,16 @@ impl NewsList for WibbleRequest {
         let mut template = self.template("index").await;
         let title = text.index_meta_title(search.as_deref());
         let description = text.index_meta_description();
+        let root_path = self.localized_root_path();
         let load_more_url = build_index_url(
+            &root_path,
             params.search.as_deref(),
             params.t.as_deref(),
             params.sort.as_deref(),
             next_after_id.as_deref(),
         );
-        let sort_options = sort_options(&params, text);
-        let time_options = time_options(&params, text);
+        let sort_options = sort_options(&params, text, &root_path);
+        let time_options = time_options(&params, text, &root_path);
         let search_heading = match params
             .search
             .as_deref()
@@ -300,12 +303,13 @@ impl NewsList for WibbleRequest {
             .insert("current_time_key", &params.t.clone().unwrap_or_default())
             .insert("sort_options", &sort_options)
             .insert("time_options", &time_options)
+            .insert("home_url", &root_path)
             .insert("has_results", &has_results)
             .insert("has_active_search", &has_active_search)
             .insert("secondary_items", &items)
             .insert(
                 "reset_filters_url",
-                &build_index_url(None, None, None, None),
+                &build_index_url(&root_path, None, None, None, None),
             );
         if let Some(lead_item) = lead_item {
             template.insert("lead_item", &lead_item);
@@ -342,9 +346,15 @@ mod tests {
     #[test]
     fn build_index_url_preserves_active_filters() {
         assert_eq!(
-            build_index_url(Some("space mayor"), Some("week"), Some("hot"), Some("abc")),
-            "/?search=space+mayor&t=week&sort=hot&afterId=abc"
+            build_index_url(
+                "/pt/",
+                Some("space mayor"),
+                Some("week"),
+                Some("hot"),
+                Some("abc")
+            ),
+            "/pt/?search=space+mayor&t=week&sort=hot&afterId=abc"
         );
-        assert_eq!(build_index_url(None, None, None, None), "/");
+        assert_eq!(build_index_url("/pt/", None, None, None, None), "/pt/");
     }
 }

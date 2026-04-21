@@ -8,8 +8,8 @@
       <h1>{{ ui.edit_preview.title }}</h1>
     </div>
     <div class="workflow-actions edit-actions">
-      <a href="/content/{{ slug }}/edit" class="btn btn-outline-secondary">{{ ui.edit_preview.back_to_editor }}</a>
-      <a href="/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit_preview.view_article }}</a>
+      <a href="{{ locale_prefix }}/content/{{ slug }}/edit" class="btn btn-outline-secondary">{{ ui.edit_preview.back_to_editor }}</a>
+      <a href="{{ locale_prefix }}/content/{{ slug }}" class="btn btn-outline-secondary">{{ ui.edit_preview.view_article }}</a>
     </div>
   </div>
 
@@ -64,7 +64,7 @@
   <div class="card border-0 workflow-card">
     <div class="card-body">
       <h2 class="h4 mb-3">{{ ui.edit_preview.apply_revision }}</h2>
-      <form method="post" action="/content/{{ slug }}/edit/agent/apply">
+      <form method="post" action="{{ locale_prefix }}/content/{{ slug }}/edit/agent/apply">
         <input type="hidden" name="title" value="{{ proposed_title }}">
         <input type="hidden" name="description" value="{{ proposed_description }}">
         <input type="hidden" name="summary" value="{{ summary }}">
@@ -73,7 +73,7 @@
         <textarea class="d-none" name="markdown">{{ proposed_markdown }}</textarea>
         <div class="edit-submit-bar">
           <button type="submit" class="btn btn-primary">{{ ui.edit_preview.apply_revision }}</button>
-          <a href="/content/{{ slug }}/edit" class="btn btn-outline-secondary">{{ ui.edit_preview.discard_preview }}</a>
+          <a href="{{ locale_prefix }}/content/{{ slug }}/edit" class="btn btn-outline-secondary">{{ ui.edit_preview.discard_preview }}</a>
         </div>
       </form>
     </div>

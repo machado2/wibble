@@ -20,6 +20,10 @@ use crate::llm::prompt_registry::SupportedTranslationLanguage;
 use crate::llm::translate::detect_browser_translation_language;
 use crate::rate_limit::RequesterTier;
 use crate::services::article_language::resolve_supported_language_preference;
+use crate::services::site_paths::{
+    detect_site_language_from_path, locale_prefix, localized_path, localized_root_path,
+    saved_site_language_from_headers, supported_site_languages,
+};
 use crate::services::site_text::{resolve_site_language, site_text, SiteText};
 
 const ARTICLE_LANGUAGE_COOKIE_NAME: &str = "__article_lang";
@@ -101,11 +105,25 @@ impl WibbleRequest {
         let site_url = Self::get_site_url();
         let canonical_url = format!("{}{}", site_url, self.request_path);
         let ui = site_text(self.site_language).template_strings();
+        let locale_prefix = self.locale_prefix();
+        let locale_home_url = self.localized_root_path();
+        let alternate_locale_urls: Vec<_> = supported_site_languages()
+            .into_iter()
+            .map(|language| {
+                serde_json::json!({
+                    "code": language.code,
+                    "href": format!("{}{}", site_url, localized_path(language, &self.request_path)),
+                })
+            })
+            .collect();
         context.insert("style", &busted_style);
         context.insert("site_url", &site_url);
         context.insert("canonical_url", &canonical_url);
         context.insert("page_language_code", self.site_language.code);
         context.insert("page_language_name", self.site_language.name);
+        context.insert("locale_prefix", &locale_prefix);
+        context.insert("locale_home_url", &locale_home_url);
+        context.insert("alternate_locale_urls", &alternate_locale_urls);
         context.insert("ui", &ui);
         if let Some(text_create_new_article) = ui["base"]["create_article"].as_str() {
             context.insert("text_create_new_article", text_create_new_article);
@@ -128,6 +146,22 @@ impl WibbleRequest {
 
     pub fn site_text(&self) -> SiteText {
         site_text(self.site_language)
+    }
+
+    pub fn locale_prefix(&self) -> String {
+        locale_prefix(self.site_language)
+    }
+
+    pub fn localized_root_path(&self) -> String {
+        localized_root_path(self.site_language)
+    }
+
+    pub fn localized_path(&self, path: &str) -> String {
+        localized_path(self.site_language, path)
+    }
+
+    pub fn localized_request_path(&self) -> String {
+        self.localized_path(&self.request_path)
     }
 
     fn browser_translation_language_from_headers(
@@ -206,11 +240,17 @@ where
         let style = query
             .and_then(|q| q.get("theme").cloned())
             .unwrap_or("style".to_string());
-        let request_path = parts.uri.path().to_string();
+        let request_path = parts
+            .uri
+            .path_and_query()
+            .map(|path| path.as_str().to_string())
+            .unwrap_or_else(|| parts.uri.path().to_string());
         let state = AppState::from_ref(state);
         let browser_translation_language =
             WibbleRequest::browser_translation_language_from_headers(&parts.headers);
-        let site_language = resolve_site_language(browser_translation_language);
+        let site_language = detect_site_language_from_path(&request_path)
+            .or_else(|| saved_site_language_from_headers(&parts.headers))
+            .unwrap_or_else(|| resolve_site_language(browser_translation_language));
         let saved_article_language =
             WibbleRequest::saved_article_language_from_headers(&parts.headers);
         let auth_user = if let Some(token) = extract_auth_token(parts) {

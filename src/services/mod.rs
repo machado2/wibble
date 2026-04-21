@@ -3,4 +3,5 @@ pub mod article_language;
 pub mod article_persistence;
 pub mod article_translations;
 pub mod editorial_policy;
+pub mod site_paths;
 pub mod site_text;

@@ -19,7 +19,7 @@ use self::agent::{build_unified_diff, markdown_image_count, text_paragraphs};
 
 pub(super) const MAX_IMAGE_UPLOAD_BYTES: usize = 12 * 1024 * 1024;
 
-pub fn router() -> Router<AppState> {
+pub fn localized_router() -> Router<AppState> {
     Router::new()
         .route(
             "/content/{slug}/edit",
@@ -183,7 +183,7 @@ mod tests {
         WibbleRequest {
             state,
             style: "style".to_string(),
-            request_path: "/content/story-slug/edit".to_string(),
+            request_path: "/en/content/story-slug/edit".to_string(),
             auth_user: Some(author_user(email)),
             requester_tier: RequesterTier::Authenticated,
             rate_limit_key: format!("user:{}", email),

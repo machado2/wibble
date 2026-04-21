@@ -9,7 +9,7 @@
 </div>
 
 <div class="sort-bar mb-3">
-  <a href="/admin/articles" class="sort-link">Articles</a>
+  <a href="{{ locale_prefix }}/admin/articles" class="sort-link">Articles</a>
   <span class="sort-link active">Jobs</span>
 </div>
 
@@ -226,7 +226,7 @@
             <td><span class="badge badge-info">{{ job.status }}</span></td>
             <td>
               {% if job.slug %}
-              <a href="/content/{{ job.slug }}">{{ job.title | default(value=job.slug) }}</a>
+              <a href="{{ locale_prefix }}/content/{{ job.slug }}">{{ job.title | default(value=job.slug) }}</a>
               {% elif job.title %}
               {{ job.title }}
               {% else %}
@@ -249,7 +249,7 @@
             <td>{{ job.updated_at }}</td>
             <td class="col-actions">
               {% if job.can_cancel %}
-              <form method="post" action="/admin/article-jobs/{{ job.id }}/cancel">
+              <form method="post" action="{{ locale_prefix }}/admin/article-jobs/{{ job.id }}/cancel">
                 <button type="submit" class="btn btn-sm btn-outline-warning">Cancel</button>
               </form>
               {% endif %}
@@ -321,7 +321,7 @@
           <tr>
             <td>
               {% if job.article_slug %}
-              <a href="/content/{{ job.article_slug }}">{{ job.article_title | default(value=job.article_id) }}</a>
+              <a href="{{ locale_prefix }}/content/{{ job.article_slug }}">{{ job.article_title | default(value=job.article_id) }}</a>
               {% else %}
               {{ job.article_title | default(value=job.article_id) }}
               {% endif %}
@@ -333,7 +333,7 @@
             <td>{{ job.updated_at }}</td>
             <td class="col-actions">
               {% if job.can_cancel %}
-              <form method="post" action="/admin/translation-jobs/{{ job.id }}/cancel">
+              <form method="post" action="{{ locale_prefix }}/admin/translation-jobs/{{ job.id }}/cancel">
                 <button type="submit" class="btn btn-sm btn-outline-warning">Cancel</button>
               </form>
               {% endif %}
@@ -366,7 +366,7 @@
           <tr>
             <td>
               {% if job.article_slug %}
-              <a href="/content/{{ job.article_slug }}">{{ job.article_title | default(value=job.article_id) }}</a>
+              <a href="{{ locale_prefix }}/content/{{ job.article_slug }}">{{ job.article_title | default(value=job.article_id) }}</a>
               {% else %}
               {{ job.article_title | default(value=job.article_id) }}
               {% endif %}

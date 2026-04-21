@@ -16,7 +16,7 @@ use crate::wibble_request::WibbleRequest;
 
 use self::service::{load_admin_articles_page, load_admin_jobs_page};
 
-pub fn router() -> Router<AppState> {
+pub fn localized_router() -> Router<AppState> {
     Router::new()
         .route("/admin/articles", get(get_admin_articles))
         .route("/admin/jobs", get(get_admin_jobs))
@@ -104,7 +104,7 @@ async fn post_cancel_article_job(
         Some(details),
     )
     .await?;
-    Ok(Redirect::to("/admin/jobs"))
+    Ok(Redirect::to(&wr.localized_path("/admin/jobs")))
 }
 
 async fn post_cancel_translation_job(
@@ -131,7 +131,7 @@ async fn post_cancel_translation_job(
         Some(details),
     )
     .await?;
-    Ok(Redirect::to("/admin/jobs"))
+    Ok(Redirect::to(&wr.localized_path("/admin/jobs")))
 }
 
 fn require_admin_user(wr: &WibbleRequest) -> Result<&AuthUser, Error> {

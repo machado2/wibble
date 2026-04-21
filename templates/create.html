@@ -43,7 +43,7 @@
       </div>
       {% endif %}
 
-      <form action="/create" method="post" class="create-form">
+      <form action="{{ locale_prefix }}/create" method="post" class="create-form">
         <fieldset class="mode-card-fieldset">
           <legend class="form-label">{{ ui.create.desk_mode }}</legend>
           <div class="mode-card-grid">
@@ -70,7 +70,7 @@
                   {% if logged_in %}
                   {{ research_quota_note }}
                   {% else %}
-                  <a href="/login">{{ ui.create.mode_research_login_prefix }}</a> {{ ui.create.mode_research_login_suffix }}
+                  <a href="{{ locale_prefix }}/login">{{ ui.create.mode_research_login_prefix }}</a> {{ ui.create.mode_research_login_suffix }}
                   {% endif %}
                 </span>
               </span>

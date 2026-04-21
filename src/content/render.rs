@@ -11,11 +11,12 @@ fn article_image_regex() -> &'static Regex {
     })
 }
 
-fn link_article_images(html: &str) -> String {
+fn link_article_images(html: &str, locale_prefix: &str) -> String {
     article_image_regex()
         .replace_all(html, |caps: &regex::Captures<'_>| {
             format!(
-                r#"<a href="/image_info/{id}" class="article-image-link">{img}</a>"#,
+                r#"<a href="{locale_prefix}/image_info/{id}" class="article-image-link">{img}</a>"#,
+                locale_prefix = locale_prefix,
                 id = &caps[2],
                 img = &caps[0],
             )
@@ -23,10 +24,10 @@ fn link_article_images(html: &str) -> String {
         .into_owned()
 }
 
-pub fn markdown_to_html(markdown_str: &str) -> String {
+pub fn markdown_to_html(markdown_str: &str, locale_prefix: &str) -> String {
     let html = to_html_with_options(markdown_str, &Options::gfm())
         .unwrap_or_else(|_| to_html(markdown_str));
-    link_article_images(&html)
+    link_article_images(&html, locale_prefix)
 }
 
 pub fn strip_leading_description(markdown: &str, description: &str) -> String {
@@ -56,11 +57,12 @@ mod tests {
 
 ![Alt text](/image/abc-123 "Prompt")
 "#,
+            "/pt",
         );
 
         assert!(!rendered.contains("<script>"));
         assert!(rendered.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
-        assert!(rendered.contains(r#"href="/image_info/abc-123""#));
+        assert!(rendered.contains(r#"href="/pt/image_info/abc-123""#));
         assert!(rendered.contains(r#"src="/image/abc-123""#));
     }
 
