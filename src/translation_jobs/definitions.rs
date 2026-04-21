@@ -42,9 +42,9 @@ pub fn request_source_from_preferred_language(
     match source {
         PreferredLanguageSource::Explicit => TranslationJobRequestSource::Explicit,
         PreferredLanguageSource::Cookie => TranslationJobRequestSource::Cookie,
-        PreferredLanguageSource::Browser | PreferredLanguageSource::ArticleSource => {
-            TranslationJobRequestSource::Browser
-        }
+        PreferredLanguageSource::Route
+        | PreferredLanguageSource::Browser
+        | PreferredLanguageSource::ArticleSource => TranslationJobRequestSource::Browser,
     }
 }
 

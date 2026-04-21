@@ -723,6 +723,13 @@ impl SiteText {
                         "Manual selection".to_string()
                     }
                 }
+                PreferredLanguageSource::Route => {
+                    if self.is_portuguese() {
+                        "Idioma da URL".to_string()
+                    } else {
+                        "URL locale".to_string()
+                    }
+                }
                 PreferredLanguageSource::Cookie => {
                     if self.is_portuguese() {
                         "Seleção salva".to_string()

@@ -146,8 +146,13 @@ mod tests {
 
     #[test]
     fn automatic_language_option_is_active_without_explicit_override() {
-        let selection =
-            resolve_article_language(None, None, find_supported_translation_language("pt"), &[]);
+        let selection = resolve_article_language(
+            None,
+            None,
+            None,
+            find_supported_translation_language("pt"),
+            &[],
+        );
 
         let options = build_article_language_options(
             "story-slug",
@@ -163,8 +168,13 @@ mod tests {
 
     #[test]
     fn requested_language_option_stays_active_while_falling_back() {
-        let selection =
-            resolve_article_language(find_supported_translation_language("pt"), None, None, &[]);
+        let selection = resolve_article_language(
+            find_supported_translation_language("pt"),
+            None,
+            None,
+            None,
+            &[],
+        );
 
         let options = build_article_language_options(
             "story-slug",
@@ -185,6 +195,7 @@ mod tests {
     #[test]
     fn saved_language_option_is_marked_active_from_cookie_preference() {
         let selection = resolve_article_language(
+            None,
             None,
             find_supported_translation_language("pt"),
             find_supported_translation_language("fr"),
@@ -210,6 +221,7 @@ mod tests {
     #[test]
     fn saved_language_option_notes_saved_preference_when_translation_is_available() {
         let selection = resolve_article_language(
+            None,
             None,
             find_supported_translation_language("pt"),
             find_supported_translation_language("fr"),

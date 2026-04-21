@@ -15,6 +15,7 @@ use crate::services::article_language::{
     requested_article_language_query_value, resolve_article_language,
     resolve_requested_article_language,
 };
+use crate::services::site_paths::detect_site_language_from_path;
 use crate::wibble_request::WibbleRequest;
 
 use self::actions::{post_comment, post_vote};
@@ -54,6 +55,7 @@ async fn get_content(
     Path(slug): Path<String>,
     Query(query): Query<ContentQuery>,
 ) -> Result<Response, Error> {
+    let route_language = detect_site_language_from_path(&wr.request_path);
     let requested_language = resolve_requested_article_language(query.lang.as_deref());
     if let Some(raw_language) = query.lang.as_deref() {
         let canonical_language = requested_language.map(requested_article_language_query_value);
@@ -69,9 +71,14 @@ async fn get_content(
             .into_response());
         }
     }
-    let requested_language = requested_language.unwrap_or(None);
-    let automatic_selection =
-        resolve_article_language(None, None, wr.browser_translation_language, &[]);
+    let requested_language = requested_language.unwrap_or(route_language);
+    let automatic_selection = resolve_article_language(
+        None,
+        route_language,
+        None,
+        wr.browser_translation_language,
+        &[],
+    );
     let cookie_header = article_language_cookie_header(
         wr.site_language,
         &slug,

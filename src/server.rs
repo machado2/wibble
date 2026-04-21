@@ -1,8 +1,9 @@
-use axum::{middleware, Router};
+use axum::{middleware, routing::get, Router};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 use crate::app_state::AppState;
+use crate::llm::prompt_registry::supported_translation_languages;
 use crate::rate_limit::rate_limit_middleware;
 use crate::routes::{admin, auth, content, create, edit, legacy, public};
 
@@ -17,12 +18,28 @@ pub fn build_router(state: AppState) -> Router {
         .merge(auth::localized_router())
         .layer(middleware::from_fn(legacy::persist_site_language_cookie));
 
-    Router::new()
+    let mut router = Router::new()
         .merge(public::global_router())
         .merge(auth::global_callback_router())
-        .merge(legacy::router())
-        .nest("/en", localized_app.clone())
-        .nest("/pt", localized_app)
+        .merge(legacy::router());
+
+    for language in supported_translation_languages() {
+        router = router
+            .route(
+                &format!("/{code}", code = language.code),
+                get(public::get_localized_index),
+            )
+            .route(
+                &format!("/{code}/", code = language.code),
+                get(public::get_localized_index),
+            )
+            .nest(
+                &format!("/{code}", code = language.code),
+                localized_app.clone(),
+            );
+    }
+
+    router
         .fallback_service(serve_dir)
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn_with_state(
@@ -65,7 +82,28 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let response = app
+            .clone()
             .oneshot(Request::builder().uri("/pt/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/es/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/es/create")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

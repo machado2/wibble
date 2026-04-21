@@ -9,6 +9,7 @@ pub const AUTOMATIC_LANGUAGE_QUERY_VALUE: &str = "auto";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PreferredLanguageSource {
     Explicit,
+    Route,
     Cookie,
     Browser,
     ArticleSource,
@@ -39,6 +40,7 @@ pub fn article_source_language() -> SupportedTranslationLanguage {
 
 pub fn resolve_article_language(
     explicit_language: Option<SupportedTranslationLanguage>,
+    route_language: Option<SupportedTranslationLanguage>,
     saved_language: Option<SupportedTranslationLanguage>,
     browser_language: Option<SupportedTranslationLanguage>,
     available_translations: &[SupportedTranslationLanguage],
@@ -47,11 +49,14 @@ pub fn resolve_article_language(
 
     let (preferred_language, preferred_language_source) = match explicit_language {
         Some(language) => (language, PreferredLanguageSource::Explicit),
-        None => match saved_language {
-            Some(language) => (language, PreferredLanguageSource::Cookie),
-            None => match browser_language {
-                Some(language) => (language, PreferredLanguageSource::Browser),
-                None => (source_language, PreferredLanguageSource::ArticleSource),
+        None => match route_language {
+            Some(language) => (language, PreferredLanguageSource::Route),
+            None => match saved_language {
+                Some(language) => (language, PreferredLanguageSource::Cookie),
+                None => match browser_language {
+                    Some(language) => (language, PreferredLanguageSource::Browser),
+                    None => (source_language, PreferredLanguageSource::ArticleSource),
+                },
             },
         },
     };
@@ -136,6 +141,7 @@ mod tests {
         let selection = resolve_article_language(
             find_supported_translation_language("pt"),
             None,
+            None,
             browser_language,
             &available_translations,
         );
@@ -158,7 +164,7 @@ mod tests {
         let available_translations = [find_supported_translation_language("es").unwrap()];
 
         let selection =
-            resolve_article_language(None, None, browser_language, &available_translations);
+            resolve_article_language(None, None, None, browser_language, &available_translations);
 
         assert_eq!(selection.preferred_language.code, "es");
         assert_eq!(
@@ -172,7 +178,7 @@ mod tests {
     fn missing_translation_falls_back_to_source_article_immediately() {
         let browser_language = find_supported_translation_language("pt");
 
-        let selection = resolve_article_language(None, None, browser_language, &[]);
+        let selection = resolve_article_language(None, None, None, browser_language, &[]);
 
         assert_eq!(selection.preferred_language.code, "pt");
         assert!(selection.translation_requested);
@@ -190,7 +196,7 @@ mod tests {
         let available_translations = [find_supported_translation_language("de").unwrap()];
 
         let selection =
-            resolve_article_language(None, None, browser_language, &available_translations);
+            resolve_article_language(None, None, None, browser_language, &available_translations);
 
         assert_eq!(selection.preferred_language.code, "de");
         assert_eq!(
@@ -205,12 +211,32 @@ mod tests {
         let saved_language = find_supported_translation_language("pt");
         let browser_language = find_supported_translation_language("fr");
 
-        let selection = resolve_article_language(None, saved_language, browser_language, &[]);
+        let selection = resolve_article_language(None, None, saved_language, browser_language, &[]);
 
         assert_eq!(selection.preferred_language.code, "pt");
         assert_eq!(
             selection.preferred_language_source,
             PreferredLanguageSource::Cookie
+        );
+    }
+
+    #[test]
+    fn route_language_beats_saved_cookie_and_browser_language() {
+        let saved_language = find_supported_translation_language("pt");
+        let browser_language = find_supported_translation_language("fr");
+
+        let selection = resolve_article_language(
+            None,
+            find_supported_translation_language("es"),
+            saved_language,
+            browser_language,
+            &[],
+        );
+
+        assert_eq!(selection.preferred_language.code, "es");
+        assert_eq!(
+            selection.preferred_language_source,
+            PreferredLanguageSource::Route
         );
     }
 

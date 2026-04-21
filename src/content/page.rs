@@ -13,6 +13,7 @@ use crate::services::article_language::{
 use crate::services::article_translations::{
     cached_translation_languages, load_cached_article_translation, ArticleSourceText,
 };
+use crate::services::site_paths::detect_site_language_from_path;
 use crate::services::site_text::SiteText;
 use crate::translation_jobs::{
     request_article_translation, request_source_from_preferred_language,
@@ -57,12 +58,15 @@ pub(super) fn build_article_language_options(
 ) -> Vec<ArticleLanguageOption> {
     let automatic_note =
         text.article_language_automatic_note(browser_language, selection.source_language);
+    let route_selected_source =
+        selection.preferred_language_source == PreferredLanguageSource::Route;
     let mut options = vec![
         ArticleLanguageOption {
             href: article_language_href(site_language, slug, Some("auto")),
             label: text.article_language_automatic_label().to_string(),
             note: automatic_note,
-            active: !uses_manual_article_language_preference(selection.preferred_language_source),
+            active: !uses_manual_article_language_preference(selection.preferred_language_source)
+                && !route_selected_source,
         },
         ArticleLanguageOption {
             href: article_language_href(site_language, slug, Some(selection.source_language.code)),
@@ -70,7 +74,8 @@ pub(super) fn build_article_language_options(
                 text.translation_language_name(selection.source_language),
             ),
             note: text.article_language_original_note().to_string(),
-            active: uses_manual_article_language_preference(selection.preferred_language_source)
+            active: (uses_manual_article_language_preference(selection.preferred_language_source)
+                || route_selected_source)
                 && selection.preferred_language.code == selection.source_language.code,
         },
     ];
@@ -84,7 +89,11 @@ pub(super) fn build_article_language_options(
                 let manually_selected =
                     uses_manual_article_language_preference(selection.preferred_language_source)
                         && selection.preferred_language.code == language.code;
-                let note = if manually_selected && !selection.translation_available {
+                let route_selected = selection.preferred_language_source
+                    == PreferredLanguageSource::Route
+                    && selection.preferred_language.code == language.code;
+                let active = manually_selected || route_selected;
+                let note = if active && !selection.translation_available {
                     text.article_language_requested_note(
                         text.translation_language_name(selection.served_language),
                     )
@@ -92,7 +101,7 @@ pub(super) fn build_article_language_options(
                     && selection.preferred_language_source == PreferredLanguageSource::Cookie
                 {
                     text.article_language_saved_note().to_string()
-                } else if manually_selected {
+                } else if active {
                     text.article_language_selected_note().to_string()
                 } else {
                     text.article_language_open_when_available().to_string()
@@ -102,7 +111,7 @@ pub(super) fn build_article_language_options(
                     href: article_language_href(site_language, slug, Some(language.code)),
                     label: text.translation_language_name(language).to_string(),
                     note,
-                    active: manually_selected,
+                    active,
                 }
             }),
     );
@@ -186,8 +195,10 @@ pub(super) async fn render_content_page(
     };
     let mut available_translations =
         cached_translation_languages(&request.state.db, source_article).await?;
+    let route_language = detect_site_language_from_path(&request.request_path);
     let mut language_selection = resolve_article_language(
         requested_language,
+        route_language,
         request.saved_article_language,
         request.browser_translation_language,
         &available_translations,
@@ -210,6 +221,7 @@ pub(super) async fn render_content_page(
             .retain(|language| language.code != language_selection.served_language.code);
         language_selection = resolve_article_language(
             requested_language,
+            route_language,
             request.saved_article_language,
             request.browser_translation_language,
             &available_translations,
@@ -291,6 +303,7 @@ pub(super) async fn render_content_page(
             "preferred_article_language_source",
             match language_selection.preferred_language_source {
                 PreferredLanguageSource::Explicit => "explicit",
+                PreferredLanguageSource::Route => "route",
                 PreferredLanguageSource::Cookie => "cookie",
                 PreferredLanguageSource::Browser => "browser",
                 PreferredLanguageSource::ArticleSource => "source",

@@ -5,7 +5,6 @@ use http::HeaderMap;
 use crate::llm::prompt_registry::{
     find_supported_translation_language, SupportedTranslationLanguage,
 };
-
 pub const SITE_LANGUAGE_COOKIE_NAME: &str = "__site_lang";
 
 fn english_site_language() -> SupportedTranslationLanguage {
@@ -22,9 +21,12 @@ pub fn supported_site_languages() -> [SupportedTranslationLanguage; 2] {
 }
 
 pub fn find_supported_site_language(value: &str) -> Option<SupportedTranslationLanguage> {
-    supported_site_languages()
-        .into_iter()
-        .find(|language| language.code.eq_ignore_ascii_case(value))
+    find_supported_translation_language(value).or_else(|| {
+        value
+            .split(['-', '_'])
+            .next()
+            .and_then(find_supported_translation_language)
+    })
 }
 
 pub fn detect_site_language_from_path(path: &str) -> Option<SupportedTranslationLanguage> {
@@ -37,15 +39,16 @@ pub fn detect_site_language_from_path(path: &str) -> Option<SupportedTranslation
 }
 
 pub fn site_relative_path(path_and_query: &str) -> String {
-    for language in supported_site_languages() {
-        let prefix = format!("/{}", language.code);
-        if path_and_query == prefix || path_and_query == format!("{}/", prefix) {
-            return "/".to_string();
-        }
-        if let Some(rest) = path_and_query.strip_prefix(&prefix) {
-            if rest.is_empty() {
-                return "/".to_string();
-            }
+    let normalized = if path_and_query.starts_with('/') {
+        path_and_query
+    } else {
+        return format!("/{}", path_and_query);
+    };
+    let trimmed = normalized.trim_start_matches('/');
+    if let Some(separator_index) = trimmed.find(['/', '?']) {
+        let locale = &trimmed[..separator_index];
+        if find_supported_site_language(locale).is_some() {
+            let rest = &trimmed[separator_index..];
             if rest.starts_with('/') {
                 return rest.to_string();
             }
@@ -53,14 +56,14 @@ pub fn site_relative_path(path_and_query: &str) -> String {
                 return format!("/{}", rest);
             }
         }
+    } else if find_supported_site_language(trimmed).is_some() {
+        return "/".to_string();
     }
 
-    if path_and_query.is_empty() {
+    if normalized.is_empty() {
         "/".to_string()
-    } else if path_and_query.starts_with('/') {
-        path_and_query.to_string()
     } else {
-        format!("/{}", path_and_query)
+        normalized.to_string()
     }
 }
 
@@ -121,13 +124,20 @@ mod tests {
     fn finds_supported_site_language_codes() {
         assert_eq!(find_supported_site_language("en").unwrap().code, "en");
         assert_eq!(find_supported_site_language("pt").unwrap().code, "pt");
-        assert!(find_supported_site_language("es").is_none());
+        assert_eq!(find_supported_site_language("es").unwrap().code, "es");
+        assert_eq!(find_supported_site_language("pt-BR").unwrap().code, "pt");
     }
 
     #[test]
     fn detects_locale_prefix_from_path() {
         assert_eq!(
             detect_site_language_from_path("/pt/content/story")
+                .unwrap()
+                .code,
+            "pt"
+        );
+        assert_eq!(
+            detect_site_language_from_path("/pt-BR/content/story")
                 .unwrap()
                 .code,
             "pt"
@@ -146,6 +156,10 @@ mod tests {
         let english = find_supported_site_language("en").unwrap();
         assert_eq!(
             site_relative_path("/pt/content/story?lang=fr"),
+            "/content/story?lang=fr"
+        );
+        assert_eq!(
+            site_relative_path("/pt-BR/content/story?lang=fr"),
             "/content/story?lang=fr"
         );
         assert_eq!(
