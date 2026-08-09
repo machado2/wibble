@@ -2,6 +2,11 @@
 
 [Wibble News](https://wibble.news) is a site where one can generate articles with images using LLM and Stable Diffusion or Dalle. Used mostly for satire, where the LLM being wrong doesn't harm
 
+The public application is intentionally English-only and follows the original
+2024 flow: enter one prompt, wait, and receive a public article. It has no
+public accounts, private drafts, research modes, comments, votes, or automatic
+translation pipeline.
+
 ## Language model
 
 To use the current OpenAI Responses API directly, configure:
@@ -23,8 +28,10 @@ OpenRouter and OpenCode-compatible endpoints continue to use Chat Completions.
 
 ## Authentication
 
-Wibble uses `sso.fbmac.net` as an OpenID Connect provider with Authorization
-Code and PKCE. Configure the client registered in the SSO with:
+SSO is reserved for administrative access. Public article generation does not
+require or benefit from signing in. Wibble uses `sso.fbmac.net` as an OpenID
+Connect provider with Authorization Code and PKCE. Configure the administrative
+client registered in the SSO with:
 
 ```dotenv
 SSO_ISSUER_URL=https://sso.fbmac.net/api/auth
@@ -43,6 +50,9 @@ Replicate is the default image provider. Configure it with:
 ```dotenv
 IMAGE_MODE=replicate
 REPLICATE_API_TOKEN=your-replicate-token
+
+# Safety brake: serialize prediction creation and wait 30 seconds between calls.
+REPLICATE_MIN_REQUEST_INTERVAL_SECONDS=30
 ```
 
 The default model endpoint is FLUX Schnell:

@@ -31,7 +31,11 @@ pub async fn start_create_article(
     } else {
         job_service.check_create_rate_limit(requester_tier, &rate_limit_key)?;
     }
-    let clarification = build_clarification_request(&prompt);
+    let clarification = if selected_mode == CreateModeSelection::Standard {
+        None
+    } else {
+        build_clarification_request(&prompt)
+    };
     let permit = if clarification.is_none() {
         Some(job_service.try_acquire_generation_slot("create")?)
     } else {

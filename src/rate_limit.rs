@@ -19,12 +19,6 @@ pub enum ArticleRateLimit {
     Daily,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TranslationRateLimit {
-    Hourly,
-    Daily,
-}
-
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum RequesterTier {
     Anonymous,
@@ -63,7 +57,6 @@ pub enum RateLimitCapability {
     PlainArticleGeneration,
     ResearchGeneration,
     EditAgentRequest,
-    BackgroundTranslation,
     ImageRegeneration,
     ClarifyingQuestion,
 }
@@ -74,7 +67,6 @@ impl RateLimitCapability {
             Self::PlainArticleGeneration => "MAX_ARTICLES",
             Self::ResearchGeneration => "MAX_RESEARCH_ARTICLES",
             Self::EditAgentRequest => "MAX_EDIT_AGENT_REQUESTS",
-            Self::BackgroundTranslation => "MAX_TRANSLATIONS",
             Self::ImageRegeneration => "MAX_IMAGE_REGENERATIONS",
             Self::ClarifyingQuestion => "MAX_CLARIFYING_QUESTIONS",
         }
@@ -85,7 +77,6 @@ impl RateLimitCapability {
             Self::PlainArticleGeneration => "plain_article_generation",
             Self::ResearchGeneration => "research_generation",
             Self::EditAgentRequest => "edit_agent_request",
-            Self::BackgroundTranslation => "background_translation",
             Self::ImageRegeneration => "image_regeneration",
             Self::ClarifyingQuestion => "clarifying_question",
         }
@@ -107,11 +98,6 @@ impl RateLimitCapability {
                 RequesterTier::Anonymous => CapabilityDefaults::new(1, 2),
                 RequesterTier::Authenticated => CapabilityDefaults::new(10, 20),
                 RequesterTier::Admin => CapabilityDefaults::new(40, 80),
-            },
-            Self::BackgroundTranslation => match tier {
-                RequesterTier::Anonymous => CapabilityDefaults::new(20, 50),
-                RequesterTier::Authenticated => CapabilityDefaults::new(40, 100),
-                RequesterTier::Admin => CapabilityDefaults::new(200, 500),
             },
             Self::ImageRegeneration => match tier {
                 RequesterTier::Anonymous => CapabilityDefaults::new(1, 2),
@@ -298,7 +284,6 @@ impl RateLimitState {
             RateLimitCapability::PlainArticleGeneration,
             RateLimitCapability::ResearchGeneration,
             RateLimitCapability::EditAgentRequest,
-            RateLimitCapability::BackgroundTranslation,
             RateLimitCapability::ImageRegeneration,
             RateLimitCapability::ClarifyingQuestion,
         ];
@@ -417,18 +402,6 @@ impl RateLimitState {
             })
     }
 
-    pub fn check_translation_generation_limit(
-        &self,
-        tier: RequesterTier,
-        key: &str,
-    ) -> Result<(), TranslationRateLimit> {
-        self.check_capability_limit(RateLimitCapability::BackgroundTranslation, tier, key)
-            .map_err(|window| match window {
-                LimitWindow::Hourly => TranslationRateLimit::Hourly,
-                LimitWindow::Daily => TranslationRateLimit::Daily,
-            })
-    }
-
     pub fn quota_summary_for(
         capability: RateLimitCapability,
         tier: RequesterTier,
@@ -544,38 +517,6 @@ mod tests {
         );
         assert!(state
             .check_article_generation_limit(RequesterTier::Authenticated, "user:other@example.com")
-            .is_ok());
-    }
-
-    #[tokio::test]
-    async fn translation_hourly_burst_blocks_same_key_only() {
-        let state = RateLimitState::new();
-        let max = RateLimitState::capability_limit(
-            RateLimitCapability::BackgroundTranslation,
-            RequesterTier::Anonymous,
-            LimitWindow::Hourly,
-        );
-        let burst = RateLimitState::capability_burst(
-            RateLimitCapability::BackgroundTranslation,
-            RequesterTier::Anonymous,
-            LimitWindow::Hourly,
-            max,
-        );
-        for i in 0..burst {
-            assert!(
-                state
-                    .check_translation_generation_limit(RequesterTier::Anonymous, "anon-a")
-                    .is_ok(),
-                "failed at {}",
-                i
-            );
-        }
-        assert_eq!(
-            state.check_translation_generation_limit(RequesterTier::Anonymous, "anon-a"),
-            Err(TranslationRateLimit::Hourly)
-        );
-        assert!(state
-            .check_translation_generation_limit(RequesterTier::Anonymous, "anon-b")
             .is_ok());
     }
 

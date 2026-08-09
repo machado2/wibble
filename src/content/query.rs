@@ -4,7 +4,6 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tracing::{event, warn, Level};
 
 use crate::article_id::{canonical_article_id, normalize_optional_content_model};
-use crate::auth::AuthUser;
 use crate::create::{render_wait_page, start_recover_article_for_slug};
 use crate::entities::{content, content_image, prelude::*};
 use crate::error::Error;
@@ -83,64 +82,6 @@ pub async fn require_article_by_slug(
     find_article_by_slug(db, slug)
         .await?
         .ok_or_else(|| article_not_found(slug))
-}
-
-pub async fn find_article_after_id(
-    db: &DatabaseConnection,
-    slug: &str,
-    after_id: Option<String>,
-) -> Result<content::Model, Error> {
-    Content::find()
-        .filter(content::Column::Slug.contains(slug))
-        .filter(content::Column::Id.gt(after_id.unwrap_or_default()))
-        .one(db)
-        .await
-        .map(normalize_optional_content_model)
-        .map_err(|e| Error::Database(format!("Database error reading content: {}", e)))?
-        .ok_or_else(|| content_not_found(slug))
-}
-
-pub async fn increment_click_count(db: &DatabaseConnection, article_id: &str) -> Result<(), Error> {
-    Content::update_many()
-        .filter(content::Column::Id.eq(canonical_article_id(article_id)))
-        .col_expr(
-            content::Column::ClickCount,
-            Expr::col(content::Column::ClickCount).add(1),
-        )
-        .exec(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error updating click count: {}", e)))?;
-    Ok(())
-}
-
-pub async fn load_user_vote(
-    db: &DatabaseConnection,
-    article_id: &str,
-    auth_user: Option<&AuthUser>,
-    interactions_open: bool,
-) -> Result<String, Error> {
-    if !interactions_open {
-        return Ok(String::new());
-    }
-
-    let Some(auth_user) = auth_user else {
-        return Ok(String::new());
-    };
-
-    Ok(
-        ContentVote::find_by_id((article_id.to_string(), auth_user.email.clone()))
-            .one(db)
-            .await
-            .map_err(|e| Error::Database(format!("Error loading vote: {}", e)))?
-            .map(|vote| {
-                if vote.downvote {
-                    "down".to_string()
-                } else {
-                    "up".to_string()
-                }
-            })
-            .unwrap_or_default(),
-    )
 }
 
 pub async fn load_content_page_article(

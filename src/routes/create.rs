@@ -29,13 +29,10 @@ struct WaitClarificationData {
 }
 
 async fn get_wait(wr: WibbleRequest, Path(id): Path<String>) -> Response {
-    let site_language = wr.site_language;
     match create_page::wait(wr, &id).await {
-        create_page::WaitResponse::Redirect(slug) => Redirect::to(&localized_path(
-            site_language,
-            &format!("/content/{}", slug),
-        ))
-        .into_response(),
+        create_page::WaitResponse::Redirect(slug) => {
+            Redirect::to(&localized_path(&format!("/content/{}", slug))).into_response()
+        }
         create_page::WaitResponse::Html(html) => html.into_response(),
         create_page::WaitResponse::NotFound => StatusCode::NOT_FOUND.into_response(),
         create_page::WaitResponse::InternalError => {
@@ -48,7 +45,8 @@ async fn create_article(
     wr: WibbleRequest,
     Form(data): Form<create_page::PostCreateData>,
 ) -> impl IntoResponse {
-    let author_email = wr.auth_user.as_ref().map(|u| u.email.clone());
+    // Public generation intentionally has no user accounts or private drafts.
+    let author_email = None;
     let selected_mode = match create_page::normalize_create_mode(data.mode.as_deref()) {
         Ok(mode) => mode,
         Err(Error::BadRequest(message)) => {

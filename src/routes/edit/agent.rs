@@ -123,16 +123,8 @@ pub(super) async fn render_agent_edit_preview(
             &build_unified_diff(
                 &article.title,
                 &proposal.title,
-                if text.language().code == "pt" {
-                    "título atual"
-                } else {
-                    "current title"
-                },
-                if text.language().code == "pt" {
-                    "título proposto"
-                } else {
-                    "proposed title"
-                },
+                "current title",
+                "proposed title",
             ),
         )
         .insert(
@@ -140,16 +132,8 @@ pub(super) async fn render_agent_edit_preview(
             &build_unified_diff(
                 &article.description,
                 &proposal.description,
-                if text.language().code == "pt" {
-                    "descrição atual"
-                } else {
-                    "current description"
-                },
-                if text.language().code == "pt" {
-                    "descrição proposta"
-                } else {
-                    "proposed description"
-                },
+                "current description",
+                "proposed description",
             ),
         )
         .insert(
@@ -157,16 +141,8 @@ pub(super) async fn render_agent_edit_preview(
             &build_unified_diff(
                 current_markdown,
                 &proposal.markdown,
-                if text.language().code == "pt" {
-                    "markdown atual"
-                } else {
-                    "current markdown"
-                },
-                if text.language().code == "pt" {
-                    "markdown proposto"
-                } else {
-                    "proposed markdown"
-                },
+                "current markdown",
+                "proposed markdown",
             ),
         )
         .render()

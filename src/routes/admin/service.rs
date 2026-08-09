@@ -8,19 +8,12 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::app_state::AppState;
-use crate::entities::{
-    article_job, audit_log, content as content_entity, prelude::*, translation_job,
-};
+use crate::entities::{article_job, audit_log, content as content_entity, prelude::*};
 use crate::error::Error;
 use crate::rate_limit::RateLimitMetricsSnapshot;
 use crate::services::article_jobs::{
     ARTICLE_JOB_STATUS_CANCELLED, ARTICLE_JOB_STATUS_COMPLETED, ARTICLE_JOB_STATUS_FAILED,
     ARTICLE_JOB_STATUS_PROCESSING, ARTICLE_JOB_STATUS_QUEUED,
-};
-use crate::translation_jobs::{
-    TRANSLATION_JOB_STATUS_CANCELLED, TRANSLATION_JOB_STATUS_COMPLETED,
-    TRANSLATION_JOB_STATUS_FAILED, TRANSLATION_JOB_STATUS_PROCESSING,
-    TRANSLATION_JOB_STATUS_QUEUED,
 };
 
 #[derive(Serialize)]
@@ -108,23 +101,6 @@ pub(super) struct ArticleJobRow {
     can_cancel: bool,
 }
 
-#[derive(Serialize)]
-pub(super) struct TranslationJobRow {
-    id: String,
-    article_id: String,
-    article_title: Option<String>,
-    article_slug: Option<String>,
-    language_code: String,
-    request_source: String,
-    priority: i32,
-    status: String,
-    fail_count: i32,
-    updated_at: String,
-    next_retry_at: Option<String>,
-    last_error: Option<String>,
-    can_cancel: bool,
-}
-
 pub(super) struct AdminArticlesPageData {
     pub(super) articles: Vec<AdminArticleRow>,
     pub(super) current_sort: String,
@@ -136,15 +112,12 @@ pub(super) struct AdminArticlesPageData {
 
 pub(super) struct AdminJobsPageData {
     pub(super) article_status_counts: Vec<StatusCount>,
-    pub(super) translation_status_counts: Vec<StatusCount>,
     pub(super) requester_summaries: Vec<RequesterSummary>,
     pub(super) feature_usage: Vec<FeatureUsageSummary>,
     pub(super) audit_summaries: Vec<AuditActionSummary>,
     pub(super) rate_limit_metrics: RateLimitMetricsSnapshot,
     pub(super) active_article_jobs: Vec<ArticleJobRow>,
     pub(super) failed_article_jobs: Vec<ArticleJobRow>,
-    pub(super) active_translation_jobs: Vec<TranslationJobRow>,
-    pub(super) failed_translation_jobs: Vec<TranslationJobRow>,
 }
 
 pub(super) async fn load_admin_articles_page(
@@ -181,7 +154,7 @@ pub(super) async fn load_admin_articles_page(
         .count(db)
         .await
         .map_err(|e| Error::Database(format!("Error counting articles: {}", e)))?;
-    let total_pages = (total as u64).div_ceil(per_page);
+    let total_pages = total.div_ceil(per_page);
 
     Ok(AdminArticlesPageData {
         articles: articles.into_iter().map(admin_article_row).collect(),
@@ -196,7 +169,6 @@ pub(super) async fn load_admin_articles_page(
 pub(super) async fn load_admin_jobs_page(state: &AppState) -> Result<AdminJobsPageData, Error> {
     let db = &state.db;
     let article_jobs_recent = load_recent_article_jobs(db, 200).await?;
-    let translation_jobs_recent = load_recent_translation_jobs(db, 200).await?;
     let active_article_jobs = load_article_jobs_by_statuses(
         db,
         &[ARTICLE_JOB_STATUS_QUEUED, ARTICLE_JOB_STATUS_PROCESSING],
@@ -209,41 +181,16 @@ pub(super) async fn load_admin_jobs_page(state: &AppState) -> Result<AdminJobsPa
         50,
     )
     .await?;
-    let active_translation_jobs = load_translation_jobs_by_statuses(
-        db,
-        &[
-            TRANSLATION_JOB_STATUS_QUEUED,
-            TRANSLATION_JOB_STATUS_PROCESSING,
-        ],
-        50,
-    )
-    .await?;
-    let failed_translation_jobs = load_translation_jobs_by_statuses(
-        db,
-        &[
-            TRANSLATION_JOB_STATUS_FAILED,
-            TRANSLATION_JOB_STATUS_CANCELLED,
-        ],
-        50,
-    )
-    .await?;
-
     let content_map = load_content_metadata_map(
         db,
         article_jobs_recent
             .iter()
-            .filter_map(article_job_content_id)
-            .chain(
-                translation_jobs_recent
-                    .iter()
-                    .map(|job| job.article_id.clone()),
-            ),
+            .filter_map(article_job_content_id),
     )
     .await?;
 
     Ok(AdminJobsPageData {
         article_status_counts: load_article_status_counts(db).await?,
-        translation_status_counts: load_translation_status_counts(db).await?,
         requester_summaries: build_requester_summaries(&article_jobs_recent),
         feature_usage: build_feature_usage_summaries(&article_jobs_recent),
         audit_summaries: load_recent_audit_action_summaries(db, 200).await?,
@@ -255,14 +202,6 @@ pub(super) async fn load_admin_jobs_page(state: &AppState) -> Result<AdminJobsPa
         failed_article_jobs: failed_article_jobs
             .iter()
             .map(|job| article_job_row(job, &content_map))
-            .collect(),
-        active_translation_jobs: active_translation_jobs
-            .iter()
-            .map(|job| translation_job_row(job, &content_map))
-            .collect(),
-        failed_translation_jobs: failed_translation_jobs
-            .iter()
-            .map(|job| translation_job_row(job, &content_map))
             .collect(),
     })
 }
@@ -316,33 +255,6 @@ async fn load_article_status_counts(db: &DatabaseConnection) -> Result<Vec<Statu
     ])
 }
 
-async fn load_translation_status_counts(
-    db: &DatabaseConnection,
-) -> Result<Vec<StatusCount>, Error> {
-    Ok(vec![
-        StatusCount {
-            label: "queued",
-            count: count_translation_jobs_by_status(db, TRANSLATION_JOB_STATUS_QUEUED).await?,
-        },
-        StatusCount {
-            label: "processing",
-            count: count_translation_jobs_by_status(db, TRANSLATION_JOB_STATUS_PROCESSING).await?,
-        },
-        StatusCount {
-            label: "completed",
-            count: count_translation_jobs_by_status(db, TRANSLATION_JOB_STATUS_COMPLETED).await?,
-        },
-        StatusCount {
-            label: "failed",
-            count: count_translation_jobs_by_status(db, TRANSLATION_JOB_STATUS_FAILED).await?,
-        },
-        StatusCount {
-            label: "cancelled",
-            count: count_translation_jobs_by_status(db, TRANSLATION_JOB_STATUS_CANCELLED).await?,
-        },
-    ])
-}
-
 async fn load_recent_article_jobs(
     db: &DatabaseConnection,
     limit: u64,
@@ -353,18 +265,6 @@ async fn load_recent_article_jobs(
         .all(db)
         .await
         .map_err(|e| Error::Database(format!("Error loading article jobs: {}", e)))
-}
-
-async fn load_recent_translation_jobs(
-    db: &DatabaseConnection,
-    limit: u64,
-) -> Result<Vec<translation_job::Model>, Error> {
-    TranslationJob::find()
-        .order_by_desc(translation_job::Column::CreatedAt)
-        .limit(limit)
-        .all(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error loading translation jobs: {}", e)))
 }
 
 async fn load_article_jobs_by_statuses(
@@ -381,37 +281,12 @@ async fn load_article_jobs_by_statuses(
         .map_err(|e| Error::Database(format!("Error loading filtered article jobs: {}", e)))
 }
 
-async fn load_translation_jobs_by_statuses(
-    db: &DatabaseConnection,
-    statuses: &[&str],
-    limit: u64,
-) -> Result<Vec<translation_job::Model>, Error> {
-    TranslationJob::find()
-        .filter(translation_job::Column::Status.is_in(statuses.iter().copied()))
-        .order_by_desc(translation_job::Column::UpdatedAt)
-        .limit(limit)
-        .all(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error loading filtered translation jobs: {}", e)))
-}
-
 async fn count_article_jobs_by_status(db: &DatabaseConnection, status: &str) -> Result<u64, Error> {
     ArticleJob::find()
         .filter(article_job::Column::Status.eq(status))
         .count(db)
         .await
         .map_err(|e| Error::Database(format!("Error counting article jobs: {}", e)))
-}
-
-async fn count_translation_jobs_by_status(
-    db: &DatabaseConnection,
-    status: &str,
-) -> Result<u64, Error> {
-    TranslationJob::find()
-        .filter(translation_job::Column::Status.eq(status))
-        .count(db)
-        .await
-        .map_err(|e| Error::Database(format!("Error counting translation jobs: {}", e)))
 }
 
 async fn load_content_metadata_map<I>(
@@ -491,33 +366,6 @@ fn article_job_row(
         can_cancel: matches!(
             job.status.as_str(),
             ARTICLE_JOB_STATUS_QUEUED | ARTICLE_JOB_STATUS_PROCESSING
-        ),
-    }
-}
-
-fn translation_job_row(
-    job: &translation_job::Model,
-    content_map: &HashMap<String, ContentMeta>,
-) -> TranslationJobRow {
-    let content_meta = content_map.get(&job.article_id);
-    TranslationJobRow {
-        id: job.id.clone(),
-        article_id: job.article_id.clone(),
-        article_title: content_meta.map(|meta| meta.title.clone()),
-        article_slug: content_meta.map(|meta| meta.slug.clone()),
-        language_code: job.language_code.clone(),
-        request_source: job.request_source.clone(),
-        priority: job.priority,
-        status: job.status.clone(),
-        fail_count: job.fail_count,
-        updated_at: format_time(job.updated_at),
-        next_retry_at: job.next_retry_at.map(format_time),
-        last_error: job.last_error.clone(),
-        can_cancel: matches!(
-            job.status.as_str(),
-            TRANSLATION_JOB_STATUS_QUEUED
-                | TRANSLATION_JOB_STATUS_PROCESSING
-                | TRANSLATION_JOB_STATUS_FAILED
         ),
     }
 }

@@ -153,3 +153,30 @@ textarea {
     align-items: center;
     justify-content: center;
 }
+
+/* Administrative access stays unobtrusive without changing the public theme. */
+.admin-footer {
+    position: fixed;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.admin-footer a {
+    color: #0645ad;
+    margin-left: 0.75rem;
+    opacity: 0.75;
+}
+
+.draft-note {
+    color: #8a1515;
+    font-weight: bold;
+}
+
+.admin-actions {
+    margin-top: 2rem;
+}
+
+.admin-actions a {
+    margin-right: 1rem;
+}

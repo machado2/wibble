@@ -16,7 +16,6 @@ use crate::app_state::AppState;
 use crate::auth::{AuthUser, JwksClient};
 use crate::image_generator::replicate::ReplicateImageGenerator;
 use crate::image_generator::ImageGenerator;
-use crate::llm::prompt_registry::find_supported_translation_language;
 use crate::llm::Llm;
 use crate::rate_limit::RateLimitState;
 
@@ -142,6 +141,7 @@ impl TestContext {
         Self::new_with_overrides(&[]).await
     }
 
+    #[allow(clippy::await_holding_lock)]
     pub async fn new_with_overrides(overrides: &[(&str, &str)]) -> Self {
         let env_guard = test_env_lock()
             .lock()
@@ -179,11 +179,9 @@ pub async fn test_state_for(database_url: &str) -> AppState {
         rate_limit_state: RateLimitState::new(),
         template_auto_reload: true,
         article_generation_semaphore: Arc::new(Semaphore::new(1)),
-        translation_generation_semaphore: Arc::new(Semaphore::new(0)),
         active_article_generations: Arc::new(AtomicUsize::new(0)),
         active_generation_ids: Arc::new(AsyncMutex::new(HashSet::new())),
         active_image_generation_ids: Arc::new(AsyncMutex::new(HashSet::new())),
-        active_translation_generation_ids: Arc::new(AsyncMutex::new(HashSet::new())),
         dead_link_recovery_max_per_day: 0,
         dead_link_recovery_timestamps: Arc::new(AsyncMutex::new(Vec::<Instant>::new())),
         jwks_client: JwksClient::new(),
@@ -207,9 +205,4 @@ pub fn author_user(email: &str) -> AuthUser {
 
 pub fn admin_user() -> AuthUser {
     author_user("admin@example.com")
-}
-
-pub fn preferred_language(code: &str) -> crate::llm::prompt_registry::SupportedTranslationLanguage {
-    find_supported_translation_language(code)
-        .unwrap_or_else(|| panic!("supported language {} should exist", code))
 }

@@ -1,130 +1,30 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="front-page-shell">
-  <div class="front-page-header">
-    <div class="front-page-intro">
-      <p class="home-eyebrow">{% if has_active_search %}{{ ui.index.search_eyebrow }}{% else %}{{ ui.index.front_page_eyebrow }}{% endif %}</p>
-      <h1 class="front-page-title">
-        {% if has_active_search %}
-        {{ search_heading }}
-        {% else %}
-        {{ ui.index.front_page_title }}
-        {% endif %}
-      </h1>
-      <p class="front-page-summary">
-        {% if has_active_search %}
-        {{ ui.index.search_summary }}
-        {% else %}
-        {{ ui.index.front_page_summary }}
-        {% endif %}
-      </p>
-    </div>
-
-    <form action="{{ home_url }}" method="get" class="front-page-search" role="search">
-      {% if current_sort_key == "hot" %}
-      <input type="hidden" name="sort" value="hot">
-      {% endif %}
-      {% if current_time_key != "" %}
-      <input type="hidden" name="t" value="{{ current_time_key }}">
-      {% endif %}
-      <div class="front-page-search-row">
-        <label class="visually-hidden" for="search">{{ ui.index.search_button }}</label>
-        <input id="search" class="form-control front-page-search-input" type="search" name="search" value="{{ current_search }}" placeholder="{{ ui.index.search_placeholder }}">
-        <div class="front-page-search-actions">
-          <button type="submit" class="btn btn-primary">{{ ui.index.search_button }}</button>
-          {% if has_active_search %}
-          <a href="{{ reset_filters_url }}" class="btn btn-outline-secondary">{{ ui.index.clear_button }}</a>
-          {% endif %}
-        </div>
-      </div>
-    </form>
-  </div>
-
-  <div class="front-page-toolbar" aria-label="{{ ui.index.toolbar_aria }}">
-    <div class="front-page-toolbar-group">
-      <span class="front-page-toolbar-label">{{ ui.index.toolbar_order }}</span>
-      <div class="front-page-toolbar-options">
-        {% for option in sort_options %}
-        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
-        {% endfor %}
-      </div>
-    </div>
-    <div class="front-page-toolbar-group">
-      <span class="front-page-toolbar-label">{{ ui.index.toolbar_window }}</span>
-      <div class="front-page-toolbar-options">
-        {% for option in time_options %}
-        <a href="{{ option.url }}" class="sort-link{% if option.active %} active{% endif %}">{{ option.label }}</a>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-</section>
-
-{% if has_results %}
+<ul class="news-list">
   {% if lead_item is defined %}
-  <section class="lead-story card border-0">
-    <a href="{{ locale_prefix }}/content/{{ lead_item.slug }}?source=top" class="lead-story-link{% if not lead_item.image_id %} no-media{% endif %}">
-      {% if lead_item.image_id %}
-      <div class="lead-story-media">
-        <img src="/image/{{ lead_item.image_id }}" class="lead-story-image" alt="{{ lead_item.title }}">
-      </div>
-      {% endif %}
-      <div class="lead-story-copy">
-        <p class="story-kicker">{{ ui.index.lead_report }}</p>
-        <h2 class="lead-story-title">{{ lead_item.title }}</h2>
-        <p class="lead-story-date">{{ lead_item.created_at }}</p>
-        <p class="lead-story-dek">{{ lead_item.description }}</p>
-      </div>
-    </a>
-  </section>
+  <li>
+    <section>
+      {% if lead_item.image_id %}<img src="/image/{{ lead_item.image_id }}" alt="">{% endif %}
+      <h2><a href="{{ locale_prefix }}/content/{{ lead_item.slug }}">{{ lead_item.title }}</a></h2>
+      <time>{{ lead_item.created_at }}</time>
+      <p>{{ lead_item.description }}</p>
+    </section>
+  </li>
   {% endif %}
+  {% for i in secondary_items %}
+  <li>
+    <section>
+      {% if i.image_id %}<img src="/image/{{ i.image_id }}" alt="">{% endif %}
+      <h2><a href="{{ locale_prefix }}/content/{{ i.slug }}">{{ i.title }}</a></h2>
+      <time>{{ i.created_at }}</time>
+      <p>{{ i.description }}</p>
+    </section>
+  </li>
+  {% endfor %}
+</ul>
 
-  {% if secondary_items | length > 0 %}
-  <section class="briefing-section">
-    <div class="section-heading">
-      <p class="home-eyebrow">{{ ui.index.further_notices }}</p>
-      <h2 class="mb-0">{{ ui.index.additional_reports }}</h2>
-    </div>
-    <div class="briefing-grid">
-      {% for i in secondary_items %}
-      <article class="card border-0 briefing-card">
-        <a href="{{ locale_prefix }}/content/{{ i.slug }}{% if loop.index0 < 2 %}?source=top{% endif %}" class="briefing-link stretched-link">
-          {% if i.image_id %}
-          <img src="/image/{{ i.image_id }}" class="briefing-image" alt="{{ i.title }}">
-          {% endif %}
-          <div class="card-body briefing-copy">
-            <p class="briefing-date">{{ i.created_at }}</p>
-            <h3 class="briefing-title">{{ i.title }}</h3>
-            <p class="briefing-dek mb-0">{{ i.description }}</p>
-          </div>
-        </a>
-      </article>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  {% if has_more %}
-  <div class="text-center mt-5">
-    <a href="{{ load_more_url }}" class="btn btn-outline-primary">{{ ui.index.load_more }}</a>
-  </div>
-  {% endif %}
-{% else %}
-<section class="empty-state card border-0">
-  <div class="card-body">
-    {% if has_active_search %}
-    <h2 class="mb-2">{{ ui.index.empty_search_title }}</h2>
-    <p class="text-muted mb-3">{{ ui.index.empty_search_body }}</p>
-    {% else %}
-    <h2 class="mb-2">{{ ui.index.empty_home_title }}</h2>
-    <p class="text-muted mb-3">{{ ui.index.empty_home_body }}</p>
-    <a href="{{ locale_prefix }}/create" class="btn btn-primary">{{ ui.index.empty_home_cta }}</a>
-    {% endif %}
-    {% if has_active_search %}
-    <a href="{{ reset_filters_url }}" class="btn btn-primary">{{ ui.index.reset_front_page }}</a>
-    {% endif %}
-  </div>
-</section>
+{% if has_more %}
+<footer class="pager"><a href="{{ load_more_url }}">Next Page</a></footer>
 {% endif %}
 {% endblock content %}

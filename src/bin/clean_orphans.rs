@@ -213,7 +213,7 @@ async fn main() {
                     let votes_cnt = ContentVote::find()
                         .filter(content_vote::Column::ContentId.eq(content_id.clone()))
                         .count(tx)
-                        .await? as u64;
+                        .await?;
 
                     // Deleta o conteúdo (cascade apaga votes)
                     let del_content = Content::delete_by_id(content_id.clone()).exec(tx).await?;

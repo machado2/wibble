@@ -20,7 +20,6 @@ use crate::wibble_request::WibbleRequest;
 
 pub fn localized_router() -> Router<AppState> {
     Router::new()
-        .route("/auth/callback", get(auth_callback))
         .route("/login", get(login))
         .route("/logout", get(logout))
 }

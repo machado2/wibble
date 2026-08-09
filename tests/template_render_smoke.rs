@@ -2,7 +2,6 @@
 
 use serde_json::{json, Map, Value};
 use tera::{Context, Tera};
-use wibble::llm::prompt_registry::find_supported_translation_language;
 use wibble::services::site_text::site_text;
 
 fn render_context(extra: Value) -> Context {
@@ -15,19 +14,9 @@ fn render_context(extra: Value) -> Context {
     );
     object.insert("page_language_code".to_string(), Value::from("en"));
     object.insert("page_language_name".to_string(), Value::from("English"));
-    object.insert("locale_prefix".to_string(), Value::from("/en"));
-    object.insert("locale_home_url".to_string(), Value::from("/en/"));
-    object.insert(
-        "alternate_locale_urls".to_string(),
-        json!([
-            {"code": "en", "href": "https://example.test/en/current"},
-            {"code": "pt", "href": "https://example.test/pt/current"}
-        ]),
-    );
-    object.insert(
-        "ui".to_string(),
-        site_text(find_supported_translation_language("en").unwrap()).template_strings(),
-    );
+    object.insert("locale_prefix".to_string(), Value::from(""));
+    object.insert("locale_home_url".to_string(), Value::from("/"));
+    object.insert("ui".to_string(), site_text().template_strings());
     object.insert(
         "text_create_new_article".to_string(),
         Value::from("Draft article"),
@@ -47,7 +36,7 @@ fn render(template_name: &str, extra: Value) -> String {
 }
 
 #[test]
-fn create_template_renders_research_mode_form() {
+fn create_template_renders_single_prompt_form() {
     let html = render(
         "create.html",
         json!({
@@ -66,23 +55,20 @@ fn create_template_renders_research_mode_form() {
             "authenticated_standard_quota": {"hourly": 20, "daily": 40},
             "authenticated_research_quota": {"hourly": 5, "daily": 10},
             "authenticated_edit_quota": {"hourly": 10, "daily": 20},
-            "authenticated_translation_quota": {"hourly": 40, "daily": 100},
             "owner_editing_note": "Owner editing is capped separately at 10 edit-agent previews per hour.",
             "research_lane_note": "Research-backed filings run on their own desk at 5 per hour / 10 per day.",
-            "translation_lane_note": "Background translation refreshes stay on their own lane at 40 per hour.",
             "login_upsell_note": "Login raises the standard desk to 20 per hour, opens a bounded research desk at 5 per hour, keeps results private as drafts, and unlocks the edit desk.",
             "research_quota_note": "Separate quota: 5 per hour / 10 per day."
         }),
     );
 
-    assert!(html.contains("Desk mode"));
-    assert!(html.contains("Research desk"));
-    assert!(html.contains("mode-research"));
-    assert!(html.contains("checked"));
+    assert!(html.contains("Enter your prompt"));
+    assert!(html.contains("Enter your prompt / hint / instructions here..."));
+    assert!(!html.contains("Research desk"));
 }
 
 #[test]
-fn wait_template_renders_clarification_state() {
+fn wait_template_renders_simple_generation_state() {
     let html = render(
         "wait.html",
         json!({
@@ -114,9 +100,9 @@ fn wait_template_renders_clarification_state() {
         }),
     );
 
-    assert!(html.contains("Clarification needed"));
-    assert!(html.contains("Resume drafting"));
-    assert!(html.contains("Which ministry issued the notice?"));
+    assert!(html.contains("Generating article..."));
+    assert!(html.contains("Incident bulletin"));
+    assert!(!html.contains("Which ministry issued the notice?"));
 }
 
 #[test]
@@ -149,7 +135,7 @@ fn edit_preview_template_renders_diff_and_apply_form() {
 }
 
 #[test]
-fn content_template_renders_research_and_language_metadata() {
+fn content_template_renders_plain_article_without_translation_ui() {
     let html = render(
         "content.html",
         json!({
@@ -164,23 +150,6 @@ fn content_template_renders_research_and_language_metadata() {
             "page_language_name": "English",
             "article_source_language_code": "en",
             "article_source_language_name": "English",
-            "preferred_article_language_code": "en",
-            "preferred_article_language_name": "English",
-            "preferred_article_language_source": "source",
-            "served_article_language_source": "preferred",
-            "article_translation_requested": false,
-            "article_translation_available": true,
-            "article_language_options": [
-                {
-                    "href": "/en/content/story-slug?lang=auto",
-                    "label": "Automatic",
-                    "note": "Original edition: English",
-                    "active": true
-                }
-            ],
-            "article_language_menu_open": false,
-            "article_language_summary_note": "Original edition",
-            "article_language_notice": "Portuguese was requested. This page is currently showing the original English edition while that translation is prepared.",
             "article_research_metadata_present": true,
             "article_research_metadata": {
                 "mode_label": "Requested research desk",
@@ -208,12 +177,13 @@ fn content_template_renders_research_and_language_metadata() {
                 "next_page": 1
             },
             "comment_page_label": "Page 1 / 1"
+            ,"is_admin": true
         }),
     );
 
-    assert!(html.contains("Requested research desk"));
-    assert!(html.contains("Edition Desk"));
-    assert!(html.contains("Comments"));
-    assert!(html.contains("&#x2F;en/content/story-slug/edit"));
-    assert!(html.contains("Edit article"));
+    assert!(html.contains("Filed report"));
+    assert!(html.contains("<p>Body</p>"));
+    assert!(html.contains("/content/story-slug/edit"));
+    assert!(!html.contains("Requested research desk"));
+    assert!(!html.contains("Comments"));
 }

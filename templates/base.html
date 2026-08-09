@@ -1,96 +1,51 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="{{ page_language_code | default(value='en') }}">
-    {%- if title -%} {%- set_global pagetitle = title ~ " - The Wibble" -%} {%-
-    else -%} {%- set_global pagetitle = "The Wibble" -%} {%- endif -%} {%- if
-    not description -%} {%- set_global description = "Get the latest news with a
-    touch of wobble from The Wibble, your source for the unpredictable and
-    unsteady world of current events" -%} {%- endif -%}
-    <head>
-        <meta charset="utf-8" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0, user-scalable=yes"
-        />
-        <title>{{ pagetitle }}</title>
-        <meta name="description" content="{{ description }}" />
-        <meta name="robots" content="{{ robots | default(value='index,follow') }}" />
-        <link rel="canonical" href="{{ canonical_url }}" />
-        {%- for alternate in alternate_locale_urls -%}
-        <link rel="alternate" hreflang="{{ alternate.code }}" href="{{ alternate.href }}" />
-        {%- endfor -%}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="{{ canonical_url }}" />
-        <meta property="og:title" content="{{ pagetitle }}" />
-        <meta property="og:description" content="{{ description }}" />
-        {%- if image_id -%}
-        <meta property="og:image" content="{{ site_url }}/image/{{ image_id }}" />
-        {%- endif -%}
-        <link rel="stylesheet" href="{{style | safe}}" />
-        <!-- Matomo -->
-        <script>
-            var _paq = (window._paq = window._paq || []);
-            _paq.push(["trackPageView"]);
-            _paq.push(["enableLinkTracking"]);
-            (function () {
-                var u = "//matomo.fbmac.net/";
-                _paq.push(["setTrackerUrl", u + "matomo.php"]);
-                _paq.push(["setSiteId", "1"]);
-                var d = document,
-                    g = d.createElement("script"),
-                    s = d.getElementsByTagName("script")[0];
-                g.async = true;
-                g.src = u + "matomo.js";
-                s.parentNode.insertBefore(g, s);
-            })();
-        </script>
-        <!-- End Matomo Code -->
-        {%- block headers -%}{%- endblock headers -%}
-    </head>
+  {%- if title -%}
+    {%- set_global pagetitle = title ~ " - Wibble News" -%}
+  {%- else -%}
+    {%- set_global pagetitle = "Wibble News" -%}
+  {%- endif -%}
+  {%- if not description -%}
+    {%- set_global description = "Get the latest news with a touch of wobble from The Wibble, your source for the unpredictable and unsteady world of current events" -%}
+  {%- endif -%}
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>{{ pagetitle }}</title>
+  <meta name="description" content="{{ description }}">
+  <meta name="robots" content="{{ robots | default(value='index,follow') }}">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta property="og:title" content="{{ pagetitle }}">
+  <meta property="og:description" content="{{ description }}">
+  {%- if image_id -%}
+  <meta property="og:image" content="{{ site_url }}/image/{{ image_id }}">
+  {%- endif -%}
+  <link rel="stylesheet" href="{{ style | safe }}">
+  {%- block headers -%}{%- endblock headers -%}
+</head>
 
-    <body>
-        <nav class="site-nav">
-            <div class="container">
-                <div class="nav-inner">
-                    <div class="brand-lockup">
-                        <a class="brand" href="{{ locale_home_url }}">
-                            <span class="brand-accent">The</span>
-                            <span class="brand-strong">Wibble</span>
-                        </a>
-                        <p class="brand-note">{{ ui.base.brand_note }}</p>
-                    </div>
-                    <div class="nav-actions">
-                        <div class="nav-primary">
-                            <div class="nav-context-actions">
-                                {%- block nav_context_actions -%}{%- endblock nav_context_actions -%}
-                            </div>
-                            <a class="btn btn-primary" href="{{ locale_prefix }}/create">
-                                {{ ui.base.create_article }}
-                            </a>
-                        </div>
-                        <div class="nav-utility">
-                            {%- if auth_user -%}
-                            {%- if is_admin -%}
-                            <a class="nav-text-link" href="{{ locale_prefix }}/admin/articles">{{ ui.base.admin }}</a>
-                            {%- endif -%}
-                            <span class="nav-user">{{ auth_user.name }}</span>
-                            <a class="nav-text-link" href="{{ locale_prefix }}/logout">{{ ui.base.logout }}</a>
-                            {%- else -%}
-                            <a class="nav-text-link" href="{{ locale_prefix }}/login">{{ ui.base.login }}</a>
-                            {%- endif -%}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <main class="container my-4">
-            {% block content %}{% endblock content %}
-        </main>
-
-        <footer class="site-footer">
-            <div class="container">
-                <p class="mb-0">{{ ui.base.footer }}</p>
-            </div>
-        </footer>
-    </body>
+<body>
+  <header>
+    <a href="{{ locale_home_url }}">Wibble News</a>
+    <a href="{{ locale_prefix }}/create">
+      <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 512 512" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm144 276c0 6.6-5.4 12-12 12h-92v92c0 6.6-5.4 12-12 12h-56c-6.6 0-12-5.4-12-12v-92h-92c-6.6 0-12-5.4-12-12v-56c0-6.6 5.4-12 12-12h92v-92c0-6.6 5.4-12 12-12h56c6.6 0 12 5.4 12 12v92h92c6.6 0 12 5.4 12 12v56z"></path>
+      </svg>
+      {{ text_create_new_article }}
+    </a>
+  </header>
+  <div class="content">
+    {% block content %}{% endblock content %}
+  </div>
+  <div class="admin-footer">
+    {% if is_admin %}
+      <a href="{{ locale_prefix }}/admin/articles">Admin</a>
+      <a href="{{ locale_prefix }}/logout">Logout</a>
+    {% else %}
+      <a href="{{ locale_prefix }}/login">Admin</a>
+    {% endif %}
+  </div>
+</body>
 </html>

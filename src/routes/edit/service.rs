@@ -12,9 +12,7 @@ use crate::image_jobs::spawn_image_generation;
 use crate::image_status::{is_pending_status, IMAGE_STATUS_PENDING};
 use crate::permissions::{can_edit_article, can_toggle_publish};
 use crate::repositories::images::{normalize_uploaded_image, store_image_file};
-use crate::services::article_translations::owned_article_source_text;
 use crate::services::editorial_policy::enforce_article_output_policy;
-use crate::translation_jobs::refresh_article_translations_after_edit;
 use crate::wibble_request::WibbleRequest;
 
 use super::MAX_IMAGE_UPLOAD_BYTES;
@@ -56,12 +54,6 @@ pub(super) async fn apply_article_edit(
 ) -> Result<Redirect, Error> {
     let db = &wr.state.db;
     enforce_article_output_policy(&data.title, &data.description, &data.markdown)?;
-    let previous_source = owned_article_source_text(&article);
-    let translatable_content_changed = article.title != data.title
-        || article.description != data.description
-        || article.markdown.as_deref().unwrap_or("") != data.markdown;
-    let article_id = article.id.clone();
-
     let mut active: content_entity::ActiveModel = article.into();
     active.title = ActiveValue::set(data.title.clone());
     active.description = ActiveValue::set(data.description.clone());
@@ -72,24 +64,6 @@ pub(super) async fn apply_article_edit(
         .map_err(|e| Error::Database(format!("Error updating article: {}", e)))?;
 
     log_audit(db, auth_user, audit_action, "content", slug, audit_details).await?;
-    if translatable_content_changed {
-        if let Some(previous_source) = previous_source {
-            refresh_article_translations_after_edit(
-                wr.state.clone(),
-                auth_user,
-                slug,
-                previous_source,
-                crate::services::article_translations::OwnedArticleSourceText {
-                    article_id,
-                    title: data.title.clone(),
-                    description: data.description.clone(),
-                    markdown: data.markdown.clone(),
-                },
-            )
-            .await?;
-        }
-    }
-
     Ok(Redirect::to(
         &wr.localized_path(&format!("/content/{}", slug)),
     ))

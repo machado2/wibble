@@ -1,87 +1,12 @@
 {% extends "base.html" %}
 
 {% block headers %}
-{% if wait_auto_refresh %}
-<meta http-equiv="refresh" content="4">
-{% endif %}
+{% if wait_auto_refresh %}<meta http-equiv="refresh" content="5">{% endif %}
 {% endblock headers %}
 
 {% block content %}
-<section class="workflow-layout wait-layout">
-  <div class="card wait-shell workflow-shell border-0">
-    <div class="card-body wait-shell-body">
-      <div class="wait-shell-copy">
-        <p class="home-eyebrow">{{ ui.wait.eyebrow }}</p>
-        <h1 class="card-title">{{ wait_summary.stage_title }}</h1>
-        <p class="text-muted">{{ wait_summary.stage_description }}</p>
-        {% if wait_summary.article_title %}
-        <p class="wait-article-title">{{ ui.wait.working_on }} <strong>{{ wait_summary.article_title }}</strong></p>
-        {% endif %}
-      </div>
-
-      <div class="wait-spinner-wrap">
-        {% if wait_summary.clarification_question %}
-        <div class="workflow-note workflow-note-warning text-start mb-0" role="status">
-          <strong>{{ ui.wait.clarification_needed }}</strong>
-          {{ wait_summary.clarification_question }}
-          {% if wait_summary.clarification_deadline %}
-          <div class="small text-muted mt-2">
-            {{ wait_summary.clarification_deadline_note }}
-          </div>
-          {% endif %}
-        </div>
-        {% else %}
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">{{ ui.wait.loading }}</span>
-        </div>
-        {% endif %}
-      </div>
-
-      <div class="wait-metrics status-chip-grid" aria-label="{{ ui.wait.progress_aria }}">
-        {% for item in wait_summary.phase_items %}
-        <div class="image-meta-chip">
-          <span class="image-meta-label">{{ item.label }}</span>
-          <strong>{{ item.state }}</strong>
-        </div>
-        {% endfor %}
-        <div class="image-meta-chip">
-          <span class="image-meta-label">{{ ui.wait.images_planned }}</span>
-          <strong>{{ wait_summary.image_total }}</strong>
-        </div>
-        <div class="image-meta-chip">
-          <span class="image-meta-label">{{ ui.wait.completed }}</span>
-          <strong>{{ wait_summary.image_completed }}</strong>
-        </div>
-        <div class="image-meta-chip">
-          <span class="image-meta-label">{{ ui.wait.in_progress }}</span>
-          <strong>{{ wait_summary.image_processing }}</strong>
-        </div>
-        <div class="image-meta-chip">
-          <span class="image-meta-label">{{ ui.wait.failed }}</span>
-          <strong>{{ wait_summary.image_failed }}</strong>
-        </div>
-      </div>
-
-      <div class="workflow-note workflow-note-muted mb-0" role="status">
-        <strong>{{ wait_summary.publication_title }}</strong>
-        {{ wait_summary.publication_note }}
-      </div>
-
-      <div class="wait-actions">
-        {% if wait_summary.clarification_question %}
-        <form method="post" action="{{ locale_prefix }}/wait/{{ id }}/clarify" class="w-100">
-          <label class="form-label" for="clarification-answer">{{ ui.wait.answer_label }}</label>
-          <textarea id="clarification-answer" class="form-control mb-3" name="answer" rows="3" maxlength="200" required></textarea>
-          <button type="submit" class="btn btn-primary">{{ ui.wait.resume }}</button>
-        </form>
-        {% else %}
-        <a href="{{ locale_prefix }}/wait/{{ id }}" class="btn btn-outline-primary">{{ ui.wait.refresh }}</a>
-        {% if wait_summary.slug %}
-        <a href="{{ locale_prefix }}/content/{{ wait_summary.slug }}" class="btn btn-outline-secondary">{{ ui.wait.open_article }}</a>
-        {% endif %}
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</section>
+<article>
+  <h1>Generating article...</h1>
+  {% if wait_summary.article_title %}<p>{{ wait_summary.article_title }}</p>{% endif %}
+</article>
 {% endblock content %}

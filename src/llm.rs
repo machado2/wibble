@@ -13,7 +13,6 @@ pub mod article_generator;
 pub mod edit_agent;
 mod function_definition;
 pub mod prompt_registry;
-pub mod translate;
 
 const OPENAI_RESPONSES_URL: &str = "https://api.openai.com/v1/responses";
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";

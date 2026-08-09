@@ -28,7 +28,7 @@ pub fn global_router() -> Router<AppState> {
         .route("/image/{id}", get(get_image))
 }
 
-pub(crate) async fn get_localized_index(
+pub(crate) async fn get_index(
     wr: WibbleRequest,
     Query(data): Query<ContentListParams>,
 ) -> Result<Html<String>, Error> {

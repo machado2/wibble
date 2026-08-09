@@ -3,43 +3,24 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 use crate::app_state::AppState;
-use crate::llm::prompt_registry::supported_translation_languages;
 use crate::rate_limit::rate_limit_middleware;
-use crate::routes::{admin, auth, content, create, edit, legacy, public};
+use crate::routes::{admin, auth, content, create, edit, public};
 
 pub fn build_router(state: AppState) -> Router {
     let serve_dir = ServeDir::new("static");
-    let localized_app = Router::new()
+    let app = Router::new()
+        .route("/", get(public::get_index))
         .merge(public::localized_router())
         .merge(create::localized_router())
         .merge(content::localized_router())
         .merge(edit::localized_router())
         .merge(admin::localized_router())
-        .merge(auth::localized_router())
-        .layer(middleware::from_fn(legacy::persist_site_language_cookie));
+        .merge(auth::localized_router());
 
-    let mut router = Router::new()
+    Router::new()
         .merge(public::global_router())
         .merge(auth::global_callback_router())
-        .merge(legacy::router());
-
-    for language in supported_translation_languages() {
-        router = router
-            .route(
-                &format!("/{code}", code = language.code),
-                get(public::get_localized_index),
-            )
-            .route(
-                &format!("/{code}/", code = language.code),
-                get(public::get_localized_index),
-            )
-            .nest(
-                &format!("/{code}", code = language.code),
-                localized_app.clone(),
-            );
-    }
-
-    router
+        .merge(app)
         .fallback_service(serve_dir)
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn_with_state(
@@ -69,29 +50,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn localized_root_routes_respond_successfully() {
+    async fn root_route_responds_successfully() {
         let ctx = TestContext::new().await;
         let app = build_router(ctx.state.clone());
 
         let response = app
             .clone()
-            .oneshot(Request::builder().uri("/pt").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let response = app
-            .clone()
-            .oneshot(Request::builder().uri("/pt/").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let response = app
-            .clone()
-            .oneshot(Request::builder().uri("/es/").body(Body::empty()).unwrap())
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
@@ -100,7 +65,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/es/create")
+                    .uri("/create")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -111,25 +76,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn legacy_content_root_redirects_to_localized_home() {
+    async fn localized_routes_are_not_supported() {
         let ctx = TestContext::new().await;
         let app = build_router(ctx.state.clone());
 
         let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/content/")
-                    .header(http::header::ACCEPT_LANGUAGE, "pt-BR,pt;q=0.9,en;q=0.8")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(Request::builder().uri("/pt/").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::SEE_OTHER);
-        assert_eq!(
-            response.headers().get(http::header::LOCATION).unwrap(),
-            "/pt/"
-        );
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

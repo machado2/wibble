@@ -11,7 +11,6 @@ use crate::audit::log_audit;
 use crate::auth::AuthUser;
 use crate::error::Error;
 use crate::services::article_jobs::ArticleJobService;
-use crate::translation_jobs::cancel_translation_job;
 use crate::wibble_request::WibbleRequest;
 
 use self::service::{load_admin_articles_page, load_admin_jobs_page};
@@ -23,10 +22,6 @@ pub fn localized_router() -> Router<AppState> {
         .route(
             "/admin/article-jobs/{id}/cancel",
             post(post_cancel_article_job),
-        )
-        .route(
-            "/admin/translation-jobs/{id}/cancel",
-            post(post_cancel_translation_job),
         )
 }
 
@@ -65,15 +60,12 @@ async fn get_admin_jobs(wr: WibbleRequest) -> Result<Html<String>, Error> {
         .insert("title", "Admin - Job Monitor")
         .insert("robots", "noindex,nofollow")
         .insert("article_status_counts", &page.article_status_counts)
-        .insert("translation_status_counts", &page.translation_status_counts)
         .insert("requester_summaries", &page.requester_summaries)
         .insert("feature_usage", &page.feature_usage)
         .insert("audit_summaries", &page.audit_summaries)
         .insert("rate_limit_metrics", &page.rate_limit_metrics)
         .insert("active_article_jobs", &page.active_article_jobs)
         .insert("failed_article_jobs", &page.failed_article_jobs)
-        .insert("active_translation_jobs", &page.active_translation_jobs)
-        .insert("failed_translation_jobs", &page.failed_translation_jobs)
         .render()
 }
 
@@ -100,33 +92,6 @@ async fn post_cancel_article_job(
         auth_user,
         "cancel_article_job",
         "article_job",
-        &id,
-        Some(details),
-    )
-    .await?;
-    Ok(Redirect::to(&wr.localized_path("/admin/jobs")))
-}
-
-async fn post_cancel_translation_job(
-    wr: WibbleRequest,
-    Path(id): Path<String>,
-) -> Result<Redirect, Error> {
-    let auth_user = require_admin_user(&wr)?;
-    if !cancel_translation_job(&wr.state, &id).await? {
-        return Err(Error::NotFound(Some(format!(
-            "Translation job {} not found",
-            id
-        ))));
-    }
-    let details = serde_json::json!({
-        "reason": "cancelled_by_admin",
-    })
-    .to_string();
-    log_audit(
-        &wr.state.db,
-        auth_user,
-        "cancel_translation_job",
-        "translation_job",
         &id,
         Some(details),
     )

@@ -44,9 +44,14 @@ impl CreateModeSelection {
 }
 
 pub fn normalize_create_mode(raw: Option<&str>) -> Result<CreateModeSelection, Error> {
-    match raw.unwrap_or("auto").trim().to_ascii_lowercase().as_str() {
-        "" | "auto" => Ok(CreateModeSelection::Auto),
-        "standard" => Ok(CreateModeSelection::Standard),
+    match raw
+        .unwrap_or("standard")
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "" | "standard" => Ok(CreateModeSelection::Standard),
+        "auto" => Ok(CreateModeSelection::Auto),
         "research" => Ok(CreateModeSelection::Research),
         other => Err(Error::BadRequest(format!("Unknown create mode: {}", other))),
     }
@@ -78,10 +83,10 @@ mod tests {
     }
 
     #[test]
-    fn create_mode_defaults_to_auto() {
+    fn create_mode_defaults_to_standard() {
         assert_eq!(
             normalize_create_mode(None).unwrap(),
-            CreateModeSelection::Auto
+            CreateModeSelection::Standard
         );
     }
 

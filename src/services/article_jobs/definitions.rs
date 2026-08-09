@@ -14,7 +14,6 @@ pub const ARTICLE_JOB_PHASE_RESEARCHING: &str = "researching";
 pub const ARTICLE_JOB_PHASE_AWAITING_USER_INPUT: &str = "awaiting_user_input";
 pub const ARTICLE_JOB_PHASE_WRITING: &str = "writing";
 pub const ARTICLE_JOB_PHASE_EDITING: &str = "editing";
-pub const ARTICLE_JOB_PHASE_TRANSLATING: &str = "translating";
 pub const ARTICLE_JOB_PHASE_RENDERING_IMAGES: &str = "rendering_images";
 pub const ARTICLE_JOB_PHASE_READY_FOR_REVIEW: &str = "ready_for_review";
 pub const ARTICLE_JOB_PHASE_COMPLETED: &str = "completed";

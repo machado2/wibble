@@ -134,7 +134,6 @@ mod tests {
     };
     use crate::image_status::{IMAGE_STATUS_COMPLETED, IMAGE_STATUS_FAILED, IMAGE_STATUS_PENDING};
     use crate::rate_limit::RequesterTier;
-    use crate::services::site_text::default_site_language;
     use crate::test_support::{author_user, TestContext};
     use crate::wibble_request::WibbleRequest;
 
@@ -187,9 +186,6 @@ mod tests {
             auth_user: Some(author_user(email)),
             requester_tier: RequesterTier::Authenticated,
             rate_limit_key: format!("user:{}", email),
-            site_language: default_site_language(),
-            browser_translation_language: None,
-            saved_article_language: None,
         }
     }
 
@@ -401,7 +397,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(updated.title.trim(), "Revised Bulletin");
-        assert_eq!(updated.published, false);
+        assert!(!updated.published);
 
         let _ = super::post_toggle_publish(
             sample_request(ctx.state.clone(), "author@example.com"),

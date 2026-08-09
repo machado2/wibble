@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
 use serde_json::{json, Value};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio::time::{sleep, timeout};
 use tracing::{event, Level};
 
@@ -21,6 +21,8 @@ pub struct ReplicateImageGenerator {
     poll_interval: Duration,
     poll_timeout: Duration,
     queue_timeout: Duration,
+    min_request_interval: Duration,
+    last_request_at: Arc<Mutex<Option<Instant>>>,
     semaphore: Arc<Semaphore>,
     inflight_predictions: Arc<AtomicUsize>,
 }
@@ -87,6 +89,10 @@ fn is_failed_status(status: &str) -> bool {
     status == "failed" || status == "canceled" || status == "cancelled"
 }
 
+fn is_retryable_poll_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
 fn extract_output_url(output: Option<&Value>) -> Option<String> {
     let output = output?;
     match output {
@@ -121,6 +127,8 @@ impl ReplicateImageGenerator {
         let poll_timeout = Duration::from_secs(env_u64("REPLICATE_POLL_TIMEOUT_SECONDS", 3_600));
         let poll_interval = Duration::from_millis(env_u64("REPLICATE_POLL_INTERVAL_MS", 1_500));
         let queue_timeout = Duration::from_secs(env_u64("REPLICATE_QUEUE_TIMEOUT_SECONDS", 3_600));
+        let min_request_interval =
+            Duration::from_secs(env_u64("REPLICATE_MIN_REQUEST_INTERVAL_SECONDS", 30));
         let max_concurrency = env_usize("REPLICATE_MAX_CONCURRENT_REQUESTS", 2);
 
         let reqwest = reqwest::Client::builder()
@@ -130,10 +138,11 @@ impl ReplicateImageGenerator {
             .expect("Failed to build reqwest client for Replicate API");
 
         println!(
-            "Replicate config: max_concurrency={}, http_timeout_secs={}, poll_timeout_secs={}",
+            "Replicate config: max_concurrency={}, http_timeout_secs={}, poll_timeout_secs={}, min_request_interval_secs={}",
             max_concurrency,
             http_timeout.as_secs(),
-            poll_timeout.as_secs()
+            poll_timeout.as_secs(),
+            min_request_interval.as_secs()
         );
 
         Self {
@@ -144,6 +153,8 @@ impl ReplicateImageGenerator {
             poll_interval,
             poll_timeout,
             queue_timeout,
+            min_request_interval,
+            last_request_at: Arc::new(Mutex::new(None)),
             semaphore: Arc::new(Semaphore::new(max_concurrency)),
             inflight_predictions: Arc::new(AtomicUsize::new(0)),
         }
@@ -186,24 +197,66 @@ impl ReplicateImageGenerator {
         prediction_id: Option<&str>,
         poll_url: &str,
     ) -> Result<Value, Error> {
-        let poll_resp = self
-            .reqwest
-            .get(poll_url)
-            .header("Authorization", format!("Bearer {}", &self.api_token))
-            .header("Accept", "application/json")
-            .send()
-            .await
-            .map_err(|e| {
-                Error::ImageGeneration(format!(
-                    "Failed to poll Replicate prediction {}: {}",
-                    prediction_id.unwrap_or("unknown"),
-                    e
-                ))
-            })?;
+        const MAX_TRANSIENT_ATTEMPTS: usize = 5;
 
-        let poll_status = poll_resp.status();
-        if !poll_status.is_success() {
+        for attempt in 0..MAX_TRANSIENT_ATTEMPTS {
+            let poll_resp = match self
+                .reqwest
+                .get(poll_url)
+                .header("Authorization", format!("Bearer {}", &self.api_token))
+                .header("Accept", "application/json")
+                .send()
+                .await
+            {
+                Ok(response) => response,
+                Err(error) if attempt + 1 < MAX_TRANSIENT_ATTEMPTS => {
+                    let delay = Duration::from_secs((1_u64 << attempt).min(8));
+                    event!(
+                        Level::WARN,
+                        prediction_id = %prediction_id.unwrap_or("unknown"),
+                        attempt = attempt + 1,
+                        delay_secs = delay.as_secs(),
+                        error = %error,
+                        "Transient Replicate polling request error; retrying"
+                    );
+                    sleep(delay).await;
+                    continue;
+                }
+                Err(error) => {
+                    return Err(Error::ImageGeneration(format!(
+                        "Failed to poll Replicate prediction {}: {}",
+                        prediction_id.unwrap_or("unknown"),
+                        error
+                    )));
+                }
+            };
+
+            let poll_status = poll_resp.status();
+            if poll_status.is_success() {
+                return poll_resp.json::<Value>().await.map_err(|e| {
+                    Error::ImageGeneration(format!(
+                        "Failed to parse poll JSON for Replicate prediction {}: {}",
+                        prediction_id.unwrap_or("unknown"),
+                        e
+                    ))
+                });
+            }
+
             let body = poll_resp.text().await.unwrap_or_default();
+            if is_retryable_poll_status(poll_status) && attempt + 1 < MAX_TRANSIENT_ATTEMPTS {
+                let delay = Duration::from_secs((1_u64 << attempt).min(8));
+                event!(
+                    Level::WARN,
+                    prediction_id = %prediction_id.unwrap_or("unknown"),
+                    status = %poll_status,
+                    attempt = attempt + 1,
+                    delay_secs = delay.as_secs(),
+                    "Transient Replicate polling response; retrying"
+                );
+                sleep(delay).await;
+                continue;
+            }
+
             return Err(Error::ImageGeneration(format!(
                 "Polling Replicate prediction {} failed with status {}: {}",
                 prediction_id.unwrap_or("unknown"),
@@ -212,16 +265,26 @@ impl ReplicateImageGenerator {
             )));
         }
 
-        poll_resp.json::<Value>().await.map_err(|e| {
-            Error::ImageGeneration(format!(
-                "Failed to parse poll JSON for Replicate prediction {}: {}",
-                prediction_id.unwrap_or("unknown"),
-                e
-            ))
-        })
+        unreachable!("polling loop returns on success or terminal error")
     }
 
     pub async fn create_prediction(&self, prompt: &str) -> Result<ReplicatePrediction, Error> {
+        let mut last_request_at = self.last_request_at.lock().await;
+        if let Some(last_request_at_value) = *last_request_at {
+            let elapsed = last_request_at_value.elapsed();
+            if elapsed < self.min_request_interval {
+                let delay = self.min_request_interval - elapsed;
+                event!(
+                    Level::WARN,
+                    delay_secs = delay.as_secs(),
+                    "Waiting for Replicate request safety interval"
+                );
+                sleep(delay).await;
+            }
+        }
+        *last_request_at = Some(Instant::now());
+        drop(last_request_at);
+
         let params = json!({
             "input": { "prompt": prompt }
         });

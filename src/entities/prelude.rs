@@ -14,7 +14,4 @@ pub use super::gpt_log::Entity as GptLog;
 pub use super::history_generation_fail::Entity as HistoryGenerationFail;
 pub use super::horde_log::Entity as HordeLog;
 pub use super::image_file::Entity as ImageFile;
-pub use super::language::Entity as Language;
 pub use super::search_history::Entity as SearchHistory;
-pub use super::translation::Entity as Translation;
-pub use super::translation_job::Entity as TranslationJob;

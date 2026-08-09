@@ -14,9 +14,8 @@ use crate::image_status::{
 use crate::services::article_jobs::{
     is_in_progress_job_status, ArticleJobService, ARTICLE_JOB_PHASE_AWAITING_USER_INPUT,
     ARTICLE_JOB_PHASE_QUEUED, ARTICLE_JOB_PHASE_READY_FOR_REVIEW,
-    ARTICLE_JOB_PHASE_RENDERING_IMAGES, ARTICLE_JOB_PHASE_RESEARCHING,
-    ARTICLE_JOB_PHASE_TRANSLATING, ARTICLE_JOB_PHASE_WRITING, ARTICLE_JOB_STATUS_COMPLETED,
-    ARTICLE_JOB_STATUS_FAILED,
+    ARTICLE_JOB_PHASE_RENDERING_IMAGES, ARTICLE_JOB_PHASE_RESEARCHING, ARTICLE_JOB_PHASE_WRITING,
+    ARTICLE_JOB_STATUS_COMPLETED, ARTICLE_JOB_STATUS_FAILED,
 };
 use crate::services::site_text::SiteText;
 use crate::wibble_request::WibbleRequest;
@@ -76,9 +75,7 @@ fn build_wait_phase_items(
 
     let phase_rank = match phase.unwrap_or(ARTICLE_JOB_PHASE_QUEUED) {
         ARTICLE_JOB_PHASE_AWAITING_USER_INPUT => 1,
-        ARTICLE_JOB_PHASE_WRITING
-        | ARTICLE_JOB_PHASE_RESEARCHING
-        | ARTICLE_JOB_PHASE_TRANSLATING => {
+        ARTICLE_JOB_PHASE_WRITING | ARTICLE_JOB_PHASE_RESEARCHING => {
             if clarification_requested {
                 2
             } else {
@@ -304,12 +301,12 @@ mod tests {
     use crate::services::article_jobs::{
         ARTICLE_JOB_PHASE_AWAITING_USER_INPUT, ARTICLE_JOB_PHASE_RESEARCHING,
     };
-    use crate::services::site_text::{default_site_language, site_text};
+    use crate::services::site_text::site_text;
 
     #[test]
     fn wait_phase_items_include_clarify_step_when_question_is_pending() {
         let items = build_wait_phase_items(
-            site_text(default_site_language()),
+            site_text(),
             Some(ARTICLE_JOB_PHASE_AWAITING_USER_INPUT),
             true,
         );
@@ -321,10 +318,8 @@ mod tests {
 
     #[test]
     fn queued_stage_copy_describes_research_phase() {
-        let (title, description) = queued_stage_copy(
-            site_text(default_site_language()),
-            Some(ARTICLE_JOB_PHASE_RESEARCHING),
-        );
+        let (title, description) =
+            queued_stage_copy(site_text(), Some(ARTICLE_JOB_PHASE_RESEARCHING));
 
         assert!(title.contains("Researching"));
         assert!(description.contains("bounded context"));
