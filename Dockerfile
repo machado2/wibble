@@ -35,7 +35,7 @@ FROM debian:trixie-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates nodejs npm curl wget && rm -rf /var/lib/apt/lists/*
 
 # Install Prisma CLI required by the entrypoint to apply migrations
-RUN npm install -g prisma
+RUN npm install -g prisma@6.19.3
 
 # Create an unprivileged user to run the app
 RUN useradd --no-log-init -m appuser
