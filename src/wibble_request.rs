@@ -14,7 +14,7 @@ use tera::{Context, Tera};
 use tracing::log;
 
 use crate::app_state::AppState;
-use crate::auth::{extract_auth_token, AuthUser};
+use crate::auth::{extract_auth_token, extract_cookie, verify_auth_user, AuthUser};
 use crate::error::Error;
 use crate::llm::prompt_registry::SupportedTranslationLanguage;
 use crate::llm::translate::detect_browser_translation_language;
@@ -254,7 +254,11 @@ where
         let saved_article_language =
             WibbleRequest::saved_article_language_from_headers(&parts.headers);
         let auth_user = if let Some(token) = extract_auth_token(parts) {
-            state.jwks_client.validate_token(&token).await.ok()
+            match state.jwks_client.validate_token(&token).await {
+                Ok(subject) => extract_cookie(parts, "__auth_profile")
+                    .and_then(|profile| verify_auth_user(&profile, &subject).ok()),
+                Err(_) => None,
+            }
         } else {
             None
         };

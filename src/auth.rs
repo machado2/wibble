@@ -2,8 +2,13 @@ use std::env;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
+use hmac::{Hmac, Mac};
+use jsonwebtoken::jwk::{Jwk, JwkSet};
+use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use tokio::sync::RwLock;
 
 use crate::error::Error;
@@ -30,34 +35,7 @@ struct JwtClaims {
     sub: String,
     iat: u64,
     exp: Option<u64>,
-    email: String,
-    name: String,
-    picture: Option<String>,
-}
-
-impl AuthUser {
-    fn from_claims(claims: JwtClaims) -> Self {
-        Self {
-            sub: claims.sub,
-            email: claims.email,
-            name: claims.name,
-            picture: claims.picture,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct JwksResponse {
-    keys: Vec<Jwk>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct Jwk {
-    kid: String,
-    #[allow(dead_code)]
-    kty: String,
-    n: String,
-    e: String,
+    nonce: Option<String>,
 }
 
 #[derive(Debug)]
@@ -69,7 +47,9 @@ struct CachedJwks {
 #[derive(Clone, Debug)]
 pub struct JwksClient {
     cache: Arc<RwLock<Option<CachedJwks>>>,
-    auth_service_url: String,
+    issuer_url: String,
+    jwks_url: String,
+    client_id: String,
     http: reqwest::Client,
 }
 
@@ -81,11 +61,17 @@ impl Default for JwksClient {
 
 impl JwksClient {
     pub fn new() -> Self {
-        let auth_service_url =
-            env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "https://auth.fbmac.net".to_string());
+        let issuer_url = env::var("SSO_ISSUER_URL")
+            .unwrap_or_else(|_| "https://sso.fbmac.net/api/auth".to_string())
+            .trim_end_matches('/')
+            .to_string();
+        let jwks_url = env::var("SSO_JWKS_URL").unwrap_or_else(|_| format!("{}/jwks", issuer_url));
+        let client_id = env::var("SSO_CLIENT_ID").expect("SSO_CLIENT_ID must be set");
         Self {
             cache: Arc::new(RwLock::new(None)),
-            auth_service_url,
+            issuer_url,
+            jwks_url,
+            client_id,
             http: reqwest::Client::new(),
         }
     }
@@ -100,16 +86,25 @@ impl JwksClient {
             }
         }
 
-        let url = format!("{}/.well-known/jwks.json", self.auth_service_url);
-        let resp: JwksResponse = self
+        let response = self
             .http
-            .get(&url)
+            .get(&self.jwks_url)
             .send()
             .await
-            .map_err(|e| Error::Auth(format!("Failed to fetch JWKS: {}", e)))?
-            .json()
+            .map_err(|e| Error::Auth(format!("Failed to fetch JWKS: {}", e)))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(Error::Auth(format!(
+                "Failed to fetch JWKS: HTTP {}",
+                status
+            )));
+        }
+        let body = response
+            .text()
             .await
-            .map_err(|e| Error::Auth(format!("Failed to parse JWKS: {}", e)))?;
+            .map_err(|e| Error::Auth(format!("Failed to read JWKS response: {}", e)))?;
+        let resp: JwkSet = serde_json::from_str(&body)
+            .map_err(|e| Error::Auth(format!("Failed to parse JWKS JSON: {}", e)))?;
 
         let keys = resp.keys;
         {
@@ -122,7 +117,15 @@ impl JwksClient {
         Ok(keys)
     }
 
-    pub async fn validate_token(&self, token: &str) -> Result<AuthUser, Error> {
+    pub async fn validate_token(&self, token: &str) -> Result<String, Error> {
+        self.validate_token_with_nonce(token, None).await
+    }
+
+    pub async fn validate_token_with_nonce(
+        &self,
+        token: &str,
+        expected_nonce: Option<&str>,
+    ) -> Result<String, Error> {
         let header = decode_header(token)
             .map_err(|e| Error::Auth(format!("Failed to decode JWT header: {}", e)))?;
         let kid = header
@@ -132,16 +135,17 @@ impl JwksClient {
         let keys = self.fetch_jwks().await?;
         let jwk = keys
             .into_iter()
-            .find(|k| k.kid == kid)
+            .find(|key| key.common.key_id.as_deref() == Some(&kid))
             .ok_or_else(|| Error::Auth(format!("Key {} not found in JWKS", kid)))?;
 
-        let decoding_key = DecodingKey::from_rsa_components(&jwk.n, &jwk.e)
-            .map_err(|e| Error::Auth(format!("Failed to create decoding key: {}", e)))?;
+        let decoding_key = DecodingKey::from_jwk(&jwk)
+            .map_err(|e| Error::Auth(format!("Failed to create decoding key from JWK: {}", e)))?;
 
-        let mut validation = Validation::new(Algorithm::RS256);
+        let mut validation = Validation::new(header.alg);
         validation.validate_exp = false;
         validation.set_required_spec_claims::<&str>(&[]);
-        validation.set_issuer(&[&self.auth_service_url]);
+        validation.set_issuer(&[&self.issuer_url]);
+        validation.set_audience(&[&self.client_id]);
 
         let token_data = decode::<JwtClaims>(token, &decoding_key, &validation)
             .map_err(|e| Error::Auth(format!("JWT validation failed: {}", e)))?;
@@ -163,9 +167,68 @@ impl JwksClient {
         if now.saturating_sub(token_data.claims.iat) > max_age_secs {
             return Err(Error::Auth("Token is too old".to_string()));
         }
+        if let Some(expected_nonce) = expected_nonce {
+            if token_data.claims.nonce.as_deref() != Some(expected_nonce) {
+                return Err(Error::Auth("OIDC nonce does not match".to_string()));
+            }
+        }
 
-        Ok(AuthUser::from_claims(token_data.claims))
+        Ok(token_data.claims.sub)
     }
+}
+
+fn session_secret() -> Result<String, Error> {
+    env::var("AUTH_SESSION_SECRET")
+        .or_else(|_| env::var("SSO_CLIENT_SECRET"))
+        .map_err(|_| {
+            Error::Auth("AUTH_SESSION_SECRET or SSO_CLIENT_SECRET must be set".to_string())
+        })
+}
+
+pub fn sign_auth_user(user: &AuthUser) -> Result<String, Error> {
+    let payload = serde_json::to_vec(user)
+        .map_err(|e| Error::Auth(format!("Failed to serialize auth profile: {}", e)))?;
+    let payload = URL_SAFE_NO_PAD.encode(payload);
+    let mut mac = Hmac::<Sha256>::new_from_slice(session_secret()?.as_bytes())
+        .map_err(|e| Error::Auth(format!("Failed to initialize session signature: {}", e)))?;
+    mac.update(payload.as_bytes());
+    let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+    Ok(format!("{}.{}", payload, signature))
+}
+
+pub fn verify_auth_user(value: &str, expected_sub: &str) -> Result<AuthUser, Error> {
+    let (payload, signature) = value
+        .split_once('.')
+        .ok_or_else(|| Error::Auth("Malformed auth profile cookie".to_string()))?;
+    let signature = URL_SAFE_NO_PAD
+        .decode(signature)
+        .map_err(|_| Error::Auth("Malformed auth profile signature".to_string()))?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(session_secret()?.as_bytes())
+        .map_err(|e| Error::Auth(format!("Failed to initialize session signature: {}", e)))?;
+    mac.update(payload.as_bytes());
+    mac.verify_slice(&signature)
+        .map_err(|_| Error::Auth("Invalid auth profile signature".to_string()))?;
+    let bytes = URL_SAFE_NO_PAD
+        .decode(payload)
+        .map_err(|_| Error::Auth("Malformed auth profile payload".to_string()))?;
+    let user: AuthUser = serde_json::from_slice(&bytes)
+        .map_err(|_| Error::Auth("Malformed auth profile JSON".to_string()))?;
+    if user.sub != expected_sub {
+        return Err(Error::Auth(
+            "Auth profile subject does not match ID token".to_string(),
+        ));
+    }
+    Ok(user)
+}
+
+pub fn extract_cookie(parts: &http::request::Parts, name: &str) -> Option<String> {
+    let cookie_header = parts.headers.get("cookie")?.to_str().ok()?;
+    cookie_header.split(';').map(str::trim).find_map(|cookie| {
+        cookie
+            .strip_prefix(&format!("{}=", name))
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    })
 }
 
 pub fn extract_auth_token(parts: &http::request::Parts) -> Option<String> {
@@ -193,4 +256,42 @@ pub fn extract_auth_token(parts: &http::request::Parts) -> Option<String> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sign_auth_user, verify_auth_user, AuthUser};
+    use jsonwebtoken::jwk::JwkSet;
+    use jsonwebtoken::DecodingKey;
+
+    #[test]
+    fn accepts_ed25519_jwks_published_by_sso() {
+        let jwks: JwkSet = serde_json::from_str(
+            r#"{"keys":[{"alg":"EdDSA","crv":"Ed25519","kty":"OKP","x":"LPf82VxFeQV9px1xbtwHYFw7uy9PuTRG0ymbfDBkFuw","kid":"test-key"}]}"#,
+        )
+        .unwrap();
+
+        assert_eq!(jwks.keys.len(), 1);
+        DecodingKey::from_jwk(&jwks.keys[0]).unwrap();
+    }
+
+    #[test]
+    fn signed_auth_profile_rejects_tampering_and_subject_mismatch() {
+        std::env::set_var("AUTH_SESSION_SECRET", "unit-test-secret");
+        let user = AuthUser {
+            sub: "user-1".into(),
+            email: "test@example.com".into(),
+            name: "Test".into(),
+            picture: None,
+        };
+        let signed = sign_auth_user(&user).unwrap();
+        assert_eq!(
+            verify_auth_user(&signed, "user-1").unwrap().email,
+            user.email
+        );
+        assert!(verify_auth_user(&signed, "user-2").is_err());
+        let mut tampered = signed.into_bytes();
+        tampered[0] = if tampered[0] == b'a' { b'b' } else { b'a' };
+        assert!(verify_auth_user(std::str::from_utf8(&tampered).unwrap(), "user-1").is_err());
+    }
 }

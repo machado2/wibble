@@ -184,6 +184,8 @@ mod tests {
         let llm = crate::llm::Llm {
             reqwest: reqwest::Client::new(),
             api_key: "test".to_string(),
+            api_url: "http://localhost".to_string(),
+            api_kind: crate::llm::ApiKind::ChatCompletions,
             models: vec!["test-model".to_string()],
         };
         let service = translation_service(&llm);

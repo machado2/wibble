@@ -2,6 +2,63 @@
 
 [Wibble News](https://wibble.news) is a site where one can generate articles with images using LLM and Stable Diffusion or Dalle. Used mostly for satire, where the LLM being wrong doesn't harm
 
+## Language model
+
+To use the current OpenAI Responses API directly, configure:
+
+```dotenv
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-5.6-luna
+```
+
+`OPENAI_API_URL` is optional and defaults to
+`https://api.openai.com/v1/responses` when `OPENAI_API_KEY` is set.
+`LANGUAGE_MODEL` can be used instead of `OPENAI_MODEL`, including a
+comma-separated fallback list.
+
+OpenRouter-compatible deployments remain supported through
+`OPENROUTER_API_KEY`, `OPENROUTER_API_URL`, and `OPENROUTER_MODEL`. When both
+provider configurations are present, the OpenAI variables take precedence.
+OpenRouter and OpenCode-compatible endpoints continue to use Chat Completions.
+
+## Authentication
+
+Wibble uses `sso.fbmac.net` as an OpenID Connect provider with Authorization
+Code and PKCE. Configure the client registered in the SSO with:
+
+```dotenv
+SSO_ISSUER_URL=https://sso.fbmac.net/api/auth
+SSO_CLIENT_ID=your-client-id
+SSO_CLIENT_SECRET=your-client-secret
+```
+
+The registered callback URI must be exactly
+`https://wibble.fbmac.net/auth/callback`. The application root
+`https://wibble.fbmac.net/` must be registered as a post-logout redirect URI.
+
+## Image generation
+
+Replicate is the default image provider. Configure it with:
+
+```dotenv
+IMAGE_MODE=replicate
+REPLICATE_API_TOKEN=your-replicate-token
+```
+
+The default model endpoint is FLUX Schnell:
+`https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions`.
+Override it with `REPLICATE_API_URL` to use another compatible Replicate model.
+
+The main optional concurrency settings are:
+
+```dotenv
+IMAGE_MAX_PARALLEL_PER_ARTICLE=2
+REPLICATE_MAX_CONCURRENT_REQUESTS=2
+```
+
+`REPLICATE_API_KEY` is not read by the application; the variable name must be
+`REPLICATE_API_TOKEN`.
+
 ## Image storage
 
 Images are stored on the local filesystem by default. Set `IMAGES_DIR` to

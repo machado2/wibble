@@ -31,7 +31,9 @@ fn set_test_env(database_url: &str) {
     env::set_var("LANGUAGE_MODEL", "test-model");
     env::set_var("REPLICATE_API_TOKEN", "test-replicate-token");
     env::set_var("SITE_URL", "http://example.test");
-    env::set_var("AUTH_SERVICE_URL", "http://127.0.0.1:9");
+    env::set_var("SSO_ISSUER_URL", "http://127.0.0.1:9/api/auth");
+    env::set_var("SSO_CLIENT_ID", "test-client");
+    env::set_var("SSO_CLIENT_SECRET", "test-secret");
     env::set_var("ADMIN_EMAIL", "admin@example.com");
 }
 

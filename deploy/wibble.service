@@ -1,0 +1,24 @@
+[Unit]
+Description=Wibble web application
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=fabio
+Group=fabio
+WorkingDirectory=/home/fabio/services/wibble
+EnvironmentFile=-/home/fabio/services/arr/.env
+EnvironmentFile=/home/fabio/services/wibble/.env
+Environment=TEMPLATE_AUTO_RELOAD=false
+ExecStart=/home/fabio/services/wibble/scripts/run-native.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

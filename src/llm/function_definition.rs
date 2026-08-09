@@ -3,10 +3,6 @@
 use std::collections::HashMap;
 use std::default::Default;
 
-use async_openai::types::{
-    ChatCompletionNamedToolChoice, ChatCompletionTool, ChatCompletionToolChoiceOption,
-    FunctionName, FunctionObject,
-};
 use serde_json::Value;
 use serde_json::Value::Object;
 use serde_json::{json, Map};
@@ -55,47 +51,12 @@ pub struct FunctionDefinition {
 }
 
 impl FunctionDefinition {
-    pub fn to_function_object(&self) -> FunctionObject {
-        FunctionObject {
-            name: self.name.clone(),
-            description: self.description.clone(),
-            parameters: Some(self.parameters.to_json()),
-            strict: Some(true),
-        }
-    }
-
-    pub fn to_chat_completion_tool(&self) -> ChatCompletionTool {
-        ChatCompletionTool {
-            r#type: Default::default(),
-            function: self.to_function_object(),
-        }
-    }
-
-    pub fn to_tool_choice(&self) -> ChatCompletionToolChoiceOption {
-        ChatCompletionToolChoiceOption::Named(ChatCompletionNamedToolChoice {
-            r#type: Default::default(),
-            function: FunctionName {
-                name: self.name.clone(),
-            },
+    pub fn to_function_object(&self) -> Value {
+        json!({
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.parameters.to_json(),
         })
-    }
-}
-
-impl From<FunctionDefinition> for ChatCompletionTool {
-    fn from(val: FunctionDefinition) -> Self {
-        val.to_chat_completion_tool()
-    }
-}
-
-impl From<FunctionDefinition> for FunctionObject {
-    fn from(val: FunctionDefinition) -> Self {
-        val.to_function_object()
-    }
-}
-
-impl From<FunctionDefinition> for ChatCompletionToolChoiceOption {
-    fn from(val: FunctionDefinition) -> Self {
-        val.to_tool_choice()
     }
 }
 
