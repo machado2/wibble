@@ -18,6 +18,12 @@ run_as_fabio() {
   sudo -u fabio -H /bin/bash -lc "$1"
 }
 
+run_pm2() {
+  sudo -u fabio -H env \
+    PATH=/home/fabio/.local/bin:/home/fabio/.local/share/node-v22.19.0-linux-x64/bin:/usr/bin:/bin \
+    /home/fabio/.local/bin/pm2 "$@"
+}
+
 run_as_fabio "git -C '${repo}' fetch --quiet origin master"
 target_revision=$(run_as_fabio "git -C '${repo}' rev-parse origin/master")
 deployed_revision=$(cat "${state_dir}/revision" 2>/dev/null || true)
@@ -37,7 +43,7 @@ backup_dir=$(mktemp -d /var/tmp/wibble-native-deploy.XXXXXX)
 web_stopped=false
 cleanup() {
   if [[ "${web_stopped}" == true ]]; then
-    systemctl start wibble-old-web.service
+    run_pm2 restart wibble-web
   fi
   case "${backup_dir}" in
     /var/tmp/wibble-native-deploy.*) rm -rf -- "${backup_dir}" ;;
@@ -53,7 +59,7 @@ run_as_fabio "git -C '${repo}' pull --ff-only --quiet origin master"
 if [[ "${needs_install}" == true ]]; then
   run_as_fabio "cd '${repo}' && pnpm --config.minimum-release-age=10080 install --frozen-lockfile"
 fi
-systemctl stop wibble-old-web.service
+run_pm2 stop wibble-web
 web_stopped=true
 if ! run_as_fabio "cd '${repo}' && pnpm typecheck && pnpm build"; then
   if [[ -d "${backup_dir}/next" ]]; then
@@ -64,8 +70,8 @@ if ! run_as_fabio "cd '${repo}' && pnpm typecheck && pnpm build"; then
   exit 1
 fi
 
-systemctl restart wibble-old-worker.service
-systemctl start wibble-old-web.service
+run_pm2 restart wibble-worker
+run_pm2 restart wibble-web
 web_stopped=false
 curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 1 http://127.0.0.1:18001/ >/dev/null
 curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 1 http://127.0.0.1:18002/health >/dev/null
