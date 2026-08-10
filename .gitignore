@@ -2,6 +2,7 @@
 .trigger
 .env
 .env.*
+*.env
 !.env.example
 .vscode/
 .idea/
