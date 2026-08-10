@@ -4,7 +4,7 @@
 
 - `web/` contains the deployed Next.js application.
 - `worker/` contains the deployed Node.js generation worker.
-- `rust/` contains the newer Rust implementation.
+- `rust/` contains an experimental, not used, Rust implementation.
 - `.github/` and the pnpm workspace configuration are repository-wide.
 
 ## Commands
