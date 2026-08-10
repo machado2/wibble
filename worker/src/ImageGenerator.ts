@@ -1,10 +1,18 @@
 import { GeneratedImageData } from "./ContentGenerator";
-import { ExternalServiceError } from "./errors";
+import {
+  ExternalServiceError,
+  PermanentImageGenerationError,
+} from "./errors";
 import { Config } from "./config";
 import { Sleep } from "./sleep";
 import { image_cache } from "@prisma/client";
 
 let lastReplicateRequestAt = 0;
+
+const isPermanentProviderResponse = (status: number) =>
+  status >= 400 &&
+  status < 500 &&
+  ![408, 409, 425, 429].includes(status);
 
 export class ImageGenerator {
   async generateImage(image: image_cache): Promise<GeneratedImageData> {
@@ -34,9 +42,10 @@ export class ImageGenerator {
     });
     const created = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new ExternalServiceError(
-        `Replicate request failed with HTTP ${response.status}`
-      );
+      const ErrorType = isPermanentProviderResponse(response.status)
+        ? PermanentImageGenerationError
+        : ExternalServiceError;
+      throw new ErrorType(`Replicate request failed with HTTP ${response.status}`);
     }
 
     const predictionUrl =
@@ -62,7 +71,10 @@ export class ImageGenerator {
       });
       const prediction = await pollResponse.json().catch(() => null);
       if (!pollResponse.ok) {
-        throw new ExternalServiceError(
+        const ErrorType = isPermanentProviderResponse(pollResponse.status)
+          ? PermanentImageGenerationError
+          : ExternalServiceError;
+        throw new ErrorType(
           `Replicate polling failed with HTTP ${pollResponse.status}`
         );
       }
@@ -70,7 +82,7 @@ export class ImageGenerator {
         prediction?.status === "failed" ||
         prediction?.status === "canceled"
       ) {
-        throw new ExternalServiceError(
+        throw new PermanentImageGenerationError(
           `Replicate generation ${prediction.status}`
         );
       }
@@ -82,7 +94,9 @@ export class ImageGenerator {
         ? prediction.output[0]
         : prediction.output;
       if (typeof urlImage !== "string" || urlImage.length === 0) {
-        throw new ExternalServiceError("Replicate generation returned no image");
+        throw new PermanentImageGenerationError(
+          "Replicate generation returned no image"
+        );
       }
       const imageResponse = await fetch(urlImage);
       if (!imageResponse.ok) {

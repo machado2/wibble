@@ -19,6 +19,13 @@ export class ExternalServiceError extends Error {
   }
 }
 
+export class PermanentImageGenerationError extends Error {
+  constructor(message: string = "Image generation failed permanently") {
+    super(message);
+    this.name = "PermanentImageGenerationError";
+  }
+}
+
 export class InvalidGptResponseError extends ExternalServiceError {
   constructor(message: string = "Invalid GPT response") {
     super(message);

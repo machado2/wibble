@@ -95,13 +95,32 @@ export class ImageRepository {
 
   public async flagImage(image: image_cache, error?: string) {
     const failCount = image.fail_count + 1;
+    const permanentlyFailed = failCount >= 5;
     await prisma.image_cache.update({
       where: { id: image.id },
       data: {
         fail_count: failCount,
-        flagged: failCount >= 5,
-        status: failCount >= 5 ? "failed" : "pending",
+        flagged: permanentlyFailed,
+        regenerate: false,
+        status: permanentlyFailed ? "failed" : "pending",
         last_error: error ?? null,
+        generation_finished_at: permanentlyFailed
+          ? DateTime.utc().toJSDate()
+          : null,
+      },
+    });
+  }
+
+  public async failPermanently(id: string, error?: string) {
+    await prisma.image_cache.update({
+      where: { id },
+      data: {
+        fail_count: { increment: 1 },
+        flagged: true,
+        regenerate: false,
+        status: "failed",
+        last_error: error ?? null,
+        generation_finished_at: DateTime.utc().toJSDate(),
       },
     });
   }

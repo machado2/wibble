@@ -1,6 +1,10 @@
 import { ImageRepository } from "./ImageRepository";
 import { ImageGenerator } from "./ImageGenerator";
 import { image_cache } from "@prisma/client";
+import {
+  ContentModerationError,
+  PermanentImageGenerationError,
+} from "./errors";
 
 export class ImageService {
   private repository = new ImageRepository();
@@ -22,6 +26,13 @@ export class ImageService {
       const imageData = await this.generator.generateImage(image);
       await this.repository.updateEntryWithImage(id, imageData);
     } catch (error) {
+      if (
+        error instanceof ContentModerationError ||
+        error instanceof PermanentImageGenerationError
+      ) {
+        await this.repository.failPermanently(id, String(error));
+        return;
+      }
       await this.repository.flagImage(image, String(error));
       throw error;
     }

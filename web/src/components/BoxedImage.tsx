@@ -14,11 +14,11 @@ export type BoxedImageProps = {
 };
 
 export const BoxedImage = (props: BoxedImageProps) => {
-  const altText = props.alt;
   const cssClass = props.className;
   const [captionUuid] = useState<string>(uuidv4());
   const [mounted, setMounted] = useState(false);
   const [retryAttempt, setRetryAttempt] = useState(0);
+  const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const imgid = computeHash(props.prompt);
@@ -29,25 +29,47 @@ export const BoxedImage = (props: BoxedImageProps) => {
 
   useEffect(() => {
     setMounted(true);
-    return () => {
-      if (retryTimer.current) clearTimeout(retryTimer.current);
-    };
   }, []);
 
-  const retryPendingImage = () => {
-    if (retryAttempt >= 24 || retryTimer.current) return;
-    retryTimer.current = setTimeout(() => {
-      retryTimer.current = null;
-      setRetryAttempt((attempt) => attempt + 1);
-    }, 5000);
-  };
+  useEffect(() => {
+    if (!mounted || !props.prompt) return;
 
-  const imageLoaded = () => {
-    if (retryTimer.current) {
-      clearTimeout(retryTimer.current);
-      retryTimer.current = null;
-    }
-  };
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    setLoadedImageUrl(null);
+
+    const loadImage = async () => {
+      try {
+        const response = await fetch(imgUrl, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          objectUrl = URL.createObjectURL(await response.blob());
+          setLoadedImageUrl(objectUrl);
+          return;
+        }
+        if (response.status !== 503 || retryAttempt >= 24) return;
+      } catch (error) {
+        if (controller.signal.aborted || retryAttempt >= 24) return;
+      }
+
+      retryTimer.current = setTimeout(() => {
+        retryTimer.current = null;
+        setRetryAttempt((attempt) => attempt + 1);
+      }, 5000);
+    };
+
+    void loadImage();
+    return () => {
+      controller.abort();
+      if (retryTimer.current) {
+        clearTimeout(retryTimer.current);
+        retryTimer.current = null;
+      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [imgUrl, mounted, props.prompt, retryAttempt]);
 
   const tryPlugCaption = () => {
     const elCaption = document.getElementById(captionUuid);
@@ -62,14 +84,14 @@ export const BoxedImage = (props: BoxedImageProps) => {
     }
   };
 
-  if (props.prompt && mounted) {
+  if (props.prompt && mounted && loadedImageUrl) {
     const captionHtml = `<div id="${captionUuid}" class="${styles.promptcaption}" onpointermove="event.stopPropagation()">`;
     return (
       <>
         <Gallery withCaption>
           <Item
-            original={imgUrl}
-            thumbnail={imgUrl}
+            original={loadedImageUrl}
+            thumbnail={loadedImageUrl}
             width="512"
             height="512"
             caption={captionHtml}
@@ -89,10 +111,9 @@ export const BoxedImage = (props: BoxedImageProps) => {
                   onClick={openLightbox}
                   alt={captionText}
                   title={captionText}
-                  src={imgUrl}
+                  src={loadedImageUrl}
                   className={cssClass}
-                  onError={retryPendingImage}
-                  onLoad={imageLoaded}
+                  onError={() => setLoadedImageUrl(null)}
                 />
               );
             }}
@@ -102,14 +123,5 @@ export const BoxedImage = (props: BoxedImageProps) => {
     );
   }
 
-  return (
-    <img
-      src={imgUrl}
-      alt={altText}
-      title={captionText}
-      className={cssClass}
-      onError={retryPendingImage}
-      onLoad={imageLoaded}
-    />
-  );
+  return null;
 };

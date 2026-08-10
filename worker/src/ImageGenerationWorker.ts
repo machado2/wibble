@@ -1,6 +1,5 @@
 import { ImageRepository } from "./ImageRepository";
 import { ImageService } from "./ImageService";
-import { ContentModerationError } from "./errors";
 import logger from "./logger";
 import { SleepOnError, SleepOnIdle } from "./sleep";
 
@@ -11,15 +10,7 @@ class ImageGenerationTask {
   public async run(): Promise<void> {
     const image = await this.imageRepository.getNextImageToGenerate();
     if (image) {
-      try {
-        await this.imageService.generateImage(image);
-      } catch (error: any) {
-        if (error?.name === "ContentModerationError") {
-          await this.imageRepository.flagImage(image);
-        } else {
-          throw error;
-        }
-      }
+      await this.imageService.generateImage(image);
     } else {
       await SleepOnIdle();
     }
