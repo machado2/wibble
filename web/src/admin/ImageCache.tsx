@@ -28,7 +28,7 @@ const ImageApiField = () => {
     setImageTimestamp(Date.now());
   }, [record]);
 
-  return record.image_data ? (
+  return record.status === "completed" ? (
     <Image src={`/api/image/${record.id}?v=${imageTimestamp}`} width={100} />
   ) : (
     <p>null</p>
@@ -60,7 +60,10 @@ export const ImageCacheEdit: React.FC = (props) => {
   const [update, { isLoading }] = useUpdate<image_cache>();
 
   const handleClearImage = () => {
-    update("image_cache", { id: record.id, data: { image_data: null } });
+    update("image_cache", {
+      id: record.id,
+      data: { regenerate: true, status: "pending" },
+    });
   };
 
   return (

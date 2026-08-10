@@ -8,7 +8,7 @@ import {
   extractMarkdownImages,
 } from "@/core/extractGeneratedImageTags";
 import { ImageRepository } from "@/core/ImageRepository";
-import { image_cache, content } from "@prisma/client";
+import { content } from "@prisma/client";
 
 class GenerationTask {
   private repository = new ContentRepository();
@@ -99,13 +99,16 @@ class GenerationTask {
         await this.repository.failGeneration(content.slug);
         return;
       }
-      const imageIds: image_cache[] = await Promise.all(
+      const imageIds = await Promise.all(
         this.images.map(
           async (image) =>
             await this.imageRepository.getImageByPrompt(image.prompt)
         )
       );
-      const thumb = imageIds[0].id;
+      const thumb = imageIds[0]?.id;
+      if (!thumb) {
+        throw new Error("Generated article image was not persisted");
+      }
       await this.repository.finishTextGeneration(
         content.slug,
         generatedContent,

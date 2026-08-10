@@ -15,7 +15,7 @@ const serveImage = (
   image: image_cache | null | undefined,
   res: NextApiResponse
 ) => {
-  if (!image || image.flagged || !image.image_data) {
+  if (!image || image.flagged || image.status !== "completed") {
     res.status(503).send("Image not ready");
     return;
   }

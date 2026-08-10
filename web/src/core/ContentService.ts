@@ -94,7 +94,7 @@ ${text}`;
       content: mdxData,
       imageUrl: content.image_id ? `/api/image/${content.image_id}` : null,
       loading: false,
-      titleInContent: content.title_repeated ?? false,
+      titleInContent: false,
       datetime: DateTime.fromJSDate(content.created_at).toISO()!,
       votes: content.votes,
       currentVote: content.votesRelation && content.votesRelation.length > 0 ? (content.votesRelation[0].downvote ? -1 : 1) : 0,

@@ -1,27 +1,17 @@
 import { image_cache } from "@prisma/client";
-import { DateTime } from "luxon";
-import { computeHash } from "./computeHash";
 import { GeneratedImageData } from "@/worker/ContentGenerator";
+import { computeHash } from "./computeHash";
 import prisma from "./PrismaWibble";
 
 export class ImageRepository {
-  public async createEntry(prompt: string): Promise<image_cache> {
-    const id = computeHash(prompt);
-    return await prisma.image_cache.create({
-      data: {
-        id,
-        prompt,
-        flagged: false,
-        created_at: DateTime.utc().toJSDate(),
-        fail_count: 0,
-      },
-    });
+  public async createEntry(_prompt: string): Promise<image_cache> {
+    throw new Error("Image creation is handled by the native generation queue");
   }
 
   public async updateEntryWithCreatedAt(id: string) {
     await prisma.image_cache.update({
       where: { id },
-      data: { created_at: DateTime.utc().toJSDate() },
+      data: { created_at: new Date() },
     });
   }
 
@@ -29,34 +19,21 @@ export class ImageRepository {
     return await prisma.image_cache.findFirst({
       where: {
         flagged: false,
-        OR: [{ image_data: null }, { regenerate: true }],
+        OR: [{ status: "pending" }, { regenerate: true }],
       },
-      orderBy: {
-        created_at: "asc",
-      },
+      orderBy: { created_at: "asc" },
     });
   }
 
   public async removeEntry(id: string) {
-    await prisma.image_cache.delete({
-      where: { id },
-    });
+    await prisma.image_cache.delete({ where: { id } });
   }
 
   public async updateEntryWithImage(
-    id: string,
-    genImgData: GeneratedImageData
+    _id: string,
+    _genImgData: GeneratedImageData
   ) {
-    await prisma.image_cache.update({
-      where: { id },
-      data: {
-        image_data: genImgData.image,
-        model: genImgData.model,
-        generator: genImgData.generator,
-        regenerate: false,
-        seed: genImgData.seed,
-      },
-    });
+    throw new Error("Image persistence is handled by the native image store");
   }
 
   public async flagImage(id: string) {
@@ -67,18 +44,27 @@ export class ImageRepository {
   }
 
   public async getImageById(id: string): Promise<image_cache | null> {
-    return await prisma.image_cache.findUnique({
-      where: { id },
+    const direct = await prisma.image_cache.findUnique({ where: { id } });
+    if (direct) return direct;
+
+    const hashed = await prisma.image_cache.findFirst({
+      where: { prompt_hash: id },
     });
+    if (hashed) return hashed;
+
+    const candidates = await prisma.image_cache.findMany({
+      where: { flagged: false },
+      orderBy: { created_at: "desc" },
+      take: 500,
+    });
+    return candidates.find((image) => computeHash(image.prompt) === id) ?? null;
   }
 
-  public async getImageByPrompt(prompt: string): Promise<image_cache> {
-    const id = computeHash(prompt);
-    const existingImage = await this.getImageById(id);
-    if (existingImage) {
-      return existingImage;
-    }
-    return await this.createEntry(prompt);
+  public async getImageByPrompt(prompt: string): Promise<image_cache | null> {
+    return await prisma.image_cache.findFirst({
+      where: { prompt, flagged: false },
+      orderBy: { created_at: "desc" },
+    });
   }
 
   public async getLastBlockedImages(): Promise<image_cache[]> {

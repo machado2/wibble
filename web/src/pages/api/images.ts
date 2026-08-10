@@ -71,7 +71,10 @@ const list = async (
   let searchFilter: Prisma.image_cacheWhereInput | undefined = undefined;
   if (search) {
     searchFilter = {
-      OR: [{ prompt: { search: search } }, { model: { search: search } }],
+      OR: [
+        { prompt: { contains: search, mode: "insensitive" } },
+        { model: { contains: search, mode: "insensitive" } },
+      ],
     };
   }
 

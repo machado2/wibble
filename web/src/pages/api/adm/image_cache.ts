@@ -14,22 +14,10 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   await requireSession(req, res);
   await defaultHandler(req, res, prisma, {
     getList: {
-        transform: (list: image_cache[]) => {
-            return list.map((row) => {
-                return {
-                    ...row,
-                    image_data: undefined,
-                };
-            });
-        },
+        transform: (list: image_cache[]) => list,
     },
     getOne: {
-      transform: (row: image_cache) => {
-        return {
-          ...row,
-          image_data: undefined,
-        };
-      },
+      transform: (row: image_cache) => row,
     },
   });
 };

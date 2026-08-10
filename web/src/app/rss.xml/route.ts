@@ -10,7 +10,7 @@ function generateRSSFeed(newsItems: NewsListItem[]): string {
     .map((item) => {
       const imageId = item.imagePrompt ? computeHash(item.imagePrompt) : null;
       const mediaUrl = imageId
-        ? `https://wibble.news/api/image/${imageId}`
+        ? `${process.env.SITE_URL ?? "https://wibble.fbmac.net"}/api/image/${imageId}`
         : null;
       const mediaTag = mediaUrl
         ? `<media:content url="${mediaUrl}" type="image/jpeg" medium="image"><media:description></media:description></media:content>`

@@ -103,19 +103,20 @@ export class ContentRepository {
 
     let searchFilter: Prisma.contentWhereInput | undefined = undefined;
     if (search) {
-      searchFilter = { OR:
-        [
-          { slug: { search: search } },
-          { title: { search: search } },
-          { description: { search: search } },
-          { content: { search: search } },
-        ]
+      searchFilter = {
+        OR: [
+          { slug: { contains: search, mode: "insensitive" } },
+          { title: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
+          { content: { contains: search, mode: "insensitive" } },
+        ],
       };
     }
 
     const contents = await prisma.content.findMany({
       where: {
         flagged: false,
+        published: true,
         model,
         created_at: days ? { gte: DateTime.utc().minus({ days }).toJSDate() } : undefined,
         AND: additionalFilter,
@@ -327,6 +328,7 @@ export class ContentRepository {
         user_input: userInput,
         user_email: userEmail,
         model,
+        published: false,
       },
     });
   }
@@ -359,9 +361,9 @@ export class ContentRepository {
           generation_finished_at: DateTime.utc().toJSDate(),
           model: model,
           prompt_version: prompt_version,
-          title_repeated: containsDuplicatedTitle,
           image_id: imageId,
           image_prompt: imagePrompt,
+          published: true,
         },
       });
     } else {
