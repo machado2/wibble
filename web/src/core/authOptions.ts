@@ -24,6 +24,9 @@ const ssoProvider: OAuthConfig<SsoProfile> = {
   authorization: {
     params: { scope: "openid profile email" },
   },
+  client: {
+    id_token_signed_response_alg: "EdDSA",
+  },
   checks: ["pkce", "state", "nonce"],
   profile(profile) {
     return {
