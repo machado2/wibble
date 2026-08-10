@@ -6,7 +6,6 @@ use crate::llm::article_generator::{
     ensure_minimum_paragraph_count, split_paragraphs, validate_article_output,
 };
 use crate::llm::edit_agent::generate_edit_proposal;
-use crate::services::editorial_policy::enforce_edit_request_policy;
 use crate::wibble_request::WibbleRequest;
 
 use super::service::{apply_article_edit, require_editable_article};
@@ -26,7 +25,6 @@ pub(super) fn normalize_agent_edit_request(raw: &str) -> Result<String, Error> {
             MAX_AGENT_EDIT_REQUEST_CHARS
         )));
     }
-    enforce_edit_request_policy(request)?;
     Ok(request.to_string())
 }
 

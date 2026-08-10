@@ -12,7 +12,6 @@ use crate::image_jobs::spawn_image_generation;
 use crate::image_status::{is_pending_status, IMAGE_STATUS_PENDING};
 use crate::permissions::{can_edit_article, can_toggle_publish};
 use crate::repositories::images::{normalize_uploaded_image, store_image_file};
-use crate::services::editorial_policy::enforce_article_output_policy;
 use crate::wibble_request::WibbleRequest;
 
 use super::MAX_IMAGE_UPLOAD_BYTES;
@@ -53,7 +52,6 @@ pub(super) async fn apply_article_edit(
     audit_details: Option<String>,
 ) -> Result<Redirect, Error> {
     let db = &wr.state.db;
-    enforce_article_output_policy(&data.title, &data.description, &data.markdown)?;
     let mut active: content_entity::ActiveModel = article.into();
     active.title = ActiveValue::set(data.title.clone());
     active.description = ActiveValue::set(data.description.clone());

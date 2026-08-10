@@ -1,7 +1,6 @@
 use serde::Deserialize;
 
 use crate::error::Error;
-use crate::services::editorial_policy::enforce_generation_request_policy;
 
 use super::MAX_PROMPT_CHARS;
 
@@ -18,7 +17,6 @@ pub fn normalize_create_prompt(raw: &str) -> Result<String, Error> {
             MAX_PROMPT_CHARS
         )));
     }
-    enforce_generation_request_policy(prompt)?;
     Ok(prompt.to_string())
 }
 

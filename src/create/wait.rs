@@ -282,7 +282,24 @@ pub async fn wait(wr: WibbleRequest, id: &str) -> WaitResponse {
                 Err(_) => WaitResponse::InternalError,
             }
         }
-        Ok(Some(job)) if job.status == ARTICLE_JOB_STATUS_FAILED => WaitResponse::InternalError,
+        Ok(Some(job)) if job.status == ARTICLE_JOB_STATUS_FAILED => {
+            let error_message = job
+                .error_summary
+                .unwrap_or_else(|| "Article generation failed.".to_string());
+            match wr
+                .template("error")
+                .await
+                .insert("title", "Article generation failed")
+                .insert("description", "The article could not be generated.")
+                .insert("robots", "noindex,nofollow")
+                .insert("error_message", &error_message)
+                .insert("image_url", "/error8.jpg")
+                .render()
+            {
+                Ok(html) => WaitResponse::Html(html),
+                Err(_) => WaitResponse::InternalError,
+            }
+        }
         Ok(Some(job)) if is_in_progress_job_status(&job.status) => {
             match render_wait_page(&wr, id).await {
                 Ok(html) => WaitResponse::Html(html),
