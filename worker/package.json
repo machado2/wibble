@@ -1,0 +1,47 @@
+{
+  "name": "wibble-worker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "prisma generate && openapi --input https://stablehorde.net/api/swagger.json --output ./src/generated/stable-horde-api --name stableHordeClient"
+  },
+  "author": "",
+  "private": true,
+  "license": "proprietary",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@types/express": "^4.17.17",
+    "@types/luxon": "^3.3.0",
+    "@types/uuid": "^9.0.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "luxon": "^3.3.0",
+    "mysql2": "^3.4.0",
+    "next-mdx-remote": "^4.4.1",
+    "openai": "^3.2.1",
+    "rate-limiter-flexible": "^2.4.1",
+    "remark": "^14.0.3",
+    "remark-mdx": "^2.3.0",
+    "remark-parse": "^10.0.2",
+    "sharp": "^0.32.1",
+    "slugify": "^1.6.6",
+    "ts-node": "^10.9.1",
+    "tsx": "^3.12.7",
+    "typescript": "^5.0.4",
+    "unist-util-visit": "^4.1.2",
+    "uuid": "^9.0.0",
+    "winston": "^3.9.0",
+    "winston-loggly-bulk": "^3.2.1"
+  },
+  "devDependencies": {
+    "@types/winston-loggly-bulk": "^3.0.3",
+    "openapi-typescript-codegen": "^0.24.0",
+    "prettier": "^2.8.8",
+    "prisma": "^5.0.0"
+  }
+}

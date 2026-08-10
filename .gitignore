@@ -1,11 +1,16 @@
 /target
 .trigger
 .env
+.env.*
+!.env.example
 .vscode/
 .idea/
 /compose.yaml
 **/target/
 **/node_modules/
+**/.next/
+**/coverage/
+**/*.tsbuildinfo
 images
 dist/
 *.gz

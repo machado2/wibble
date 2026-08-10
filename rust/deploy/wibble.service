@@ -8,11 +8,11 @@ Requires=postgresql.service
 Type=simple
 User=fabio
 Group=fabio
-WorkingDirectory=/home/fabio/services/wibble
+WorkingDirectory=/home/fabio/services/wibble/rust
 EnvironmentFile=-/home/fabio/services/arr/.env
 EnvironmentFile=/home/fabio/services/wibble/.env
 Environment=TEMPLATE_AUTO_RELOAD=false
-ExecStart=/home/fabio/services/wibble/scripts/run-native.sh
+ExecStart=/home/fabio/services/wibble/rust/scripts/run-native.sh
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=180

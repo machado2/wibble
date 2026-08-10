@@ -1,0 +1,8 @@
+echo use linux or wsl to avoid encoding issues
+echo
+echo dumping database
+# powershell mysqldump -u ***** -p***** -h ***** --skip-column-statistics ***** | Out-File backup.sql -Encoding UTF8
+mysqldump -u ***** -p***** -h ***** ***** > backup.sql
+
+echo uploading to local server
+mysql -u ***** -p***** -h ***** ***** < backup.sql

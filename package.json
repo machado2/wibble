@@ -1,0 +1,12 @@
+{
+  "name": "wibble-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "pnpm --filter wibble-web build",
+    "dev:web": "pnpm --filter wibble-web dev",
+    "start:worker": "pnpm --filter wibble-worker start",
+    "typecheck": "pnpm --filter wibble-web typecheck && pnpm --filter wibble-worker typecheck"
+  }
+}

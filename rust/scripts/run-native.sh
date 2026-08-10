@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-cd /home/fabio/services/wibble
+cd /home/fabio/services/wibble/rust
 
 # Convert the legacy Docker Compose database hostname without copying secrets.
 case "${DATABASE_URL:-}" in
@@ -15,4 +15,4 @@ esac
 export LANGUAGE_MODEL="${LANGUAGE_MODEL:-${OPENAI_MODEL:-${OPENROUTER_MODEL:-openai/gpt-4o-mini}}}"
 
 /usr/local/bin/prisma migrate deploy --schema=database/prisma/schema.prisma
-exec /home/fabio/services/wibble/target/release/wibble
+exec /home/fabio/services/wibble/rust/target/release/wibble

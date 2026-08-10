@@ -1,0 +1,13 @@
+.supportthewibble {
+  margin-top: 2em;
+  margin-bottom: 2em;
+  width: 100%;
+  text-align: center;
+  font-size: x-small;
+  color: gray;
+}
+
+.supportthewibble a {
+  color: #0000ff;
+  text-decoration: underline;
+}

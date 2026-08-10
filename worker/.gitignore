@@ -1,0 +1,8 @@
+*~
+node_modules/
+/src/generated/
+/.vscode/
+/docker-compose.yml
+/.env
+/backup.sql
+/backup.sh

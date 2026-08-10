@@ -1,0 +1,47 @@
+.newsItem {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.loader {
+  font-size: 1.1em;
+  margin-top: 20px;
+  text-align: center;
+}
+
+.noMoreNews {
+  font-size: 1.1em;
+  margin-top: 20px;
+  text-align: center;
+}
+
+.maincard {
+  max-width: 800px;
+  margin: 0 auto;
+  font-size: 16px;
+  line-height: 1.6;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.nextPageLink {
+  display: flex;
+  justify-content: center;
+  margin-top: 3rem;
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+}
+
+.selectors {
+  display: flex;
+  justify-content: left;
+  align-items: center;
+}
+
+.sortSelector {
+  margin-right: 1em;
+}

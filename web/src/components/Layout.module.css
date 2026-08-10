@@ -1,0 +1,16 @@
+.siteheader {
+  background-color: #1890ff;
+  color: white;
+  padding: 0;
+  padding-left: 20px;
+  padding-right: 20px;
+  font-size: 1.5rem;
+}
+
+.siteheader a {
+  color: white;
+}
+
+.content {
+  padding: 20px;
+}

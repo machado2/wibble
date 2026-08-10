@@ -1,0 +1,35 @@
+.ImageListItem {
+    width: 30%;
+    float: left;
+}
+
+.listBottom {
+    clear: both;
+}
+
+.nextPageLink {
+    display: flex;
+    justify-content: center;
+    margin-top: 3rem;
+    padding: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+  }
+
+  .ImageListContainer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .ImageListItem {
+    padding: 1px;
+    width: 30%;
+  }
+
+  .ImageListItemImg {
+    width: 100%;
+
+  }

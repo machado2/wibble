@@ -1,0 +1,33 @@
+
+.imagecenter, .imageleft, .imageright, .imagebetween {
+    max-width: 80%;
+}
+
+.imageleft, .imageright, .imagebetween {
+    max-width: 30%;
+}
+
+
+.imagecenter {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
+
+  .imageleft {
+    float: left;
+    margin: 5px;
+  }
+
+  .imageright {
+    float: right;
+    margin: 5px;
+  }
+
+  .imagebetween {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }

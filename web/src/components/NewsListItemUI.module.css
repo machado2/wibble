@@ -1,0 +1,74 @@
+.newsDate {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 5px;
+    margin-top: 0;
+    font-family: 'Roboto', sans-serif;
+}
+
+.thumbnail {
+    max-width: 20%;
+    min-width: 100px;
+    margin-right: 10px;
+    object-fit: cover;
+    border-radius: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    float: left;
+}
+
+.titleLink {
+    font-size: 1.1em;
+    font-weight: bold;
+    text-decoration: none;
+    color: #0070f3;
+}
+
+.titleLink:hover {
+    text-decoration: underline;
+}
+
+.description {
+    margin-top: 5px;
+    font-size: 0.9em;
+    color: #666;
+    padding: 0;
+    margin-bottom: 0;
+}
+
+.bottom {
+    padding-top: 1em;
+    clear: both;
+    display: flex;
+    justify-content: left;
+}
+
+.voteContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.upvoteButton, .downvoteButton {
+    cursor: pointer;
+    border: none;
+    padding: 0;
+    background: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.upvoteButton svg, .downvoteButton svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.voteCount {
+    margin: 0 8px; /* Adjust the margin as needed */
+}
+
+.voted {
+    color: #f00; /* Choose a color that indicates that the user has voted */
+}

@@ -1,0 +1,10 @@
+version: '3'
+services:
+  wibbleworker:
+    build: .
+    restart: "always"
+    environment:
+      - OPENAI_KEY=
+      - DATABASE_URL=
+      - JWT_SECRET=
+      - SDH_KEY=
