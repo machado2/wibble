@@ -2,7 +2,12 @@ import prisma from "@/core/PrismaWibble";
 import xml from "xml";
 import { NextResponse } from "next/server";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
+
+const siteUrl = (process.env.SITE_URL ?? "https://wibble.fbmac.net").replace(
+  /\/$/,
+  ""
+);
 
 const HIGH_PRIORITY = 1;
 const DEFAULT_PRIORITY = 0.1;
@@ -21,6 +26,7 @@ export async function GET() {
         not: null,
       },
       flagged: false,
+      published: true,
     },
     orderBy: {
       created_at: "desc",
@@ -33,9 +39,14 @@ export async function GET() {
     },
   };
 
-  let urlset: any[] = [namespace];
+  let urlset: any[] = [
+    namespace,
+    {
+      url: [{ loc: siteUrl }, { priority: HIGH_PRIORITY }],
+    },
+  ];
   for (let article of articles) {
-    const fullUrl = `https://wibble.news/content/${article.slug}`;
+    const fullUrl = `${siteUrl}/content/${encodeURIComponent(article.slug)}`;
     // we give higher priority to GPT-4 articles and articles that were voted on
     const priority =
       article.model.includes("gpt-4") || article.votes > 0

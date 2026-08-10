@@ -41,7 +41,7 @@ description: ${msg}
       imageUrl: null,
       loading,
       titleInContent: false,
-      datetime: new Date().toUTCString(),
+      datetime: new Date().toISOString(),
     };
   }
 
@@ -78,7 +78,7 @@ ${text}`;
       imageUrl: null,
       loading: true,
       titleInContent: false,
-      datetime: new Date().toUTCString(),
+      datetime: new Date().toISOString(),
     };
   }
 

@@ -27,6 +27,14 @@ const ssoProvider: OAuthConfig<SsoProfile> = {
   client: {
     id_token_signed_response_alg: "EdDSA",
   },
+  userinfo: {
+    async request({ tokens, client }) {
+      if (!tokens.access_token) {
+        throw new Error("SSO did not return an access token");
+      }
+      return client.userinfo(tokens.access_token);
+    },
+  },
   checks: ["pkce", "state", "nonce"],
   profile(profile) {
     return {

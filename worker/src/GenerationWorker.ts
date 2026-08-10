@@ -9,8 +9,6 @@ import {
 import { ImageRepository } from "./ImageRepository";
 import { image_cache, content } from "@prisma/client";
 import logger from "./logger";
-import { getRateLimiter } from "./RateLimiter";
-import { Config } from "./config";
 import { SleepCoolDown, SleepOnError } from "./sleep";
 
 class GenerationTask {
@@ -117,7 +115,11 @@ class GenerationTask {
     const imageIds: image_cache[] = await Promise.all(
       this.images.map(
         async (image) =>
-          await this.imageRepository.getImageByPrompt(image.prompt)
+          await this.imageRepository.getImageByPrompt(
+            image.prompt,
+            content.id,
+            image.alt
+          )
       )
     );
     const thumb = imageIds[0].id;
@@ -135,22 +137,7 @@ class GenerationTask {
   }
 }
 
-const secondsInADay = 24 * 60 * 60;
-
-const getGpt3Limiter = async () => {
-  const gpt3Limiter = await getRateLimiter(
-    Config.gpt3DailyLimit,
-    secondsInADay,
-    "gpt3"
-  );
-  return gpt3Limiter;
-};
-
 export const contentGenerationLoop = async () => {
-  const coolDownMs = Config.coolDownSec * 1000;
-  const waitOnErrorMs = Config.waitOnErrorSec * 1000;
-  const gpt3Limiter = await getGpt3Limiter();
-
   logger.info("Starting content generation loop");
   for (;;) {
     try {

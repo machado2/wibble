@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Gallery, Item } from "react-photoswipe-gallery";
 import "photoswipe/dist/photoswipe.css";
 import styles from "@/styles/GeneratedImage.module.css";
@@ -17,10 +17,37 @@ export const BoxedImage = (props: BoxedImageProps) => {
   const altText = props.alt;
   const cssClass = props.className;
   const [captionUuid] = useState<string>(uuidv4());
+  const [mounted, setMounted] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const imgid = computeHash(props.prompt);
-  const imgUrl = `/api/image/${imgid}`;
+  const imgUrl = `/api/image/${imgid}${
+    retryAttempt > 0 ? `?retry=${retryAttempt}` : ""
+  }`;
   const captionText = props.alt.length > 0 ? props.alt : props.prompt ?? "";
+
+  useEffect(() => {
+    setMounted(true);
+    return () => {
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    };
+  }, []);
+
+  const retryPendingImage = () => {
+    if (retryAttempt >= 24 || retryTimer.current) return;
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null;
+      setRetryAttempt((attempt) => attempt + 1);
+    }, 5000);
+  };
+
+  const imageLoaded = () => {
+    if (retryTimer.current) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
+  };
 
   const tryPlugCaption = () => {
     const elCaption = document.getElementById(captionUuid);
@@ -35,7 +62,7 @@ export const BoxedImage = (props: BoxedImageProps) => {
     }
   };
 
-  if (props.prompt) {
+  if (props.prompt && mounted) {
     const captionHtml = `<div id="${captionUuid}" class="${styles.promptcaption}" onpointermove="event.stopPropagation()">`;
     return (
       <>
@@ -64,6 +91,8 @@ export const BoxedImage = (props: BoxedImageProps) => {
                   title={captionText}
                   src={imgUrl}
                   className={cssClass}
+                  onError={retryPendingImage}
+                  onLoad={imageLoaded}
                 />
               );
             }}
@@ -73,5 +102,14 @@ export const BoxedImage = (props: BoxedImageProps) => {
     );
   }
 
-  return <img src={imgUrl} alt={altText} className={cssClass} />;
+  return (
+    <img
+      src={imgUrl}
+      alt={altText}
+      title={captionText}
+      className={cssClass}
+      onError={retryPendingImage}
+      onLoad={imageLoaded}
+    />
+  );
 };

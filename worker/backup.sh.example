@@ -1,8 +1,9 @@
 echo use linux or wsl to avoid encoding issues
 echo
 echo dumping database
-# powershell mysqldump -u ***** -p***** -h ***** --skip-column-statistics ***** | Out-File backup.sql -Encoding UTF8
-mysqldump -u ***** -p***** -h ***** ***** > backup.sql
+# Create a PostgreSQL backup before maintenance.
+pg_dump --format=custom --file=wibble.dump "$DATABASE_URL"
 
-echo uploading to local server
-mysql -u ***** -p***** -h ***** ***** < backup.sql
+echo restoring database
+# Restore into an empty PostgreSQL database when needed.
+pg_restore --clean --if-exists --no-owner --dbname="$DATABASE_URL" wibble.dump

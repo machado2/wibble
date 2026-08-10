@@ -8,7 +8,6 @@ const SearchBox = () => {
   const router = useRouter();
   const searchTerm = (router.query.search as string) || undefined;
   const [inputValue, setInputValue] = useState(searchTerm);
-  const [previousSearchTerm, setPreviousSearchTerm] = useState(searchTerm);
   const [debouncedValue] = useDebounce(inputValue, 800);
 
   useEffect(() => {
@@ -16,7 +15,10 @@ const SearchBox = () => {
   }, [searchTerm]);
 
   useEffect(() => {
-    const newSearchParameter = (debouncedValue?.length ?? 0) > 0 ? debouncedValue : undefined;
+    if (!router.isReady) return;
+    const newSearchParameter =
+      (debouncedValue?.length ?? 0) > 0 ? debouncedValue : undefined;
+    if (newSearchParameter === searchTerm) return;
     const query: any = { ...router.query };
     delete query.afterId;
     if (!newSearchParameter) {
@@ -24,16 +26,11 @@ const SearchBox = () => {
     } else {
       query.search = newSearchParameter;
     }
-    router.push(
-      {
-        pathname: router.pathname,
-        query,
-      },
-    );
-    if (previousSearchTerm !== debouncedValue) {
-      setPreviousSearchTerm(debouncedValue);
-    }
-  }, [previousSearchTerm, debouncedValue]);
+    void router.push({
+      pathname: router.pathname,
+      query,
+    });
+  }, [debouncedValue, router, searchTerm]);
 
   const handleSearchChange: React.ChangeEventHandler<HTMLInputElement> = (
     e

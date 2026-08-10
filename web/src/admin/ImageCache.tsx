@@ -29,7 +29,11 @@ const ImageApiField = () => {
   }, [record]);
 
   return record.status === "completed" ? (
-    <Image src={`/api/image/${record.id}?v=${imageTimestamp}`} width={100} />
+    <Image
+      src={`/api/image/${record.id}?v=${imageTimestamp}`}
+      alt={record.alt_text || record.prompt}
+      width={100}
+    />
   ) : (
     <p>null</p>
   );

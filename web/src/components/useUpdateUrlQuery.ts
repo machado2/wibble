@@ -4,7 +4,7 @@ export const useUpdateUrlQuery = () => {
   const router = useRouter();
 
   const updateUrlQuery = (parameter: string, value?: string) => {
-    const newQuery = router.query;
+    const newQuery = { ...router.query };
     const oldValue = newQuery[parameter];
     if (value === undefined || value === "") {
       if (oldValue === undefined) {
@@ -17,6 +17,7 @@ export const useUpdateUrlQuery = () => {
       }
       newQuery[parameter] = value;
     }
+    delete newQuery.afterId;
     router.push(
       {
         pathname: router.pathname,

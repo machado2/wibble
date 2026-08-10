@@ -45,9 +45,9 @@ export const GeneratedImage = (props: GeneratedImageProps) => {
         }
 
         const newCssClass = [styles.imageleft, styles.imageright, styles.imagebetween][order];
-        if (className !== newCssClass) {
-            setClassName(newCssClass);
-        }
+        setClassName((currentClassName) =>
+            currentClassName === newCssClass ? currentClassName : newCssClass
+        );
 
     }, []);
 

@@ -19,7 +19,12 @@ const GenerateNewArticle = () => {
   const admin = isAdmin(session);
 
   const submit = async () => {
-    if (prompt.length > 2000) {
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      message.error("Please enter a prompt.");
+      return;
+    }
+    if (trimmedPrompt.length > 2000) {
       message.error("Your text is too long!");
       return;
     }
@@ -27,7 +32,7 @@ const GenerateNewArticle = () => {
     setIsLoading(true);
     try {
       const response = await axios.post<{ slug: string }>("/api/create", {
-        prompt,
+        prompt: trimmedPrompt,
         model,
       });
       router.push(`/content/${response.data.slug}`);

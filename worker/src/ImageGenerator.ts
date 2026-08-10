@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import { GeneratedImageData } from "./ContentGenerator";
 import { ExternalServiceError } from "./errors";
 import { Config } from "./config";
@@ -36,9 +35,7 @@ export class ImageGenerator {
     const created = await response.json().catch(() => null);
     if (!response.ok) {
       throw new ExternalServiceError(
-        `Replicate request failed with HTTP ${
-          response.status
-        }: ${JSON.stringify(created)}`
+        `Replicate request failed with HTTP ${response.status}`
       );
     }
 
@@ -51,9 +48,7 @@ export class ImageGenerator {
         : undefined);
     if (!predictionUrl) {
       throw new ExternalServiceError(
-        `Replicate response did not include a polling URL: ${JSON.stringify(
-          created
-        )}`
+        "Replicate response did not include a polling URL"
       );
     }
 
@@ -68,9 +63,7 @@ export class ImageGenerator {
       const prediction = await pollResponse.json().catch(() => null);
       if (!pollResponse.ok) {
         throw new ExternalServiceError(
-          `Replicate polling failed with HTTP ${
-            pollResponse.status
-          }: ${JSON.stringify(prediction)}`
+          `Replicate polling failed with HTTP ${pollResponse.status}`
         );
       }
       if (
@@ -78,7 +71,7 @@ export class ImageGenerator {
         prediction?.status === "canceled"
       ) {
         throw new ExternalServiceError(
-          `Replicate generation failed: ${JSON.stringify(prediction)}`
+          `Replicate generation ${prediction.status}`
         );
       }
       if (prediction?.status !== "succeeded") {
@@ -89,11 +82,7 @@ export class ImageGenerator {
         ? prediction.output[0]
         : prediction.output;
       if (typeof urlImage !== "string" || urlImage.length === 0) {
-        throw new ExternalServiceError(
-          `Replicate generation returned no image: ${JSON.stringify(
-            prediction
-          )}`
-        );
+        throw new ExternalServiceError("Replicate generation returned no image");
       }
       const imageResponse = await fetch(urlImage);
       if (!imageResponse.ok) {
@@ -102,16 +91,20 @@ export class ImageGenerator {
         );
       }
       const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-      const jpegImageBuffer = await sharp(imageBuffer)
-        .jpeg({ quality: 85 })
-        .toBuffer();
+      const contentType = imageResponse.headers.get("content-type") ?? "";
+      const extension = contentType.includes("png")
+        ? ".png"
+        : contentType.includes("jpeg")
+        ? ".jpg"
+        : ".webp";
       return {
         prompt,
         model: Config.replicateApiUrl,
-        image: jpegImageBuffer,
+        image: imageBuffer,
         generator: "replicate",
         seed: "",
         parameters: JSON.stringify(request),
+        extension,
       };
     }
     throw new ExternalServiceError("Replicate generation timed out");

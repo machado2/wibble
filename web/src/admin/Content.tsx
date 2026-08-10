@@ -94,11 +94,10 @@ const SlugInputEdit = (props: any) => {
 
   useEffect(() => {
     const slug = slugify(watchTitle, { lower: true, strict: false });
-    console.log(slug);
     if (slug != watchSlug) {
       form.setValue("slug", slug);
     }
-  }, [watchTitle]);
+  }, [form, watchSlug, watchTitle]);
   return <TextInput source="slug" {...props} />;
 };
 

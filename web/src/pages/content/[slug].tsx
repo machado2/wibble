@@ -22,6 +22,9 @@ your source for the unpredictable and unsteady world of current events.`;
 const defaultTitle = "The Wibble";
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
+const publicSiteUrl = (
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://wibble.fbmac.net"
+).replace(/\/$/, "");
 
 async function tryLoadContent(slug: string): Promise<ParsedResponse> {
   const response = await fetch(`${baseUrl}/api/content/${slug}`);
@@ -43,6 +46,7 @@ function SlugPage(data: ParsedResponse) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     if (slug) {
       const fetchData = async () => {
         try {
@@ -50,6 +54,7 @@ function SlugPage(data: ParsedResponse) {
           while (keepTrying) {
             await new Promise((resolve) => setTimeout(resolve, 5000));
             const newResponse = await tryLoadContent(slug);
+            if (cancelled) return;
             setParsedResponse(newResponse);
             keepTrying = newResponse.loading;
           }
@@ -60,7 +65,10 @@ function SlugPage(data: ParsedResponse) {
       };
       fetchData();
     }
-  }, [slug]);
+    return () => {
+      cancelled = true;
+    };
+  }, [parsedResponse.loading, slug]);
 
   const title = (parsedResponse?.content?.frontmatter.title ||
     defaultTitle) as string;
@@ -79,7 +87,7 @@ function SlugPage(data: ParsedResponse) {
         <meta property="og:description" content={description} />
         <meta
           property="og:image"
-          content={`https://wibble.news${
+          content={`${publicSiteUrl}${
             parsedResponse?.imageUrl || "/wibble2.jpeg"
           }`}
         />
@@ -118,12 +126,12 @@ function SlugPage(data: ParsedResponse) {
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const { slug } = context.query;
-  if (!slug) {
-    return { props: {} };
+  if (!slug || Array.isArray(slug)) {
+    return { notFound: true };
   }
 
+  const service = new ContentService();
   try {
-    const service = new ContentService();
     const email = await getServerEmail(
       context.req as NextApiRequest,
       context.res as NextApiResponse
@@ -132,7 +140,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     return { props: data };
   } catch (error) {
     console.log(error);
-    return { props: {} };
+    return { props: await service.fatalErrorResponse() };
   }
 }
 

@@ -2,7 +2,7 @@ import styles from "./NewsListItemUI.module.css";
 import { downvote, unvote, upvote } from "./clientvote";
 import classNames from "classnames";
 import { BiUpvote, BiDownvote } from "react-icons/bi";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 
 export const VoteButtons = (props: {
@@ -12,7 +12,15 @@ export const VoteButtons = (props: {
 }) => {
   const [voteCount, setVoteCount] = useState(props.votes);
   const [currentVote, setCurrentVote] = useState(props.currentVote);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const { data: session } = useSession();
+
+  useEffect(() => {
+    setVoteCount(props.votes);
+    setCurrentVote(props.currentVote);
+    setError("");
+  }, [props.contentId, props.currentVote, props.votes]);
 
   if (!props.contentId) {
     return null;
@@ -25,23 +33,43 @@ export const VoteButtons = (props: {
   const handleVote = async (direction: 1 | -1) => {
     if (!isLogged) {
       await signIn();
+      return;
     }
 
-    setCurrentVote((prevVote) => {
-      let adjustment: number = direction;
-      if (prevVote == direction) {
-        // User is undoing their vote
-        setVoteCount((prevCount) => prevCount - adjustment);
-        unvote(id);
-        return 0;
-      } else if (prevVote === -direction) {
-        // User is changing their vote
-        adjustment = direction * 2;
+    const previousVote = currentVote ?? 0;
+    const previousCount = voteCount;
+    const removingVote = previousVote === direction;
+    const adjustment = removingVote
+      ? -direction
+      : previousVote === -direction
+      ? direction * 2
+      : direction;
+    const nextVote = removingVote ? 0 : direction;
+
+    setVoteCount(previousCount + adjustment);
+    setCurrentVote(nextVote);
+    setSaving(true);
+    setError("");
+    try {
+      const response = removingVote
+        ? await unvote(id)
+        : direction === 1
+        ? await upvote(id)
+        : await downvote(id);
+      if (!response.ok) {
+        if (response.status === 401) {
+          await signIn();
+        }
+        throw new Error("Vote could not be saved.");
       }
-      setVoteCount((prevCount) => prevCount + adjustment);
-      direction === 1 ? upvote(id) : downvote(id);
-      return direction;
-    });
+    } catch (voteError) {
+      console.error(voteError);
+      setVoteCount(previousCount);
+      setCurrentVote(previousVote);
+      setError("Vote could not be saved.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpvote = () => {
@@ -57,6 +85,7 @@ export const VoteButtons = (props: {
         className={styles.upvoteButton}
         onClick={handleUpvote}
         aria-label="Upvote"
+        disabled={saving}
       >
         <BiUpvote
           className={classNames({ [styles.voted]: currentVote === 1 })}
@@ -67,11 +96,13 @@ export const VoteButtons = (props: {
         className={styles.downvoteButton}
         onClick={handleDownvote}
         aria-label="Downvote"
+        disabled={saving}
       >
         <BiDownvote
           className={classNames({ [styles.voted]: currentVote === -1 })}
         />
       </button>
+      {error ? <span role="status">{error}</span> : null}
     </div>
   );
 };

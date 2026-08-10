@@ -6,7 +6,6 @@ import {
 } from "@/core/errors";
 import { stableHordeClient } from "../generated/stable-horde-api";
 import axios from "axios";
-import sharp from "sharp";
 import slugify from "slugify";
 import prisma from "@/core/PrismaWibble";
 import { v4 as uuidv4 } from "uuid";
@@ -24,6 +23,11 @@ export type GeneratedImageData = {
   image: Buffer;
   generator: string;
   seed: string;
+};
+
+const convertToJpeg = async (image: Buffer): Promise<Buffer> => {
+  const { default: sharp } = await import("sharp");
+  return sharp(image).jpeg({ quality: 85 }).toBuffer();
 };
 
 function escapeMarkdownString(str: string): string {
@@ -137,16 +141,18 @@ export class ContentGenerator {
     }
     if (!response.ok) {
       throw new ExternalServiceError(
-        `OpenAI request failed with HTTP ${response.status}: ${JSON.stringify(
-          payload
-        )}`
+        `OpenAI request failed with HTTP ${response.status}`
       );
     }
     const content = responseText(payload);
     if (content == null) {
       throw new ExternalServiceError();
     }
-    console.log(`Asked GPT: ${prompt}, got: ${content}`);
+    console.info("OpenAI request completed", {
+      model,
+      promptLength: prompt.length,
+      responseLength: content.length,
+    });
     return content;
   }
 
@@ -267,14 +273,14 @@ demonstrated here. These are examples, don't use them in your article:
     }
     if (!response.ok) {
       throw new ExternalServiceError(
-        `OpenAI moderation failed with HTTP ${
-          response.status
-        }: ${JSON.stringify(payload)}`
+        `OpenAI moderation failed with HTTP ${response.status}`
       );
     }
     const moderation_result = payload?.results?.[0]?.flagged === true;
     if (moderation_result) {
-      console.log(`Content flagged: ${content}`);
+      console.info("Content was rejected by moderation", {
+        contentLength: content.length,
+      });
     }
     return !moderation_result;
   }
@@ -308,9 +314,7 @@ demonstrated here. These are examples, don't use them in your article:
       responseType: "arraybuffer",
     });
     const imageBuffer = Buffer.from(imageDataResponse.data, "binary");
-    const jpegImageBuffer = await sharp(imageBuffer)
-      .jpeg({ quality: 85 })
-      .toBuffer();
+    const jpegImageBuffer = await convertToJpeg(imageBuffer);
     return jpegImageBuffer;
   }
 
@@ -324,9 +328,7 @@ demonstrated here. These are examples, don't use them in your article:
     // Decode the base64 image data and convert it to a buffer
     const imageData = Buffer.from(imageUrl.split(",", 1)[0], "base64");
     // Convert the image to jpeg format with 85% quality
-    const jpegImageBuffer = await sharp(imageData)
-      .jpeg({ quality: 85 })
-      .toBuffer();
+    const jpegImageBuffer = await convertToJpeg(imageData);
     return jpegImageBuffer;
   }
 
@@ -371,9 +373,7 @@ demonstrated here. These are examples, don't use them in your article:
           responseType: "arraybuffer",
         });
         const image_buffer = Buffer.from(response.data, "base64");
-        const jpegImageBuffer = await sharp(image_buffer)
-          .jpeg({ quality: 85 })
-          .toBuffer();
+        const jpegImageBuffer = await convertToJpeg(image_buffer);
         return jpegImageBuffer;
       }
     }
@@ -471,9 +471,7 @@ demonstrated here. These are examples, don't use them in your article:
           responseType: "arraybuffer",
         });
         const image_buffer = Buffer.from(imgResponse.data, "base64");
-        const jpegImageBuffer = await sharp(image_buffer)
-          .jpeg({ quality: 85 })
-          .toBuffer();
+        const jpegImageBuffer = await convertToJpeg(image_buffer);
         return {
           prompt,
           model,

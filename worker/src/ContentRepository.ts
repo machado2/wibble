@@ -59,7 +59,10 @@ export class ContentRepository {
       where: {
         ...additionalFilter,
         flagged: false,
-        title: search ? { contains: search } : undefined,
+        published: true,
+        title: search
+          ? { contains: search, mode: "insensitive" }
+          : undefined,
       },
       orderBy: [{ hot_score: "desc" }, { created_at: "desc" }],
       take: page_size,
@@ -100,6 +103,7 @@ export class ContentRepository {
       where: {
         flagged: false,
         generating: true,
+        published: false,
       },
       orderBy: [{ votes: "desc" }, { created_at: "asc" }],
     });
@@ -247,10 +251,10 @@ export class ContentRepository {
           generation_finished_at: DateTime.utc().toJSDate(),
           model: model,
           prompt_version: prompt_version,
-          title_repeated: containsDuplicatedTitle,
           image_id: imageId,
           image_prompt: imagePrompt,
           generation_time_ms: timeEllapsedMs,
+          published: true,
         },
       });
     } else {

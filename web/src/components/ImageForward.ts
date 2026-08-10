@@ -63,7 +63,14 @@ const serveImage = async (
   image: image_cache | null | undefined,
   res: NextApiResponse
 ) => {
-  if (!image || image.flagged || image.status !== "completed") {
+  if (!image || image.flagged) {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(404).send("Image not found");
+    return;
+  }
+  if (image.status !== "completed") {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Retry-After", "5");
     res.status(503).send("Image not ready");
     return;
   }

@@ -18,14 +18,19 @@ type LayoutProps = {
 };
 
 function Layout({ children }: LayoutProps) {
-  const discordServerURL = "https://discord.gg/sjjCsjFpru";
+  const discordServerURL = "https://discord.gg/qwATcUrFe";
   const { data: session } = useSession();
   const isDerp = isAdmin(session);
   return (
     <>
       <Row className={styles.siteheader} align="middle">
         <Col flex="0 1 auto" style={{ textAlign: "left" }}>
-          <Link href={discordServerURL} title="Discord">
+          <Link
+            href={discordServerURL}
+            target="_blank"
+            rel="noreferrer"
+            title="Discord"
+          >
             <FaDiscord style={{ fontSize: "24px", cursor: "pointer" }} />
           </Link>
         </Col>

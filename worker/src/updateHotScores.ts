@@ -84,7 +84,14 @@ async function updateHotScores() {
   await prisma.$executeRaw`
     UPDATE content
     SET hot_score = GREATEST(votes + 3, 0)
-        / POW(TIMESTAMPDIFF(HOUR, created_at, NOW()) + 2, 0.1)`;
+        / POWER(
+            GREATEST(
+              EXTRACT(EPOCH FROM ((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - created_at))
+                / 3600.0 + 2,
+              1
+            ),
+            0.1
+          )`;
 }
 
 export async function updateScoresLoop() {

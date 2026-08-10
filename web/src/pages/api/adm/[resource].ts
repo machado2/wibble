@@ -10,7 +10,7 @@ export const config = {
 };
 
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
-  await requireSession(req, res);
+  if (!(await requireSession(req, res))) return;
   await defaultHandler(req, res, prisma);
 };
 

@@ -17,8 +17,13 @@ export class ImageService {
       await this.repository.flagImage(image);
       return;
     }
-    const imageData = await this.generator.generateImage(image);
-    if (imageData === null) throw new Error("Image generation failed");
-    await this.repository.updateEntryWithImage(id, imageData);
+    await this.repository.markGenerating(id);
+    try {
+      const imageData = await this.generator.generateImage(image);
+      await this.repository.updateEntryWithImage(id, imageData);
+    } catch (error) {
+      await this.repository.flagImage(image, String(error));
+      throw error;
+    }
   }
 }

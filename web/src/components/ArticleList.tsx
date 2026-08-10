@@ -34,6 +34,7 @@ export default function ArticleList(props: ArticleListProps) {
 
   useEffect(() => {
     const reload = async () => {
+      setNews(undefined);
       const newNews = await loadNews(
         PAGE_SIZE,
         afterId,
@@ -45,23 +46,28 @@ export default function ArticleList(props: ArticleListProps) {
       setNews(newNews);
     };
 
-    if (!props.latestNews) {
+    if (props.latestNews) {
+      setNews(props.latestNews);
+    } else {
       dontWaitFor(reload());
     }
-  }, [searchTerm, model, afterId, t, sort]);
+  }, [props.latestNews, searchTerm, model, afterId, t, sort]);
 
   if (!news) {
-    return null;
+    return <p className={styles.loader}>Loading articles...</p>;
   }
 
   return (
     <>
+      {news.length === 0 ? (
+        <p className={styles.noMoreNews}>No articles found.</p>
+      ) : null}
       {news.map((newsItem) => (
         <div key={`${newsItem.id}`} className={styles.newsItem}>
           <NewsListItemUI item={newsItem} key={newsItem.id} />
         </div>
       ))}
-      {news.length > 0 ? (
+      {news.length === PAGE_SIZE ? (
         <Link
           className={styles.nextPageLink}
           href={{

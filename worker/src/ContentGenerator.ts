@@ -22,6 +22,7 @@ export type GeneratedImageData = {
   generator: string;
   seed: string;
   parameters: string;
+  extension: ".jpg" | ".png" | ".webp";
 };
 
 const TAG_START = "<<<START>>>";

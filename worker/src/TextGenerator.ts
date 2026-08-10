@@ -38,9 +38,7 @@ class TextGenerator {
     }
     if (!response.ok) {
       throw new ExternalServiceError(
-        `OpenAI request failed with HTTP ${response.status}: ${JSON.stringify(
-          payload
-        )}`
+        `OpenAI request failed with HTTP ${response.status}`
       );
     }
     return payload;
@@ -54,7 +52,7 @@ class TextGenerator {
     const response = await this.post(moderationUrl, { input: content });
     const moderation_result = response?.results?.[0]?.flagged === true;
     if (moderation_result) {
-      logger.info(`Content flagged: ${content}`);
+      logger.info(`Content rejected by moderation (${content.length} chars)`);
     }
     return !moderation_result;
   }
@@ -64,7 +62,7 @@ class TextGenerator {
     prompt: string,
     systemMessage?: string
   ): Promise<string> {
-    logger.info(`Asking GPT: ${prompt}`);
+    logger.info(`Requesting ${model} generation (${prompt.length} chars)`);
     if (!(await this.moderateContent(prompt))) {
       throw new ContentModerationError();
     }
@@ -81,13 +79,12 @@ class TextGenerator {
       reasoning: { effort: "none" },
       max_output_tokens: 16000,
     });
-    logger.info(`response: ${JSON.stringify(response)}`);
     const content = responsesText(response);
     if (content == null) {
       logger.error(`content is null`);
       throw new ExternalServiceError();
     }
-    logger.info(`Response message: ${content}`);
+    logger.info(`Generation completed (${content.length} chars)`);
     return content;
   }
 }

@@ -23,17 +23,19 @@ export const SortSelection = (props: SortSelectionProps) => {
   }, [router.query.sort]);
 
   const onChange = (value: string) => {
+    const query = { ...router.query };
+    delete query.afterId;
+    if (!value || value === "recent") delete query.t;
     if (!value) {
-      let q = router.query;
-      delete q.sort;
+      delete query.sort;
       router.push({
         pathname: router.pathname,
-        query: q,
+        query,
       });
     } else if (sort !== value) {
       router.push({
         pathname: router.pathname,
-        query: { ...router.query, sort: value },
+        query: { ...query, sort: value },
       });
     }
   };
@@ -41,7 +43,7 @@ export const SortSelection = (props: SortSelectionProps) => {
   return (
     <>
       <Select
-        value={sort?.length ?? 0 > 0 ? sort : options[0].value}
+        value={sort || options[0].value}
         options={options}
         style={{ width: 120 }}
         onChange={onChange}

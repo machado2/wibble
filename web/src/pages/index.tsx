@@ -1,5 +1,4 @@
 import { Card } from "antd";
-import { useState } from "react";
 import styles from "@/styles/newsList.module.css";
 import Head from "next/head";
 import {
@@ -11,7 +10,6 @@ import { NewsListItem } from "@/core/NewsListItem";
 import { getServerEmail } from "@/core/serverSession";
 import ArticleList from "@/components/ArticleList";
 import { ContentRepository } from "@/core/ContentRepository";
-import { useRouter } from "next/router";
 import SearchBox from "@/components/SearchBox";
 import { SortSelection } from "@/components/SortSelection";
 import { NewsImageSelector } from "@/components/NewsImageSelector";
@@ -27,16 +25,6 @@ type HomeProps = {
 };
 
 export default function Home(props: HomeProps) {
-  const [news, setNews] = useState<NewsListItem[] | undefined>(
-    props.latestNews
-  );
-  const router = useRouter();
-  const firstRoute = useState<string>(router.asPath)[0];
-
-  if (news && router.asPath !== firstRoute) {
-    setNews(undefined);
-  }
-
   const sortOptions = [
     {
       value: "recent",
@@ -68,7 +56,7 @@ export default function Home(props: HomeProps) {
           <TimeSelection />
         </div>
         <SearchBox />
-        <ArticleList latestNews={news} />
+        <ArticleList latestNews={props.latestNews} />
       </Card>
     </>
   );

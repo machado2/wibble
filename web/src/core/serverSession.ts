@@ -1,30 +1,30 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { getServerSession } from "next-auth/next";
-import { isAdmin } from "./isAdmin";
-import { authOptions } from "./authOptions";
-import { HttpError } from "react-admin";
+import { getToken } from "next-auth/jwt";
 
-export const getServerSessionWibble = async (
-  req: NextApiRequest,
-  res: NextApiResponse
-) => {
-  return await getServerSession(req, res, authOptions);
-};
+const authSecret =
+  process.env.NEXTAUTH_SECRET ?? process.env.SSO_CLIENT_SECRET ?? "";
+
+const getServerToken = async (req: NextApiRequest) =>
+  getToken({ req, secret: authSecret });
 
 export const getServerEmail = async (
   req: NextApiRequest,
-  res: NextApiResponse
+  _res: NextApiResponse
 ) => {
-  const session = await getServerSessionWibble(req, res);
-  return session?.user?.email ?? null;
+  const token = await getServerToken(req);
+  return typeof token?.email === "string" ? token.email : null;
 };
 
 export const requireSession = async (
   req: NextApiRequest,
   res: NextApiResponse
-): Promise<void> => {
-  const session = await getServerSessionWibble(req, res);
-  if (!isAdmin(session)) {
-    throw new HttpError(401, "Unauthorized");
+): Promise<boolean> => {
+  const email = await getServerEmail(req, res);
+  const adminEmail =
+    process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
+  if (!email || email !== adminEmail) {
+    res.status(401).json({ message: "Unauthorized" });
+    return false;
   }
+  return true;
 };

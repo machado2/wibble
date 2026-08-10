@@ -31,17 +31,18 @@ export const TimeSelection = () => {
   }
 
   const onChange = (value: string) => {
+    const query = { ...router.query };
+    delete query.afterId;
     if (!value) {
-      let q = router.query;
-      delete q.t;
+      delete query.t;
       router.push({
         pathname: router.pathname,
-        query: q,
+        query,
       });
     } else if (period !== value) {
       router.push({
         pathname: router.pathname,
-        query: { ...router.query, t: value },
+        query: { ...query, t: value },
       });
     }
   };
@@ -49,7 +50,7 @@ export const TimeSelection = () => {
   return (
     <>
       <Select
-        value={period?.length ?? 0 > 0 ? period : options[2].value}
+        value={period || options[2].value}
         options={options}
         style={{ width: 120 }}
         onChange={onChange}

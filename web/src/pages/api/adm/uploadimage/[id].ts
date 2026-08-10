@@ -10,7 +10,7 @@ export const config = {
 };
 
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
-  await requireSession(req, res);
+  if (!(await requireSession(req, res))) return;
   if (req.method !== "PUT") {
     res.setHeader("Allow", "PUT");
     res.status(405).end(`Method ${req.method} Not Allowed`);

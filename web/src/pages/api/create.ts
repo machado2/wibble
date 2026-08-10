@@ -13,18 +13,27 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
-    const email = await getServerEmail(req, res);
-
     if (req.method !== "POST") {
-      res.status(405).json({ message: "Method not allowed" });
+      res.status(405).json({ error: "Method not allowed" });
       return;
     }
+    const email = await getServerEmail(req, res);
 
-    const prompt = req.body?.prompt;
-    const model = email ? replaceEmptyUndefined(req.body?.model) : undefined;
+    const prompt =
+      typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+    const adminEmail =
+      process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
+    const model =
+      email && email === adminEmail
+        ? replaceEmptyUndefined(req.body?.model)
+        : undefined;
 
     if (!prompt) {
-      res.status(400).json({ message: "Missing prompt" });
+      res.status(400).json({ error: "Missing prompt" });
+      return;
+    }
+    if (prompt.length > 2000) {
+      res.status(400).json({ error: "Your text is too long!" });
       return;
     }
 
@@ -44,6 +53,6 @@ export default async function handler(
     console.error(error);
     res
       .status(500)
-      .json({ message: error?.message ?? "Internal server error" });
+      .json({ error: error?.message ?? "Internal server error" });
   }
 }

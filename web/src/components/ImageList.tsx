@@ -6,9 +6,12 @@ import { dontWaitFor } from "@/core/dontWaitFor";
 import { ImageListItem } from "@/pages/api/images";
 import { ImageListItemUI } from "./ImageListItemUI";
 
+const PAGE_SIZE = 30;
+
 export default function ImageList() {
   const router = useRouter();
-  const [images, setImages] = useState<ImageListItem[]>([]);
+  const [images, setImages] = useState<ImageListItem[] | undefined>(undefined);
+  const [error, setError] = useState("");
 
   const readString = (p: string): string | undefined => {
     const str = router.query[p];
@@ -25,7 +28,10 @@ export default function ImageList() {
 
   useEffect(() => {
     const load = async () => {
+      setImages(undefined);
+      setError("");
       const queryParams = new URLSearchParams();
+      queryParams.set("pageSize", PAGE_SIZE.toString());
       if (searchTerm && searchTerm.length > 0) {
         queryParams.set("search", searchTerm);
       }
@@ -41,24 +47,32 @@ export default function ImageList() {
       if (sort) {
         queryParams.set("sort", sort);
       }
-      const response = await fetch(`/api/images?${queryParams}`, {
-        method: "GET",
-      });
-      if (!response.ok) {
-        throw new Error(response.statusText);
+      try {
+        const response = await fetch(`/api/images?${queryParams}`, {
+          method: "GET",
+        });
+        if (!response.ok) {
+          throw new Error(response.statusText);
+        }
+        setImages((await response.json()) as ImageListItem[]);
+      } catch (loadError) {
+        console.error(loadError);
+        setImages([]);
+        setError("Images could not be loaded.");
       }
-      setImages((await response.json()) as ImageListItem[]);
     };
 
     dontWaitFor(load());
   }, [searchTerm, model, afterId, t, sort]);
 
   if (!images) {
-    return null;
+    return <p>Loading images...</p>;
   }
 
   return (
     <>
+      {error ? <p role="alert">{error}</p> : null}
+      {!error && images.length === 0 ? <p>No images found.</p> : null}
       <div className={styles.ImageListContainer}>
         {images.map((item) => (
           <div key={`${item.id}`} className={styles.ImageListItem}>
@@ -67,7 +81,7 @@ export default function ImageList() {
         ))}
       </div>
       <div className={styles.listBottom}></div>
-      {images.length > 0 ? (
+      {images.length === PAGE_SIZE ? (
         <Link
           className={styles.nextPageLink}
           href={{

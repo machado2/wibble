@@ -8,14 +8,9 @@ export default function Document() {
         <link
           rel="alternate"
           type="application/rss+xml"
-          href="https://wibble.news/rss.xml"
+          href="https://wibble.fbmac.net/rss.xml"
           title="The Wibble RSS Feed"
         />
-        <script
-          async
-          src="https://umami.wibble.news/script.js"
-          data-website-id="c17df13e-fe8d-4088-a556-c38d71b3dbb6"
-        ></script>
       </Head>
       <body>
         <Main />

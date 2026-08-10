@@ -316,21 +316,32 @@ export class ContentRepository {
     userEmail: string | null
   ): Promise<content> {
     const id = uuidv4();
-    return await prisma.content.create({
-      data: {
-        id,
-        slug,
-        title,
-        description,
-        created_at: DateTime.utc().toJSDate(),
-        generating: true,
-        flagged: false,
-        user_input: userInput,
-        user_email: userEmail,
-        model,
-        published: false,
-      },
-    });
+    try {
+      return await prisma.content.create({
+        data: {
+          id,
+          slug,
+          title,
+          description,
+          created_at: DateTime.utc().toJSDate(),
+          generating: true,
+          flagged: false,
+          user_input: userInput,
+          user_email: userEmail,
+          model,
+          published: false,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const existing = await this.getContent(slug);
+        if (existing) return existing;
+      }
+      throw error;
+    }
   }
 
   async startTextGeneration(content: content) {
