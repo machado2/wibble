@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo=/home/fabio/services/wibble
+state_dir=/var/lib/wibble-native-deploy
+lock_file=/run/lock/wibble-native-deploy.lock
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "wibble updater must run as root" >&2
+  exit 1
+fi
+
+exec 9>"${lock_file}"
+flock -n 9 || exit 0
+mkdir -p "${state_dir}"
+
+run_as_fabio() {
+  sudo -u fabio -H /bin/bash -lc "$1"
+}
+
+run_as_fabio "git -C '${repo}' fetch --quiet origin master"
+target_revision=$(run_as_fabio "git -C '${repo}' rev-parse origin/master")
+deployed_revision=$(cat "${state_dir}/revision" 2>/dev/null || true)
+[[ "${target_revision}" == "${deployed_revision}" ]] && exit 0
+
+if [[ -n $(run_as_fabio "git -C '${repo}' status --porcelain --untracked-files=no") ]]; then
+  echo "wibble updater stopped: tracked worktree changes found" >&2
+  exit 1
+fi
+
+backup_dir=$(mktemp -d /var/tmp/wibble-native-deploy.XXXXXX)
+cleanup() {
+  case "${backup_dir}" in
+    /var/tmp/wibble-native-deploy.*) rm -rf -- "${backup_dir}" ;;
+  esac
+}
+trap cleanup EXIT
+
+if [[ -d "${repo}/web/.next" ]]; then
+  cp -a "${repo}/web/.next" "${backup_dir}/next"
+fi
+
+run_as_fabio "git -C '${repo}' pull --ff-only --quiet origin master"
+if ! run_as_fabio "cd '${repo}' && pnpm --config.minimum-release-age=10080 install --frozen-lockfile && pnpm typecheck && pnpm build"; then
+  if [[ -d "${backup_dir}/next" ]]; then
+    rm -rf -- "${repo}/web/.next"
+    cp -a "${backup_dir}/next" "${repo}/web/.next"
+    chown -R fabio:fabio "${repo}/web/.next"
+  fi
+  exit 1
+fi
+
+systemctl restart wibble-old-web.service wibble-old-worker.service
+curl --fail --silent --show-error --retry 12 --retry-delay 1 http://127.0.0.1:18001/ >/dev/null
+curl --fail --silent --show-error --retry 12 --retry-delay 1 http://127.0.0.1:18002/health >/dev/null
+printf '%s\n' "${target_revision}" >"${state_dir}/revision"

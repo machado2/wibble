@@ -10,7 +10,7 @@ import {
   FaSignOutAlt,
   FaUserCircle,
 } from "react-icons/fa";
-import { useSession } from "next-auth/react";
+import { signIn, signOut, useSession } from "next-auth/react";
 import { isAdmin } from "@/core/isAdmin";
 
 type LayoutProps = {
@@ -21,6 +21,17 @@ function Layout({ children }: LayoutProps) {
   const discordServerURL = "https://discord.gg/qwATcUrFe";
   const { data: session } = useSession();
   const isDerp = isAdmin(session);
+  const login = () =>
+    signIn("sso", { callbackUrl: window.location.href });
+  const logout = async () => {
+    await signOut({ redirect: false });
+    const ssoUrl =
+      process.env.NEXT_PUBLIC_SSO_URL ?? "https://sso.fbmac.net";
+    const returnTo = `${window.location.origin}/`;
+    window.location.assign(
+      `${ssoUrl}/logout?return_to=${encodeURIComponent(returnTo)}`,
+    );
+  };
   return (
     <>
       <Row className={styles.siteheader} align="middle">
@@ -68,13 +79,13 @@ function Layout({ children }: LayoutProps) {
         <Col flex="0 1 auto">
           <div className={styles.signup}>
             {session && session.user ? (
-              <Link href="/api/auth/signout">
+              <button className={styles.authButton} onClick={() => void logout()}>
                 <FaSignOutAlt style={{ fontSize: "24px" }} title="Sign-out" />
-              </Link>
+              </button>
             ) : (
-              <Link href="/api/auth/signin">
+              <button className={styles.authButton} onClick={() => void login()}>
                 <FaUserCircle style={{ fontSize: "24px" }} title="Sign-in" />
-              </Link>
+              </button>
             )}
           </div>
         </Col>

@@ -9,10 +9,12 @@ export const authProvider: AuthProvider = {
     await signIn("sso", { callbackUrl: "/derpmin" });
   },
   logout: async () => {
-    // Use next-auth to sign out
-    await signOut({
-      redirect: false,
-    });
+    await signOut({ redirect: false });
+    const ssoUrl =
+      process.env.NEXT_PUBLIC_SSO_URL ?? "https://sso.fbmac.net";
+    window.location.assign(
+      `${ssoUrl}/logout?return_to=${encodeURIComponent(`${window.location.origin}/`)}`,
+    );
   },
   checkAuth: async () => {
     // Use next-auth to get the session

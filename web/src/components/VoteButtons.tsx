@@ -32,7 +32,7 @@ export const VoteButtons = (props: {
 
   const handleVote = async (direction: 1 | -1) => {
     if (!isLogged) {
-      await signIn();
+      await signIn("sso", { callbackUrl: window.location.href });
       return;
     }
 
@@ -58,7 +58,7 @@ export const VoteButtons = (props: {
         : await downvote(id);
       if (!response.ok) {
         if (response.status === 401) {
-          await signIn();
+          await signIn("sso", { callbackUrl: window.location.href });
         }
         throw new Error("Vote could not be saved.");
       }

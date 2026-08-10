@@ -1,0 +1,8 @@
+[Unit]
+Description=Update Wibble native services from master
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/fabio/services/wibble/deploy/update-native.sh
