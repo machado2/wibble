@@ -10,3 +10,5 @@ CREATE TABLE IF NOT EXISTS not_found_request (
 
 CREATE INDEX IF NOT EXISTS idx_not_found_request_admin
   ON not_found_request (generated_at, hit_count, last_seen_at);
+
+ALTER TABLE not_found_request OWNER TO wibble;
