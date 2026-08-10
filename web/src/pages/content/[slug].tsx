@@ -137,10 +137,13 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       context.res as NextApiResponse
     );
     const data = await service.processSlug(email, slug as string);
+    if (!data) {
+      return { notFound: true };
+    }
     return { props: data };
   } catch (error) {
     console.log(error);
-    return { props: await service.fatalErrorResponse() };
+    throw error;
   }
 }
 

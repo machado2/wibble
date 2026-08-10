@@ -1,8 +1,6 @@
 import { ContentRepository, ContentWithCurrentVote } from "./ContentRepository";
-import { RateLimiterMemory } from "rate-limiter-flexible";
 import { content } from "@prisma/client";
 import { MDXRemoteSerializeResult } from "next-mdx-remote";
-import { makeRandomExcuse } from "@/components/ExcuseMaker";
 import { serialize } from "next-mdx-remote/serialize";
 import { NewsListItem } from "./NewsListItem";
 import { dontWaitFor } from "./dontWaitFor";
@@ -24,30 +22,6 @@ export type ParsedResponse = {
 export class ContentService {
   private repository = new ContentRepository();
   private generator = new ContentGenerator();
-
-  private globallimiter = new RateLimiterMemory({
-    points: 1000,
-    duration: 3600,
-  });
-
-  async mdxMessage(msg: string, loading: boolean): Promise<ParsedResponse> {
-    const mdxContent = `---
-title: ${msg}
-description: ${msg}
----`;
-    const mdxData = await serialize(mdxContent, { parseFrontmatter: true });
-    return {
-      content: mdxData,
-      imageUrl: null,
-      loading,
-      titleInContent: false,
-      datetime: new Date().toISOString(),
-    };
-  }
-
-  async fatalErrorResponse(): Promise<ParsedResponse> {
-    return this.mdxMessage(makeRandomExcuse(), false);
-  }
 
   addFrontMatter(title: string, description: string, text: string): string {
     if (text.startsWith("---")) {
@@ -101,15 +75,10 @@ ${text}`;
     };
   }
 
-  isValidSlug(slug: string): boolean {
-    const pattern = /^[a-z0-9_-]+$/;
-    return pattern.test(slug);
-  }
-
   public async processSlug(
     email: string | null,
     pslug: string
-  ): Promise<ParsedResponse> {
+  ): Promise<ParsedResponse | null> {
     const slug = pslug.trim().toLowerCase();
 
     // only printable characters accepted
@@ -126,31 +95,15 @@ ${text}`;
         ); // Unicode Supplementary Planes
       })
     ) {
-      return await this.fatalErrorResponse();
+      return null;
     }
 
     let content = await this.repository.getContent(slug, email ?? undefined);
     if (content?.flagged) {
-      return this.fatalErrorResponse();
+      return null;
     }
     if (content === null) {
-      if (!this.isValidSlug(slug)) {
-        return await this.fatalErrorResponse();
-      }
-      await this.globallimiter.consume("global", 1);
-      const model = await modelSelector.selectNextModel();
-      const titleDescription = await this.generator.generateTitleAndDescription(model, slug);
-      if (!titleDescription) {
-        return await this.fatalErrorResponse();
-      }
-      content = await this.repository.createContent(
-        model,
-        titleDescription.title,
-        slug,
-        titleDescription.description,
-        slug,
-        email,
-      );
+      return null;
     }
     if (content.content === null) {
       return await this.loadingResponse(content.title, content.description);

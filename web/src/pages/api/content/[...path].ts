@@ -12,6 +12,10 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     const service = new ContentService();
     const email = await getServerEmail(req, res);
     const data = await service.processSlug(email, slug as string);
+    if (!data) {
+      res.status(404).send("Not found");
+      return;
+    }
     res.status(200).send(data);
   } catch (error: any) {
     res.status(500).send("Oups...");
