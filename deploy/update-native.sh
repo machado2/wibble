@@ -34,7 +34,11 @@ if [[ -n $(run_as_fabio "git -C '${repo}' status --porcelain --untracked-files=n
 fi
 
 backup_dir=$(mktemp -d /var/tmp/wibble-native-deploy.XXXXXX)
+web_stopped=false
 cleanup() {
+  if [[ "${web_stopped}" == true ]]; then
+    systemctl start wibble-old-web.service
+  fi
   case "${backup_dir}" in
     /var/tmp/wibble-native-deploy.*) rm -rf -- "${backup_dir}" ;;
   esac
@@ -49,6 +53,8 @@ run_as_fabio "git -C '${repo}' pull --ff-only --quiet origin master"
 if [[ "${needs_install}" == true ]]; then
   run_as_fabio "cd '${repo}' && pnpm --config.minimum-release-age=10080 install --frozen-lockfile"
 fi
+systemctl stop wibble-old-web.service
+web_stopped=true
 if ! run_as_fabio "cd '${repo}' && pnpm typecheck && pnpm build"; then
   if [[ -d "${backup_dir}/next" ]]; then
     rm -rf -- "${repo}/web/.next"
@@ -58,7 +64,9 @@ if ! run_as_fabio "cd '${repo}' && pnpm typecheck && pnpm build"; then
   exit 1
 fi
 
-systemctl restart wibble-old-web.service wibble-old-worker.service
+systemctl restart wibble-old-worker.service
+systemctl start wibble-old-web.service
+web_stopped=false
 curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 1 http://127.0.0.1:18001/ >/dev/null
 curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 1 http://127.0.0.1:18002/health >/dev/null
 printf '%s\n' "${target_revision}" >"${state_dir}/revision"
