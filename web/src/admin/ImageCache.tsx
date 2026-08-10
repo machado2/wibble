@@ -11,12 +11,10 @@ import {
   DateField,
   BooleanField,
   Datagrid,
-  useUpdate,
   useRecordContext,
   NumberField,
   NumberInput,
 } from "react-admin";
-import { Button } from "antd";
 import { Image } from "antd";
 import { image_cache } from "@prisma/client";
 
@@ -60,16 +58,6 @@ export const ImageCacheList: React.FC = (props) => (
 );
 
 export const ImageCacheEdit: React.FC = (props) => {
-  const record = useRecordContext<image_cache>();
-  const [update, { isLoading }] = useUpdate<image_cache>();
-
-  const handleClearImage = () => {
-    update("image_cache", {
-      id: record.id,
-      data: { regenerate: true, status: "pending" },
-    });
-  };
-
   return (
     <Edit {...props}>
       <SimpleForm>
@@ -78,15 +66,10 @@ export const ImageCacheEdit: React.FC = (props) => {
         <TextInput source="parameters" multiline fullWidth />
         <TextInput source="model" />
         <NumberInput source="seed" />
-        <BooleanInput source="regenerate" />
         <TextInput source="generator" />
         <NumberInput source="fail_count" />
         <NumberInput source="view_count" />
         <ImageApiField />
-        <Button onClick={handleClearImage} loading={isLoading}>
-          Clear Image
-        </Button>
-
         <DateInput source="created_at" />
         <BooleanInput source="flagged" />
       </SimpleForm>

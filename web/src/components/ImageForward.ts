@@ -101,14 +101,11 @@ export const imageHandler = async (
 ) => {
   const id = unarray(req.query.id);
   const hash = unarray(req.query.hash);
-  const prompt =
-    typeof req.body === "object" && req.body !== null
-      ? req.body.prompt
-      : undefined;
   const imageRepo = new ImageRepository();
 
-  if (typeof prompt === "string") {
-    await serveImage(await imageRepo.getImageByPrompt(prompt), res);
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    res.status(405).send("Method not allowed");
   } else if (typeof id === "string") {
     await serveImage(await imageRepo.getImageById(id), res);
   } else if (typeof hash === "string") {

@@ -4,8 +4,13 @@ import { v4 as uuidv4 } from "uuid";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { computeHash } from "./computeHash";
-import { GeneratedImageData } from "./ContentGenerator";
+import type { GeneratedImageData } from "./ContentGenerator";
 import prisma from "./PrismaWibble";
+import {
+  MAX_IMAGE_GENERATION_FAILURES,
+  nextImageFailureState,
+  reserveImageGenerationSlot,
+} from "./imagePolicy";
 
 export class ImageRepository {
   public async createEntry(
@@ -39,6 +44,7 @@ export class ImageRepository {
     return prisma.image_cache.findFirst({
       where: {
         flagged: false,
+        fail_count: { lt: MAX_IMAGE_GENERATION_FAILURES },
         OR: [{ status: "pending" }, { regenerate: true }],
       },
       orderBy: [{ fail_count: "asc" }, { created_at: "asc" }],
@@ -94,8 +100,9 @@ export class ImageRepository {
   }
 
   public async flagImage(image: image_cache, error?: string) {
-    const failCount = image.fail_count + 1;
-    const permanentlyFailed = failCount >= 5;
+    const { failCount, permanentlyFailed } = nextImageFailureState(
+      image.fail_count
+    );
     await prisma.image_cache.update({
       where: { id: image.id },
       data: {
@@ -108,6 +115,33 @@ export class ImageRepository {
           ? DateTime.utc().toJSDate()
           : null,
       },
+    });
+  }
+
+  public async reserveGenerationSlot(intervalSeconds: number): Promise<number> {
+    return prisma.$transaction(async (transaction) => {
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('wibble:image-generation-rate-limit'))`;
+
+      const now = DateTime.utc();
+      const schedule = await transaction.generation_schedule.findUnique({
+        where: { id: "image-generation-rate-limit" },
+      });
+      const reservation = reserveImageGenerationSlot(
+        now.toMillis(),
+        schedule?.next_run.getTime() ?? null,
+        intervalSeconds * 1000
+      );
+
+      await transaction.generation_schedule.upsert({
+        where: { id: "image-generation-rate-limit" },
+        create: {
+          id: "image-generation-rate-limit",
+          next_run: new Date(reservation.nextRunMs),
+        },
+        update: { next_run: new Date(reservation.nextRunMs) },
+      });
+
+      return Math.max(0, reservation.runAtMs - now.toMillis());
     });
   }
 

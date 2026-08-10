@@ -46,19 +46,8 @@ const serveImage = (
   res.status(200).send(response);
 };
 
-const serveImageByPrompt = async (
-  prompt: string,
-  req: NextApiRequest,
-  res: NextApiResponse
-) => {
-  const imageRepo = new ImageRepository();
-  const image = await imageRepo.getImageByPrompt(prompt);
-  serveImage(image, res);
-};
-
 const serveImageById = async (
   id: string,
-  req: NextApiRequest,
   res: NextApiResponse
 ) => {
   const imageRepo = new ImageRepository();
@@ -81,13 +70,14 @@ const unarray = (value: string | string[] | null | undefined) => {
 };
 
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    res.status(405).send("Method not allowed");
+    return;
+  }
   const id = unarray(req.query.id);
-  const body = req.body?.length > 0 ? JSON.parse(req.body) : null;
-  const prompt = body?.prompt ?? null;
-  if (typeof prompt === "string") {
-    await serveImageByPrompt(prompt, req, res);
-  } else if (typeof id === "string") {
-    await serveImageById(id, req, res);
+  if (typeof id === "string") {
+    await serveImageById(id, res);
   } else {
     res.status(404).send("Not found");
   }

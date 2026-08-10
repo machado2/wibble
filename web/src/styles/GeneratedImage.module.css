@@ -1,15 +1,18 @@
 
 .imagecenter, .imageleft, .imageright, .imagebetween {
-    max-width: 80%;
+    display: block;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
 }
 
 .imageleft, .imageright, .imagebetween {
-    max-width: 30%;
+    width: 30%;
 }
 
 
-.imagecenter {
-    display: block;
+  .imagecenter {
+    width: 80%;
     margin-left: auto;
     margin-right: auto;
     text-align: center;
@@ -26,8 +29,15 @@
   }
 
   .imagebetween {
-    display: block;
     margin-left: auto;
     margin-right: auto;
     text-align: center;
+  }
+
+  @media (max-width: 600px) {
+    .imagecenter, .imageleft, .imageright, .imagebetween {
+      float: none;
+      width: 100%;
+      margin: 5px auto;
+    }
   }

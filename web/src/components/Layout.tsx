@@ -7,8 +7,8 @@ import {
   FaHatWizard,
   FaPlusCircle,
   FaRss,
-  FaSignInAlt,
   FaSignOutAlt,
+  FaUserCircle,
 } from "react-icons/fa";
 import { useSession } from "next-auth/react";
 import { isAdmin } from "@/core/isAdmin";
@@ -73,7 +73,7 @@ function Layout({ children }: LayoutProps) {
               </Link>
             ) : (
               <Link href="/api/auth/signin">
-                <FaSignInAlt style={{ fontSize: "24px" }} title="Sign-in" />
+                <FaUserCircle style={{ fontSize: "24px" }} title="Sign-in" />
               </Link>
             )}
           </div>

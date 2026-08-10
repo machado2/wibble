@@ -47,9 +47,9 @@ export const Config = {
     "REPLICATE_API_URL",
     "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions"
   ),
-  replicateMinRequestIntervalSeconds: numberConfig(
-    "REPLICATE_MIN_REQUEST_INTERVAL_SECONDS",
-    30
+  replicateMinRequestIntervalSeconds: Math.max(
+    1,
+    numberConfig("REPLICATE_MIN_REQUEST_INTERVAL_SECONDS", 30)
   ),
   logglyToken: strConfig("LOGGLY_TOKEN", ""),
 };

@@ -79,9 +79,6 @@ importers:
       ra-data-simple-prisma:
         specifier: ^2.2.1
         version: 2.3.2(@prisma/client@5.22.0(prisma@5.22.0))(@types/react@18.0.37)(react-dom@18.2.0(react@18.2.0))(react-is@19.2.8)(react@18.2.0)
-      rate-limiter-flexible:
-        specifier: ^2.4.1
-        version: 2.4.2
       react:
         specifier: 18.2.0
         version: 18.2.0
@@ -3993,9 +3990,6 @@ packages:
   range-parser@1.2.1:
     resolution: {integrity: sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==}
     engines: {node: '>= 0.6'}
-
-  rate-limiter-flexible@2.4.2:
-    resolution: {integrity: sha512-rMATGGOdO1suFyf/mI5LYhts71g1sbdhmd6YvdiXO2gJnd42Tt6QS4JUKJKSWVVkMtBacm6l40FR7Trjo6Iruw==}
 
   raw-body@2.5.3:
     resolution: {integrity: sha512-s4VSOf6yN0rvbRZGxs8Om5CWj6seneMwK3oDb4lWDH0UPhWcxwOWw5+qk24bxq87szX1ydrwylIOp2uG1ojUpA==}
@@ -9840,8 +9834,6 @@ snapshots:
       - react-native
 
   range-parser@1.2.1: {}
-
-  rate-limiter-flexible@2.4.2: {}
 
   raw-body@2.5.3:
     dependencies:

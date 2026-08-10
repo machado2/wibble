@@ -6,8 +6,7 @@ import {
 import { Config } from "./config";
 import { Sleep } from "./sleep";
 import { image_cache } from "@prisma/client";
-
-let lastReplicateRequestAt = 0;
+import { ImageRepository } from "./ImageRepository";
 
 const isPermanentProviderResponse = (status: number) =>
   status >= 400 &&
@@ -15,6 +14,8 @@ const isPermanentProviderResponse = (status: number) =>
   ![408, 409, 425, 429].includes(status);
 
 export class ImageGenerator {
+  private repository = new ImageRepository();
+
   async generateImage(image: image_cache): Promise<GeneratedImageData> {
     if (Config.imageMode !== "replicate") {
       throw new ExternalServiceError(
@@ -23,13 +24,12 @@ export class ImageGenerator {
     }
 
     const prompt = image.prompt;
-    const waitMs =
-      Config.replicateMinRequestIntervalSeconds * 1000 -
-      (Date.now() - lastReplicateRequestAt);
+    const waitMs = await this.repository.reserveGenerationSlot(
+      Config.replicateMinRequestIntervalSeconds
+    );
     if (waitMs > 0) {
       await Sleep(waitMs / 1000);
     }
-    lastReplicateRequestAt = Date.now();
     const request = { input: { prompt } };
     const response = await fetch(Config.replicateApiUrl, {
       method: "POST",
