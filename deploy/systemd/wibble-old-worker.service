@@ -1,0 +1,23 @@
+[Unit]
+Description=Wibble background worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fabio
+Group=fabio
+WorkingDirectory=/home/fabio/services/wibble/worker
+EnvironmentFile=/home/fabio/services/wibble/.env
+Environment=WORKER_PORT=18002
+Environment=PATH=/home/fabio/.local/share/node-v22.19.0-linux-x64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/fabio/services/wibble/worker/node_modules/.bin/tsx src/index.ts
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

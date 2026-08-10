@@ -1,0 +1,23 @@
+[Unit]
+Description=Wibble web application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fabio
+Group=fabio
+WorkingDirectory=/home/fabio/services/wibble/web
+EnvironmentFile=/home/fabio/services/wibble/.env
+EnvironmentFile=/home/fabio/services/wibble/.wibble-web-runtime.env
+Environment=PATH=/home/fabio/.local/share/node-v22.19.0-linux-x64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/fabio/services/wibble/web/node_modules/.bin/next start
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
