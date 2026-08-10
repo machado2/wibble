@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { ContentService } from "@/core/ContentService";
 import { getServerEmail } from "@/core/serverSession";
+import { normalizeArticleTarget } from "@/core/articleTarget";
+import { NotFoundRepository } from "@/core/NotFoundRepository";
 
 const replaceEmptyUndefined = (t: string | null | undefined): string | undefined => {
   if (!t) return undefined;
@@ -23,6 +25,31 @@ export default async function handler(
       typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
     const adminEmail =
       process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
+    const targetUrl =
+      typeof req.body?.url === "string" ? req.body.url.trim() : "";
+    if (targetUrl && (!email || email !== adminEmail)) {
+      res.status(403).json({ error: "Only administrators can select a URL" });
+      return;
+    }
+    let target: ReturnType<typeof normalizeArticleTarget> | undefined;
+    if (targetUrl) {
+      try {
+        target = normalizeArticleTarget(
+          targetUrl,
+          process.env.NEXT_PUBLIC_SITE_URL ??
+            process.env.SITE_URL ??
+            "https://wibble.fbmac.net",
+        );
+      } catch (targetError) {
+        res.status(400).json({
+          error:
+            targetError instanceof Error
+              ? targetError.message
+              : "Invalid target URL",
+        });
+        return;
+      }
+    }
     const model =
       email && email === adminEmail
         ? replaceEmptyUndefined(req.body?.model)
@@ -41,8 +68,12 @@ export default async function handler(
     const content = await service.generateForSuggestion(
       email,
       prompt,
-      model
+      model,
+      target?.slug,
     );
+    if (target) {
+      await new NotFoundRepository().markRequested(target.url, content.slug);
+    }
     const data = {
       slug: content.slug,
       title: content.title,

@@ -243,20 +243,27 @@ export class ContentRepository {
   ) {
     const content = await this.getContent(slug);
     if (content) {
-      await prisma.content.update({
-        where: { slug },
-        data: {
-          content: generated_content,
-          generating: false,
-          generation_finished_at: DateTime.utc().toJSDate(),
-          model: model,
-          prompt_version: prompt_version,
-          image_id: imageId,
-          image_prompt: imagePrompt,
-          generation_time_ms: timeEllapsedMs,
-          published: true,
-        },
-      });
+      const finishedAt = DateTime.utc().toJSDate();
+      await prisma.$transaction([
+        prisma.content.update({
+          where: { slug },
+          data: {
+            content: generated_content,
+            generating: false,
+            generation_finished_at: finishedAt,
+            model: model,
+            prompt_version: prompt_version,
+            image_id: imageId,
+            image_prompt: imagePrompt,
+            generation_time_ms: timeEllapsedMs,
+            published: true,
+          },
+        }),
+        prisma.not_found_request.updateMany({
+          where: { generated_slug: slug },
+          data: { generated_at: finishedAt },
+        }),
+      ]);
     } else {
       console.error(`Content ${slug} not found`);
     }

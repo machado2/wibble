@@ -146,7 +146,8 @@ ${text}`;
   async generateForSuggestion(
     email: string | null,
     suggestion: string,
-    model?: string
+    model?: string,
+    requestedSlug?: string,
   ): Promise<content> {
     if (!model) {
       model = await modelSelector.selectNextModel();
@@ -159,7 +160,7 @@ ${text}`;
     return await this.repository.createContent(
       model,
       titleDescription.title,
-      titleDescription.slug,
+      requestedSlug ?? titleDescription.slug,
       titleDescription.description,
       suggestion,
       email

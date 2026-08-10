@@ -16,6 +16,8 @@ import { getServerEmail } from "@/core/serverSession";
 import { SupportTheWibble } from "@/components/SupportTheWibble";
 import { VoteButtons } from "@/components/VoteButtons";
 import { getHumanReadableDate } from "@/core/getHumanReadableDate";
+import { NotFoundRepository } from "@/core/NotFoundRepository";
+import { articleTargetForSlug } from "@/core/articleTarget";
 
 const defaultDescription = `Get the latest news with a touch of wobble from The Wibble,
 your source for the unpredictable and unsteady world of current events.`;
@@ -138,6 +140,12 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     );
     const data = await service.processSlug(email, slug as string);
     if (!data) {
+      try {
+        const target = articleTargetForSlug(slug);
+        await new NotFoundRepository().record(target.url);
+      } catch (recordError) {
+        console.error("Failed to record missing article URL", recordError);
+      }
       return { notFound: true };
     }
     return { props: data };

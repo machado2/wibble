@@ -5,6 +5,7 @@ import { dataProvider } from "ra-data-simple-prisma";
 import { authProvider } from './authProvider';
 import { ContentList, ContentEdit, ContentCreate } from './Content';
 import { ImageCacheList, ImageCacheEdit } from './ImageCache';
+import { NotFoundRequestList } from './NotFoundRequests';
 
 const prismaDataProvider = dataProvider('/api/adm')
 
@@ -25,5 +26,10 @@ export const AdminPanel: React.FC = () => (
     />
     <Resource name="search_history" list={ListGuesser} />
     <Resource name="history_generation_fail" list={ListGuesser} />
+    <Resource
+      name="not_found_request"
+      list={NotFoundRequestList}
+      options={{ label: "404 URLs" }}
+    />
   </Admin>
 );

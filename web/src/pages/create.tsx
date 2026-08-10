@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import axios from "axios";
 import { Button, Card, Input, Spin, message } from "antd";
@@ -12,11 +12,20 @@ const { TextArea } = Input;
 
 const GenerateNewArticle = () => {
   const [prompt, setPrompt] = useState<string>("");
+  const [targetUrl, setTargetUrl] = useState<string>("");
   const [model, setModel] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const router = useRouter();
   const { data: session } = useSession();
   const admin = isAdmin(session);
+
+  useEffect(() => {
+    if (!admin || !router.isReady || typeof router.query.url !== "string") {
+      return;
+    }
+    const requestedUrl = router.query.url;
+    setTargetUrl((current) => current || requestedUrl);
+  }, [admin, router.isReady, router.query.url]);
 
   const submit = async () => {
     const trimmedPrompt = prompt.trim();
@@ -34,6 +43,7 @@ const GenerateNewArticle = () => {
       const response = await axios.post<{ slug: string }>("/api/create", {
         prompt: trimmedPrompt,
         model,
+        url: admin && targetUrl.trim() ? targetUrl.trim() : undefined,
       });
       router.push(`/content/${response.data.slug}`);
     } catch (error: any) {
@@ -50,12 +60,21 @@ const GenerateNewArticle = () => {
       </Head>
       <Card className="app-container" bordered={false}>
         <Spin spinning={isLoading}>
-          <h1>Enter your prompt</h1>
+          <h1>{admin ? "Enter the target URL and prompt" : "Enter your prompt"}</h1>
           <p>
             Type anything here for guiding the AI and it will try to guess what
             you mean. You can try a title, part of a title, keywords,
             instructions, or anything else you can think of.
           </p>
+          {admin && (
+            <Input
+              className={styles.inputfield}
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              placeholder="/content/article-slug"
+              aria-label="Target article URL"
+            />
+          )}
           <TextArea
             className={styles.inputfield}
             value={prompt}

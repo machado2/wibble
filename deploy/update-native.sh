@@ -59,6 +59,11 @@ run_as_fabio "git -C '${repo}' pull --ff-only --quiet origin master"
 if [[ "${needs_install}" == true ]]; then
   run_as_fabio "cd '${repo}' && pnpm --config.minimum-release-age=10080 install --frozen-lockfile"
 fi
+for migration in "${repo}"/deploy/migrations/*.sql; do
+  [[ -f "${migration}" ]] || continue
+  sudo -u postgres psql -X -v ON_ERROR_STOP=1 -d wibble -f "${migration}" >/dev/null
+done
+run_as_fabio "cd '${repo}' && pnpm --filter wibble-web exec prisma generate && pnpm --filter wibble-worker exec prisma generate"
 run_pm2 stop wibble-web
 web_stopped=true
 if ! run_as_fabio "cd '${repo}' && pnpm typecheck && pnpm build"; then
