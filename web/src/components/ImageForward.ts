@@ -27,7 +27,18 @@ const localImage = async (image: image_cache): Promise<ImagePayload | null> => {
       : extension === ".webp"
       ? "image/webp"
       : "image/jpeg";
-  return { data: await fs.readFile(filePath), contentType };
+  try {
+    return { data: await fs.readFile(filePath), contentType };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return null;
+    }
+    throw error;
+  }
 };
 
 const replicateImage = async (
@@ -57,13 +68,6 @@ const replicateImage = async (
   };
 };
 
-const placeholderImage = async (): Promise<ImagePayload> => ({
-  data: await fs.readFile(
-    path.join(process.cwd(), "public", "placeholder.jpeg")
-  ),
-  contentType: "image/jpeg",
-});
-
 const serveImage = async (
   image: image_cache | null | undefined,
   res: NextApiResponse
@@ -80,10 +84,12 @@ const serveImage = async (
     return;
   }
 
-  const payload =
-    (await localImage(image)) ??
-    (await replicateImage(image)) ??
-    (await placeholderImage());
+  const payload = (await localImage(image)) ?? (await replicateImage(image));
+  if (!payload) {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(404).send("Image data not found");
+    return;
+  }
 
   void prisma.image_cache
     .update({

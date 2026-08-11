@@ -24,6 +24,11 @@ test("migrates environment values into a valid private Nickel file", () => {
         "OPENROUTER_API_KEY=openrouter-test-key",
         "REPLICATE_API_TOKEN=replicate-test-token",
         "LOGGLY_TOKEN=loggly-test-token",
+        "SITE_URL=https://example.test",
+        "SSO_ISSUER_URL=https://sso.example.test/api/auth",
+        "SSO_CLIENT_ID=test-client-id",
+        "IMAGES_DIR=/data/images",
+        "IMAGE_MODE=replicate",
       ].join("\n")
     );
 
@@ -49,6 +54,14 @@ test("migrates environment values into a valid private Nickel file", () => {
     assert.equal(exported.secrets.safety_identifier_secret, "nextauth-secret");
     assert.equal(exported.secrets.openai_api_key, "openai-test-key");
     assert.equal(exported.secrets.openrouter_api_key, "openrouter-test-key");
+    assert.equal(exported.app.site_url, "https://example.test");
+    assert.equal(exported.app.images_dir, "/data/images");
+    assert.equal(
+      exported.auth.sso_issuer_url,
+      "https://sso.example.test/api/auth"
+    );
+    assert.equal(exported.auth.sso_client_id, "test-client-id");
+    assert.equal(exported.image.mode, "replicate");
   } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }

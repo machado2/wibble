@@ -66,6 +66,11 @@ const values = {
   openrouter_api_key: first("OPENROUTER_API_KEY"),
   replicate_api_token: first("REPLICATE_API_TOKEN"),
   loggly_token: first("LOGGLY_TOKEN"),
+  site_url: first("SITE_URL", "NEXTAUTH_URL"),
+  sso_issuer_url: first("SSO_ISSUER_URL"),
+  sso_client_id: first("SSO_CLIENT_ID"),
+  images_dir: first("IMAGES_DIR"),
+  mode: first("IMAGE_MODE"),
 };
 
 const replaceField = (source, field, value) => {
@@ -81,7 +86,9 @@ const replaceField = (source, field, value) => {
 
 let output = fs.readFileSync(path.resolve(templateArgument), "utf8");
 for (const [field, value] of Object.entries(values)) {
-  output = replaceField(output, field, value);
+  if (value) {
+    output = replaceField(output, field, value);
+  }
 }
 
 const destination = path.resolve(destinationArgument);
