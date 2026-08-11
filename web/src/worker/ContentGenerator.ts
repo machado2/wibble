@@ -62,6 +62,11 @@ function escapeMarkdownString(str: string): string {
 }
 
 const responseText = (response: any): string | null => {
+  const chatText = response?.choices?.[0]?.message?.content;
+  if (typeof chatText === "string" && chatText) {
+    return chatText;
+  }
+
   if (typeof response?.output_text === "string" && response.output_text) {
     return response.output_text;
   }
@@ -75,10 +80,20 @@ const responseText = (response: any): string | null => {
 };
 
 export class ContentGenerator {
+  private openRouterApiKey = process.env.OPENROUTER_API_KEY?.trim() ?? "";
   private openAiApiKey =
-    process.env.OPENAI_API_KEY ?? process.env.OPENAI_KEY ?? "";
-  private openAiApiUrl =
-    process.env.OPENAI_API_URL ?? "https://api.openai.com/v1/responses";
+    process.env.OPENAI_API_KEY?.trim() ?? process.env.OPENAI_KEY?.trim() ?? "";
+  private languageProvider = this.openRouterApiKey ? "openrouter" : "openai";
+  private languageApiKey = this.openRouterApiKey || this.openAiApiKey;
+  private languageApiUrl =
+    process.env.LANGUAGE_API_URL?.trim() ||
+    (this.languageProvider === "openrouter"
+      ? "https://openrouter.ai/api/v1/chat/completions"
+      : process.env.OPENAI_API_URL?.trim() ||
+        "https://api.openai.com/v1/responses");
+  private moderationEnabled = ["1", "true", "yes", "on"].includes(
+    (process.env.OPENAI_MODERATION_ENABLED ?? "false").toLowerCase()
+  );
 
   // check if a content exists with the slug
   async checkSlug(slug: string): Promise<boolean> {
@@ -105,23 +120,56 @@ export class ContentGenerator {
     }
   }
 
-  async askGpt(model: string, prompt: string): Promise<string> {
+  async askGpt(
+    model: string,
+    prompt: string,
+    safetyIdentifier?: string,
+    jsonOutput = false
+  ): Promise<string> {
     if (!(await this.moderateContent(prompt))) {
       throw new ContentModerationError();
     }
 
-    const response = await fetch(this.openAiApiUrl, {
+    if (!this.languageApiKey) {
+      throw new ExternalServiceError(
+        "Missing OPENROUTER_API_KEY or OPENAI_API_KEY"
+      );
+    }
+
+    const messages = [{ role: "user", content: prompt }];
+    const request =
+      this.languageProvider === "openrouter"
+        ? {
+            model,
+            messages,
+            max_tokens: 16000,
+            ...(safetyIdentifier ? { user: safetyIdentifier } : {}),
+            ...(jsonOutput ? { response_format: { type: "json_object" } } : {}),
+          }
+        : {
+            model,
+            input: messages,
+            reasoning: { effort: "none" },
+            max_output_tokens: 16000,
+            ...(safetyIdentifier
+              ? { safety_identifier: safetyIdentifier }
+              : {}),
+          };
+
+    const response = await fetch(this.languageApiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.openAiApiKey}`,
+        Authorization: `Bearer ${this.languageApiKey}`,
         "Content-Type": "application/json",
+        ...(this.languageProvider === "openrouter"
+          ? {
+              "HTTP-Referer":
+                process.env.SITE_URL ?? "https://wibble.fbmac.net",
+              "X-OpenRouter-Title": "The Wibble",
+            }
+          : {}),
       },
-      body: JSON.stringify({
-        model,
-        input: [{ role: "user", content: prompt }],
-        reasoning: { effort: "none" },
-        max_output_tokens: 16000,
-      }),
+      body: JSON.stringify(request),
     });
     const payload = await response.json().catch(() => null);
     if (response.status === 429) {
@@ -129,7 +177,7 @@ export class ContentGenerator {
     }
     if (!response.ok) {
       throw new ExternalServiceError(
-        `OpenAI request failed with HTTP ${response.status}`
+        `Language model request failed with HTTP ${response.status}`
       );
     }
     const content = responseText(payload);
@@ -157,7 +205,8 @@ export class ContentGenerator {
 
   async generateTitleAndDescription(
     model: string,
-    suggestion: string | null
+    suggestion: string | null,
+    safetyIdentifier?: string
   ): Promise<TitleDescription> {
     const prompt = `You are a professional content writer for "The Wibble", a satirical news website that generates
     articles.
@@ -180,7 +229,12 @@ export class ContentGenerator {
     Any other text will be considered invalid.
     `;
 
-    const gptResponse = await this.askGpt(model, prompt);
+    const gptResponse = await this.askGpt(
+      model,
+      prompt,
+      safetyIdentifier,
+      true
+    );
     try {
       const parsed = JSON.parse(gptResponse);
       return {
@@ -243,17 +297,24 @@ demonstrated here. These are examples, don't use them in your article:
   }
 
   async moderateContent(content: string): Promise<boolean> {
-    const moderationUrl = this.openAiApiUrl.replace(
-      /\/responses?\/?$/,
-      "/moderations"
-    );
+    if (!this.moderationEnabled) {
+      return true;
+    }
+    if (!this.openAiApiKey) {
+      throw new ExternalServiceError(
+        "OPENAI_MODERATION_ENABLED requires OPENAI_API_KEY"
+      );
+    }
+    const moderationUrl =
+      process.env.OPENAI_MODERATION_API_URL?.trim() ||
+      "https://api.openai.com/v1/moderations";
     const response = await fetch(moderationUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.openAiApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ input: content }),
+      body: JSON.stringify({ model: "omni-moderation-latest", input: content }),
     });
     const payload = await response.json().catch(() => null);
     if (response.status === 429) {
@@ -264,7 +325,10 @@ demonstrated here. These are examples, don't use them in your article:
         `OpenAI moderation failed with HTTP ${response.status}`
       );
     }
-    const moderation_result = payload?.results?.[0]?.flagged === true;
+    const moderation_result = payload?.results?.[0]?.flagged;
+    if (typeof moderation_result !== "boolean") {
+      throw new ExternalServiceError("Invalid OpenAI moderation response");
+    }
     if (moderation_result) {
       console.info("Content was rejected by moderation", {
         contentLength: content.length,

@@ -56,7 +56,9 @@ ${text}`;
     };
   }
 
-  async parseResponse(content: ContentWithCurrentVote): Promise<ParsedResponse> {
+  async parseResponse(
+    content: ContentWithCurrentVote
+  ): Promise<ParsedResponse> {
     const mdxSource = this.addFrontMatter(
       content.title,
       content.description,
@@ -71,7 +73,12 @@ ${text}`;
       titleInContent: false,
       datetime: DateTime.fromJSDate(content.created_at).toISO()!,
       votes: content.votes,
-      currentVote: content.votesRelation && content.votesRelation.length > 0 ? (content.votesRelation[0].downvote ? -1 : 1) : 0,
+      currentVote:
+        content.votesRelation && content.votesRelation.length > 0
+          ? content.votesRelation[0].downvote
+            ? -1
+            : 1
+          : 0,
     };
   }
 
@@ -147,19 +154,27 @@ ${text}`;
     email: string | null,
     suggestion: string,
     requestedSlug?: string,
+    safetyIdentifier?: string
   ): Promise<content> {
     const model = configuredTextModel();
     const titleDescription = await this.generator.generateTitleAndDescription(
       model,
-      suggestion
+      suggestion,
+      safetyIdentifier
     );
+
+    const storedUserInput = JSON.stringify({
+      version: 1,
+      suggestion,
+      ...(safetyIdentifier ? { safetyIdentifier } : {}),
+    });
 
     return await this.repository.createContent(
       model,
       titleDescription.title,
       requestedSlug ?? titleDescription.slug,
       titleDescription.description,
-      suggestion,
+      storedUserInput,
       email
     );
   }

@@ -3,6 +3,10 @@ import { ContentService } from "@/core/ContentService";
 import { getServerEmail } from "@/core/serverSession";
 import { normalizeArticleTarget } from "@/core/articleTarget";
 import { NotFoundRepository } from "@/core/NotFoundRepository";
+import {
+  generationSafetyIdentifier,
+  requestIp,
+} from "@/core/generationIdentity";
 
 export default async function handler(
   req: NextApiRequest,
@@ -32,7 +36,7 @@ export default async function handler(
           targetUrl,
           process.env.NEXT_PUBLIC_SITE_URL ??
             process.env.SITE_URL ??
-            "https://wibble.fbmac.net",
+            "https://wibble.fbmac.net"
         );
       } catch (targetError) {
         res.status(400).json({
@@ -54,10 +58,12 @@ export default async function handler(
     }
 
     const service = new ContentService();
+    const safetyIdentifier = generationSafetyIdentifier(email, requestIp(req));
     const content = await service.generateForSuggestion(
       email,
       prompt,
       target?.slug,
+      safetyIdentifier
     );
     if (target) {
       await new NotFoundRepository().markRequested(target.url, content.slug);
@@ -70,8 +76,6 @@ export default async function handler(
     res.status(200).json(data);
   } catch (error: any) {
     console.error(error);
-    res
-      .status(500)
-      .json({ error: error?.message ?? "Internal server error" });
+    res.status(500).json({ error: error?.message ?? "Internal server error" });
   }
 }

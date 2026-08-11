@@ -17,6 +17,12 @@ pnpm typecheck
 pnpm build
 ```
 
+Text generation uses OpenRouter when `OPENROUTER_API_KEY` is set; otherwise it
+falls back to `OPENAI_API_KEY`. The model is selected with `LANGUAGE_MODEL`.
+The optional OpenAI moderation pre-check is disabled by default and can be
+enabled explicitly with `OPENAI_MODERATION_ENABLED=true` and an
+`OPENAI_API_KEY`.
+
 Run Rust commands from `rust/`:
 
 ```bash

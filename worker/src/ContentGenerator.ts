@@ -2,6 +2,7 @@ import { getExampleArticles } from "./ExampleArticles";
 import textGenerator from "./TextGenerator";
 import fs from "fs";
 import path from "path";
+import { parseGenerationInput } from "./generationInput";
 
 const systemMessageTemplate = fs.readFileSync(
   path.join(process.cwd(), "system_message.txt"),
@@ -93,17 +94,18 @@ export class ContentGenerator {
     `;
     }
 
-    let instructions: string;
-    try {
-      instructions = JSON.parse(userInput).suggestion;
-    } catch (error: any) {
-      instructions = userInput;
-    }
+    const { suggestion: instructions, safetyIdentifier } =
+      parseGenerationInput(userInput);
 
     const prompt = `${this.wrapUserInput("title for the article", title)}
 ${this.wrapUserInput("description for the article", description)}
 ${this.wrapUserInput("instructions", instructions)}`;
 
-    return await textGenerator.askGpt(this.model, prompt, systemMessage);
+    return await textGenerator.askGpt(
+      this.model,
+      prompt,
+      systemMessage,
+      safetyIdentifier
+    );
   }
 }
