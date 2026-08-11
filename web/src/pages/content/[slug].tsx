@@ -18,18 +18,14 @@ import { VoteButtons } from "@/components/VoteButtons";
 import { getHumanReadableDate } from "@/core/getHumanReadableDate";
 import { NotFoundRepository } from "@/core/NotFoundRepository";
 import { articleTargetForSlug } from "@/core/articleTarget";
+import { getWibbleConfig } from "../../../../config-runtime";
 
 const defaultDescription = `Get the latest news with a touch of wobble from The Wibble,
 your source for the unpredictable and unsteady world of current events.`;
 const defaultTitle = "The Wibble";
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
-const publicSiteUrl = (
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://wibble.fbmac.net"
-).replace(/\/$/, "");
-
 async function tryLoadContent(slug: string): Promise<ParsedResponse> {
-  const response = await fetch(`${baseUrl}/api/content/${slug}`);
+  const response = await fetch(`/api/content/${slug}`);
   if (!response.ok) {
     throw new Error(response.statusText);
   }
@@ -41,10 +37,10 @@ const mdxComponents = {
   GeneratedImage,
 };
 
-function SlugPage(data: ParsedResponse) {
+function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
   const router = useRouter();
   const slug: string = router.query.slug as string;
-  const [parsedResponse, setParsedResponse] = useState(data);
+  const [parsedResponse, setParsedResponse] = useState<ParsedResponse>(data);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -89,7 +85,7 @@ function SlugPage(data: ParsedResponse) {
         <meta property="og:description" content={description} />
         <meta
           property="og:image"
-          content={`${publicSiteUrl}${
+          content={`${data.publicSiteUrl}${
             parsedResponse?.imageUrl || "/wibble2.jpeg"
           }`}
         />
@@ -133,6 +129,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   }
 
   const service = new ContentService();
+  const siteUrl = getWibbleConfig().app.site_url;
   try {
     const email = await getServerEmail(
       context.req as NextApiRequest,
@@ -141,14 +138,19 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     const data = await service.processSlug(email, slug as string);
     if (!data) {
       try {
-        const target = articleTargetForSlug(slug);
+        const target = articleTargetForSlug(slug, siteUrl);
         await new NotFoundRepository().record(target.url);
       } catch (recordError) {
         console.error("Failed to record missing article URL", recordError);
       }
       return { notFound: true };
     }
-    return { props: data };
+    return {
+      props: {
+        ...data,
+        publicSiteUrl: siteUrl.replace(/\/$/, ""),
+      },
+    };
   } catch (error) {
     console.log(error);
     throw error;

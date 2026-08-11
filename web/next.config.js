@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   outputFileTracing: false,
+  experimental: {
+    externalDir: true,
+  },
   async rewrites() {
     return [
       {

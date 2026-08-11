@@ -30,8 +30,14 @@ deployed_revision=$(cat "${state_dir}/revision" 2>/dev/null || true)
 [[ "${target_revision}" == "${deployed_revision}" ]] && exit 0
 
 needs_install=false
+config_only=false
 if [[ -n "${deployed_revision}" ]] && ! run_as_fabio "git -C '${repo}' diff --quiet '${deployed_revision}' '${target_revision}' -- pnpm-lock.yaml package.json web/package.json worker/package.json"; then
   needs_install=true
+fi
+if [[ -n "${deployed_revision}" ]] \
+  && run_as_fabio "git -C '${repo}' diff --quiet '${deployed_revision}' '${target_revision}' -- . ':(exclude)config.ncl'" \
+  && ! run_as_fabio "git -C '${repo}' diff --quiet '${deployed_revision}' '${target_revision}' -- config.ncl"; then
+  config_only=true
 fi
 
 if [[ -n $(run_as_fabio "git -C '${repo}' status --porcelain --untracked-files=no") ]]; then
@@ -56,6 +62,14 @@ if [[ -d "${repo}/web/.next" ]]; then
 fi
 
 run_as_fabio "git -C '${repo}' pull --ff-only --quiet origin master"
+/bin/bash "${repo}/deploy/install-nickel.sh"
+run_as_fabio "/home/fabio/.local/bin/nickel export '${repo}/config.ncl' >/dev/null"
+if [[ "${config_only}" == true ]]; then
+  curl --fail --silent --show-error http://127.0.0.1:18001/api/runtime-config >/dev/null
+  curl --fail --silent --show-error http://127.0.0.1:18002/health >/dev/null
+  printf '%s\n' "${target_revision}" >"${state_dir}/revision"
+  exit 0
+fi
 if [[ "${needs_install}" == true ]]; then
   run_as_fabio "cd '${repo}' && pnpm --config.minimum-release-age=10080 install --frozen-lockfile"
 fi

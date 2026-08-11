@@ -1,80 +1,90 @@
 import dotenv from "dotenv";
+import {
+  getWibbleConfig,
+  type WriterConfig,
+  type WriterProvider,
+} from "../../config-runtime";
 
 dotenv.config();
 
-const numberConfig = (key: string, def?: number) => {
-  const value = process.env[key];
-  if (!value) {
-    if (def === undefined) {
-      throw new Error(`Missing required environment variable ${key}`);
-    }
-    return def;
-  }
-  return parseInt(value);
-};
+const optionalSecret = (key: string) => process.env[key]?.trim() || undefined;
 
-const strConfig = (key: string, def?: string) => {
-  const value = process.env[key];
+const requiredSecret = (key: string) => {
+  const value = optionalSecret(key);
   if (!value) {
-    if (def === undefined) {
-      throw new Error(`Missing required environment variable ${key}`);
-    }
-    return def;
+    throw new Error(`Missing required environment variable ${key}`);
   }
   return value;
 };
 
-const optionalStrConfig = (key: string) =>
-  process.env[key]?.trim() || undefined;
-
-const booleanConfig = (key: string, def = false) => {
-  const value = optionalStrConfig(key);
-  if (value === undefined) {
-    return def;
+export const writerForModel = (model: string): WriterConfig => {
+  const configured = getWibbleConfig().generation.writers.find(
+    (writer) => writer.slug === model
+  );
+  if (configured) {
+    return configured;
   }
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+  const provider: WriterProvider = model.includes("/")
+    ? "openrouter"
+    : "openai";
+  return {
+    id: `legacy-${model}`,
+    nickname: model,
+    slug: model,
+    provider,
+    available: false,
+    admin_only: true,
+  };
 };
 
-const openRouterApiKey = optionalStrConfig("OPENROUTER_API_KEY");
-const openAiApiKey =
-  optionalStrConfig("OPENAI_API_KEY") ?? optionalStrConfig("OPENAI_KEY");
-const languageProvider = openRouterApiKey ? "openrouter" : "openai";
-const languageApiKey = openRouterApiKey ?? openAiApiKey;
-
-if (!languageApiKey) {
-  throw new Error(
-    "Missing required environment variable OPENROUTER_API_KEY or OPENAI_API_KEY"
+export const languageApiKey = (provider: WriterProvider): string =>
+  requiredSecret(
+    provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"
   );
-}
 
 export const Config = {
-  coolDownSec: numberConfig("COOL_DOWN_SEC", 10),
-  idleSleepSec: numberConfig("IDLE_SLEEP_SEC", 10),
-  waitOnErrorSec: numberConfig("WAIT_ON_ERROR_SEC", 60),
-  languageProvider,
-  languageApiKey,
-  languageApiUrl:
-    optionalStrConfig("LANGUAGE_API_URL") ??
-    (languageProvider === "openrouter"
-      ? "https://openrouter.ai/api/v1/chat/completions"
-      : optionalStrConfig("OPENAI_API_URL") ??
-        "https://api.openai.com/v1/responses"),
-  moderationEnabled: booleanConfig("OPENAI_MODERATION_ENABLED", false),
-  moderationApiKey: openAiApiKey,
-  moderationApiUrl:
-    optionalStrConfig("OPENAI_MODERATION_API_URL") ??
-    "https://api.openai.com/v1/moderations",
-  siteUrl: strConfig("SITE_URL", "https://wibble.fbmac.net"),
-  databaseUrl: strConfig("DATABASE_URL"),
-  imageMode: strConfig("IMAGE_MODE", "replicate"),
-  replicateApiToken: strConfig("REPLICATE_API_TOKEN"),
-  replicateApiUrl: strConfig(
-    "REPLICATE_API_URL",
-    "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions"
-  ),
-  replicateMinRequestIntervalSeconds: Math.max(
-    1,
-    numberConfig("REPLICATE_MIN_REQUEST_INTERVAL_SECONDS", 30)
-  ),
-  logglyToken: strConfig("LOGGLY_TOKEN", ""),
+  get coolDownSec() {
+    return getWibbleConfig().worker.cool_down_seconds;
+  },
+  get idleSleepSec() {
+    return getWibbleConfig().worker.idle_sleep_seconds;
+  },
+  get waitOnErrorSec() {
+    return getWibbleConfig().worker.wait_on_error_seconds;
+  },
+  get updateScoresIntervalSec() {
+    return getWibbleConfig().worker.update_scores_interval_seconds;
+  },
+  get moderationEnabled() {
+    return getWibbleConfig().generation.moderation_enabled;
+  },
+  get moderationApiKey() {
+    return optionalSecret("OPENAI_API_KEY") ?? optionalSecret("OPENAI_KEY");
+  },
+  get moderationApiUrl() {
+    return getWibbleConfig().generation.moderation_api_url;
+  },
+  get maxOutputTokens() {
+    return getWibbleConfig().generation.max_output_tokens;
+  },
+  get siteUrl() {
+    return getWibbleConfig().app.site_url;
+  },
+  get imageMode() {
+    return getWibbleConfig().image.mode;
+  },
+  get imagesDir() {
+    return getWibbleConfig().app.images_dir;
+  },
+  get replicateApiToken() {
+    return requiredSecret("REPLICATE_API_TOKEN");
+  },
+  get replicateApiUrl() {
+    return getWibbleConfig().image.replicate_api_url;
+  },
+  get replicateMinRequestIntervalSeconds() {
+    return getWibbleConfig().image.minimum_request_interval_seconds;
+  },
 };
+
+export { getWibbleConfig };

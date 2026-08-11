@@ -1,0 +1,68 @@
+let Writer = {
+  id | String,
+  nickname | String,
+  slug | String,
+  provider | String,
+  available | Bool,
+  admin_only | Bool,
+}
+in
+{
+  app = {
+    site_url = "https://wibble.fbmac.net",
+    sso_public_url = "https://sso.fbmac.net",
+    discord_url = "https://discord.gg/qwATcUrFe",
+    images_dir = "/home/fabio/services/wibble/images",
+  },
+
+  auth = {
+    sso_issuer_url = "https://sso.fbmac.net/api/auth",
+    sso_client_id = "639bbd38-bece-4ce9-a8fb-43520804f733",
+  },
+
+  generation = {
+    writers | Array Writer = [
+      {
+        id = "luna",
+        nickname = "Luna",
+        slug = "gpt-5.6-luna",
+        provider = "openai",
+        available = true,
+        admin_only = false,
+      },
+      {
+        id = "deepseek-flash",
+        nickname = "DeepSeek Flash",
+        slug = "deepseek/deepseek-v4-flash-0731",
+        provider = "openrouter",
+        available = false,
+        admin_only = true,
+      },
+    ],
+    openai_api_url = "https://api.openai.com/v1/responses",
+    openrouter_api_url = "https://openrouter.ai/api/v1/chat/completions",
+    moderation_enabled = false,
+    moderation_api_url = "https://api.openai.com/v1/moderations",
+    max_output_tokens = 16000,
+    max_prompt_length = 2000,
+  },
+
+  image = {
+    mode = "replicate",
+    replicate_api_url = "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
+    minimum_request_interval_seconds = 30,
+  },
+
+  worker = {
+    cool_down_seconds = 10,
+    idle_sleep_seconds = 10,
+    wait_on_error_seconds = 60,
+    update_scores_interval_seconds = 900,
+  },
+
+  logging = {
+    loggly_subdomain = "fbmac",
+    web_tags = ["wibble-web"],
+    worker_tags = ["wibble-worker"],
+  },
+}

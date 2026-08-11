@@ -1,6 +1,10 @@
 // src/admin/authProvider.ts
 import { AuthProvider } from "react-admin";
 import { signIn, signOut, getSession } from "next-auth/react";
+import {
+  defaultPublicRuntimeConfig,
+  type PublicRuntimeConfig,
+} from "@/core/runtimeConfig";
 
 export const authProvider: AuthProvider = {
   login: async ({ username, password }) => {
@@ -10,10 +14,17 @@ export const authProvider: AuthProvider = {
   },
   logout: async () => {
     await signOut({ redirect: false });
-    const ssoUrl =
-      process.env.NEXT_PUBLIC_SSO_URL ?? "https://sso.fbmac.net";
+    const runtimeConfig = await fetch("/api/runtime-config")
+      .then((response) =>
+        response.ok
+          ? (response.json() as Promise<PublicRuntimeConfig>)
+          : defaultPublicRuntimeConfig
+      )
+      .catch(() => defaultPublicRuntimeConfig);
     window.location.assign(
-      `${ssoUrl}/logout?return_to=${encodeURIComponent(`${window.location.origin}/`)}`,
+      `${runtimeConfig.ssoUrl}/logout?return_to=${encodeURIComponent(
+        `${window.location.origin}/`
+      )}`
     );
   },
   checkAuth: async () => {

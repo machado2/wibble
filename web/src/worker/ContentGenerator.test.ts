@@ -1,19 +1,22 @@
+jest.mock("../../../config-runtime", () => ({
+  getWibbleConfig: jest.fn(),
+}));
+
+import { getWibbleConfig } from "../../../config-runtime";
 import { ContentGenerator } from "./ContentGenerator";
 
-describe("ContentGenerator moderation feature flag", () => {
-  const originalFlag = process.env.OPENAI_MODERATION_ENABLED;
+const mockGetWibbleConfig = jest.mocked(getWibbleConfig);
 
+describe("ContentGenerator moderation feature flag", () => {
   afterEach(() => {
     jest.restoreAllMocks();
-    if (originalFlag === undefined) {
-      delete process.env.OPENAI_MODERATION_ENABLED;
-    } else {
-      process.env.OPENAI_MODERATION_ENABLED = originalFlag;
-    }
+    mockGetWibbleConfig.mockReset();
   });
 
-  test("does not call the moderation API when the flag is absent", async () => {
-    delete process.env.OPENAI_MODERATION_ENABLED;
+  test("does not call the moderation API when disabled in Nickel", async () => {
+    mockGetWibbleConfig.mockReturnValue({
+      generation: { moderation_enabled: false },
+    } as ReturnType<typeof getWibbleConfig>);
     const fetchSpy = jest.spyOn(global, "fetch");
     const generator = new ContentGenerator();
 

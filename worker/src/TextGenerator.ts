@@ -4,7 +4,13 @@ import {
   RateLimitError,
 } from "./errors";
 import logger from "./logger";
-import { Config } from "./config";
+import {
+  Config,
+  getWibbleConfig,
+  languageApiKey,
+  writerForModel,
+} from "./config";
+import type { WriterProvider } from "../../config-runtime";
 
 type Message = { role: "system" | "user"; content: string };
 
@@ -31,10 +37,10 @@ class TextGenerator {
   private async post(
     url: string,
     body: unknown,
-    apiKey = Config.languageApiKey
+    apiKey: string,
+    provider?: WriterProvider
   ): Promise<any> {
-    const isOpenRouterLanguageRequest =
-      Config.languageProvider === "openrouter" && url === Config.languageApiUrl;
+    const isOpenRouterLanguageRequest = provider === "openrouter";
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -65,15 +71,14 @@ class TextGenerator {
     if (!Config.moderationEnabled) {
       return true;
     }
-    if (!Config.moderationApiKey) {
-      throw new ExternalServiceError(
-        "OPENAI_MODERATION_ENABLED requires OPENAI_API_KEY"
-      );
+    const moderationApiKey = Config.moderationApiKey;
+    if (!moderationApiKey) {
+      throw new ExternalServiceError("Moderation requires OPENAI_API_KEY");
     }
     const response = await this.post(
       Config.moderationApiUrl,
       { model: "omni-moderation-latest", input: content },
-      Config.moderationApiKey
+      moderationApiKey
     );
     const moderation_result = response?.results?.[0]?.flagged;
     if (typeof moderation_result !== "boolean") {
@@ -102,24 +107,36 @@ class TextGenerator {
     }
     messages.push({ role: "user", content: prompt });
 
+    const writer = writerForModel(model);
+    const config = getWibbleConfig();
+    const apiUrl =
+      writer.provider === "openrouter"
+        ? config.generation.openrouter_api_url
+        : config.generation.openai_api_url;
+
     const request =
-      Config.languageProvider === "openrouter"
+      writer.provider === "openrouter"
         ? {
             model,
             messages,
-            max_tokens: 16000,
+            max_tokens: Config.maxOutputTokens,
             ...(safetyIdentifier ? { user: safetyIdentifier } : {}),
           }
         : {
             model,
             input: messages,
             reasoning: { effort: "none" },
-            max_output_tokens: 16000,
+            max_output_tokens: Config.maxOutputTokens,
             ...(safetyIdentifier
               ? { safety_identifier: safetyIdentifier }
               : {}),
           };
-    const response = await this.post(Config.languageApiUrl, request);
+    const response = await this.post(
+      apiUrl,
+      request,
+      languageApiKey(writer.provider),
+      writer.provider
+    );
     const content = responsesText(response);
     if (content == null) {
       logger.error(`content is null`);

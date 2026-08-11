@@ -11,6 +11,7 @@ import {
   nextImageFailureState,
   reserveImageGenerationSlot,
 } from "./imagePolicy";
+import { Config } from "./config";
 
 export class ImageRepository {
   public async createEntry(
@@ -55,13 +56,8 @@ export class ImageRepository {
     await prisma.image_cache.delete({ where: { id } });
   }
 
-  public async updateEntryWithImage(
-    id: string,
-    generated: GeneratedImageData
-  ) {
-    const imagesRoot = path.resolve(
-      process.env.IMAGES_DIR ?? "/home/fabio/services/wibble/images"
-    );
+  public async updateEntryWithImage(id: string, generated: GeneratedImageData) {
+    const imagesRoot = path.resolve(Config.imagesDir);
     await fs.mkdir(imagesRoot, { recursive: true });
     const relativePath = `${id}${generated.extension}`;
     await fs.writeFile(path.join(imagesRoot, relativePath), generated.image);

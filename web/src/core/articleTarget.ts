@@ -3,11 +3,9 @@ export type ArticleTarget = {
   slug: string;
 };
 
-const DEFAULT_SITE_URL = "https://wibble.fbmac.net";
-
 export const normalizeArticleTarget = (
   value: string,
-  siteUrl = DEFAULT_SITE_URL,
+  siteUrl: string
 ): ArticleTarget => {
   const trimmed = value.trim();
   if (!trimmed) throw new Error("Missing target URL");
@@ -46,5 +44,8 @@ export const normalizeArticleTarget = (
   };
 };
 
-export const articleTargetForSlug = (slug: string): ArticleTarget =>
-  normalizeArticleTarget(`/content/${encodeURIComponent(slug)}`);
+export const articleTargetForSlug = (
+  slug: string,
+  siteUrl: string
+): ArticleTarget =>
+  normalizeArticleTarget(`/content/${encodeURIComponent(slug)}`, siteUrl);

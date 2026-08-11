@@ -1,18 +1,15 @@
 import prisma from "@/core/PrismaWibble";
 import xml from "xml";
 import { NextResponse } from "next/server";
+import { getWibbleConfig } from "../../../../config-runtime";
 
 export const dynamic = "force-dynamic";
-
-const siteUrl = (process.env.SITE_URL ?? "https://wibble.fbmac.net").replace(
-  /\/$/,
-  ""
-);
 
 const HIGH_PRIORITY = 1;
 const DEFAULT_PRIORITY = 0.1;
 
 export async function GET() {
+  const siteUrl = getWibbleConfig().app.site_url.replace(/\/$/, "");
   // articles where the content is not null and are not flagged
   const articles = await prisma.content.findMany({
     select: {

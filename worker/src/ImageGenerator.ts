@@ -1,17 +1,12 @@
 import { GeneratedImageData } from "./ContentGenerator";
-import {
-  ExternalServiceError,
-  PermanentImageGenerationError,
-} from "./errors";
+import { ExternalServiceError, PermanentImageGenerationError } from "./errors";
 import { Config } from "./config";
 import { Sleep } from "./sleep";
 import { image_cache } from "@prisma/client";
 import { ImageRepository } from "./ImageRepository";
 
 const isPermanentProviderResponse = (status: number) =>
-  status >= 400 &&
-  status < 500 &&
-  ![408, 409, 425, 429].includes(status);
+  status >= 400 && status < 500 && ![408, 409, 425, 429].includes(status);
 
 export class ImageGenerator {
   private repository = new ImageRepository();
@@ -19,7 +14,7 @@ export class ImageGenerator {
   async generateImage(image: image_cache): Promise<GeneratedImageData> {
     if (Config.imageMode !== "replicate") {
       throw new ExternalServiceError(
-        `Unsupported IMAGE_MODE for the old worker: ${Config.imageMode}`
+        `Unsupported image mode: ${Config.imageMode}`
       );
     }
 
@@ -45,7 +40,9 @@ export class ImageGenerator {
       const ErrorType = isPermanentProviderResponse(response.status)
         ? PermanentImageGenerationError
         : ExternalServiceError;
-      throw new ErrorType(`Replicate request failed with HTTP ${response.status}`);
+      throw new ErrorType(
+        `Replicate request failed with HTTP ${response.status}`
+      );
     }
 
     const predictionUrl =

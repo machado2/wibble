@@ -7,7 +7,7 @@ import { updateScoresLoop } from "./updateHotScores";
 logger.info("Starting wibble-worker...");
 
 const app = express();
-const port = Number(process.env.WORKER_PORT ?? process.env.PORT ?? 18002);
+const port = 18002;
 
 // Health check endpoint
 app.get("/health", (req, res) => {

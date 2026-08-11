@@ -7,7 +7,12 @@ for the images.
 It uses a second repository for the content generation that happens in background, at
 https://github.com/machado2/wibble-worker
 
-To run it, configure `LANGUAGE_MODEL`, either `OPENROUTER_API_KEY` or
-`OPENAI_API_KEY`, and a PostgreSQL database through `DATABASE_URL`. When an
-OpenRouter key is available it takes precedence. The OpenAI moderation pre-check
-is opt-in through `OPENAI_MODERATION_ENABLED=true` and is disabled by default.
+Runtime settings and writer/model choices are defined in the repository root
+`config.ncl`. The application reloads valid changes automatically. Leave the
+writer blank in the creation form to choose randomly among the writers allowed
+for the signed-in user.
+
+The `.env` file is reserved for credentials and tokens, including
+`DATABASE_URL`, authentication secrets, `OPENAI_API_KEY`,
+`OPENROUTER_API_KEY`, and `REPLICATE_API_TOKEN`. The optional OpenAI moderation
+pre-check is disabled by default in Nickel.

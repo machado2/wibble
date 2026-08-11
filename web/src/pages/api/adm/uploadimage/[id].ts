@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import { IncomingForm } from "formidable-serverless";
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getWibbleConfig } from "../../../../../../config-runtime";
 
 export const config = {
   api: { bodyParser: false, sizeLimit: "10mb" },
@@ -40,9 +41,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     const safeExtension = [".jpg", ".jpeg", ".png", ".webp"].includes(extension)
       ? extension
       : ".jpg";
-    const root = path.resolve(
-      process.env.IMAGES_DIR ?? "/home/fabio/services/wibble/images"
-    );
+    const root = path.resolve(getWibbleConfig().app.images_dir);
     const relativePath = `${id}${safeExtension}`;
     await fs.mkdir(root, { recursive: true });
     await fs.copyFile(file.path, path.join(root, relativePath));

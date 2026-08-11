@@ -6,7 +6,7 @@ import { NewsListItem } from "./NewsListItem";
 import { dontWaitFor } from "./dontWaitFor";
 import { ContentGenerator } from "@/worker/ContentGenerator";
 import { DateTime } from "luxon";
-import { configuredTextModel } from "./configuredTextModel";
+import type { WriterConfig } from "../../../config-runtime";
 
 export type ParsedResponse = {
   id?: string;
@@ -153,12 +153,12 @@ ${text}`;
   async generateForSuggestion(
     email: string | null,
     suggestion: string,
+    writer: WriterConfig,
     requestedSlug?: string,
     safetyIdentifier?: string
   ): Promise<content> {
-    const model = configuredTextModel();
     const titleDescription = await this.generator.generateTitleAndDescription(
-      model,
+      writer,
       suggestion,
       safetyIdentifier
     );
@@ -170,7 +170,7 @@ ${text}`;
     });
 
     return await this.repository.createContent(
-      model,
+      writer.slug,
       titleDescription.title,
       requestedSlug ?? titleDescription.slug,
       titleDescription.description,

@@ -15,14 +15,18 @@ export const getServerEmail = async (
   return typeof token?.email === "string" ? token.email : null;
 };
 
+export const isServerAdmin = (email: string | null): boolean => {
+  const adminEmail =
+    process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
+  return Boolean(email && adminEmail && email === adminEmail);
+};
+
 export const requireSession = async (
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<boolean> => {
   const email = await getServerEmail(req, res);
-  const adminEmail =
-    process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
-  if (!email || email !== adminEmail) {
+  if (!isServerAdmin(email)) {
     res.status(401).json({ message: "Unauthorized" });
     return false;
   }

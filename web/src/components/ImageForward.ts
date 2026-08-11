@@ -4,14 +4,17 @@ import { image_cache } from "@prisma/client";
 import fs from "fs/promises";
 import path from "path";
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getWibbleConfig } from "../../../config-runtime";
 
 type ImagePayload = { data: Buffer; contentType: string };
 
 const localImage = async (image: image_cache): Promise<ImagePayload | null> => {
-  const stored = await prisma.image_file.findUnique({ where: { id: image.id } });
+  const stored = await prisma.image_file.findUnique({
+    where: { id: image.id },
+  });
   if (!stored) return null;
 
-  const root = path.resolve(process.env.IMAGES_DIR ?? "/home/fabio/services/wibble/images");
+  const root = path.resolve(getWibbleConfig().app.images_dir);
   const filePath = path.resolve(root, stored.file_path);
   if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
     throw new Error("Invalid image path");
@@ -55,7 +58,9 @@ const replicateImage = async (
 };
 
 const placeholderImage = async (): Promise<ImagePayload> => ({
-  data: await fs.readFile(path.join(process.cwd(), "public", "placeholder.jpeg")),
+  data: await fs.readFile(
+    path.join(process.cwd(), "public", "placeholder.jpeg")
+  ),
   contentType: "image/jpeg",
 });
 

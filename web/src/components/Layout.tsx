@@ -12,24 +12,22 @@ import {
 } from "react-icons/fa";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { isAdmin } from "@/core/isAdmin";
+import { useRuntimeConfig } from "./useRuntimeConfig";
 
 type LayoutProps = {
   children: ReactNode;
 };
 
 function Layout({ children }: LayoutProps) {
-  const discordServerURL = "https://discord.gg/qwATcUrFe";
+  const { discordUrl, ssoUrl } = useRuntimeConfig();
   const { data: session } = useSession();
   const isDerp = isAdmin(session);
-  const login = () =>
-    signIn("sso", { callbackUrl: window.location.href });
+  const login = () => signIn("sso", { callbackUrl: window.location.href });
   const logout = async () => {
     await signOut({ redirect: false });
-    const ssoUrl =
-      process.env.NEXT_PUBLIC_SSO_URL ?? "https://sso.fbmac.net";
     const returnTo = `${window.location.origin}/`;
     window.location.assign(
-      `${ssoUrl}/logout?return_to=${encodeURIComponent(returnTo)}`,
+      `${ssoUrl}/logout?return_to=${encodeURIComponent(returnTo)}`
     );
   };
   return (
@@ -37,7 +35,7 @@ function Layout({ children }: LayoutProps) {
       <Row className={styles.siteheader} align="middle">
         <Col flex="0 1 auto" style={{ textAlign: "left" }}>
           <Link
-            href={discordServerURL}
+            href={discordUrl}
             target="_blank"
             rel="noreferrer"
             title="Discord"
@@ -79,11 +77,17 @@ function Layout({ children }: LayoutProps) {
         <Col flex="0 1 auto">
           <div className={styles.signup}>
             {session && session.user ? (
-              <button className={styles.authButton} onClick={() => void logout()}>
+              <button
+                className={styles.authButton}
+                onClick={() => void logout()}
+              >
                 <FaSignOutAlt style={{ fontSize: "24px" }} title="Sign-out" />
               </button>
             ) : (
-              <button className={styles.authButton} onClick={() => void login()}>
+              <button
+                className={styles.authButton}
+                onClick={() => void login()}
+              >
                 <FaUserCircle style={{ fontSize: "24px" }} title="Sign-in" />
               </button>
             )}
