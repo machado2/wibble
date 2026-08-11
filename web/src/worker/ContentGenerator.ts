@@ -184,7 +184,7 @@ export class ContentGenerator {
     if (content == null) {
       throw new ExternalServiceError();
     }
-    console.info("OpenAI request completed", {
+    console.info("Language model request completed", {
       model,
       promptLength: prompt.length,
       responseLength: content.length,
