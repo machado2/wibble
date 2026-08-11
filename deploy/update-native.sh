@@ -71,7 +71,8 @@ for migration in "${repo}"/deploy/migrations/*.sql; do
   [[ -f "${migration}" ]] || continue
   sudo -u postgres psql -X -v ON_ERROR_STOP=1 -d wibble <"${migration}" >/dev/null
 done
-run_as_fabio "cd '${repo}' && pnpm --filter wibble-web exec prisma generate && pnpm --filter wibble-worker exec prisma generate"
+run_as_fabio "cd '${repo}' && node deploy/run-with-config.cjs pnpm --filter wibble-web exec prisma generate"
+run_as_fabio "cd '${repo}' && node deploy/run-with-config.cjs pnpm --filter wibble-worker exec prisma generate"
 run_pm2 stop wibble-web
 web_stopped=true
 if ! run_as_fabio "cd '${repo}' && pnpm typecheck && pnpm build"; then
