@@ -19,6 +19,7 @@ export const BoxedImage = (props: BoxedImageProps) => {
   const [mounted, setMounted] = useState(false);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null);
+  const [terminalFailure, setTerminalFailure] = useState(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const imgid = computeHash(props.prompt);
@@ -30,6 +31,12 @@ export const BoxedImage = (props: BoxedImageProps) => {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setRetryAttempt(0);
+    setLoadedImageUrl(null);
+    setTerminalFailure(false);
+  }, [props.prompt]);
 
   useEffect(() => {
     if (!mounted || !props.prompt) return;
@@ -49,15 +56,28 @@ export const BoxedImage = (props: BoxedImageProps) => {
           setLoadedImageUrl(objectUrl);
           return;
         }
-        if (response.status !== 503 || retryAttempt >= 24) return;
-      } catch (error) {
-        if (controller.signal.aborted || retryAttempt >= 24) return;
-      }
+        if (response.status < 500) {
+          setTerminalFailure(true);
+          return;
+        }
 
-      retryTimer.current = setTimeout(() => {
-        retryTimer.current = null;
-        setRetryAttempt((attempt) => attempt + 1);
-      }, 5000);
+        const retryAfterSeconds = Number(response.headers.get("Retry-After"));
+        const retryDelayMs =
+          Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+            ? retryAfterSeconds * 1000
+            : 5000;
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null;
+          setRetryAttempt((attempt) => attempt + 1);
+        }, retryDelayMs);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null;
+          setRetryAttempt((attempt) => attempt + 1);
+        }, 5000);
+      }
     };
 
     void loadImage();
@@ -123,5 +143,16 @@ export const BoxedImage = (props: BoxedImageProps) => {
     );
   }
 
-  return null;
+  const placeholderClassName = [cssClass, styles.placeholder]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <img
+      src="/placeholder.jpeg"
+      alt={captionText}
+      title={captionText}
+      className={placeholderClassName}
+      aria-busy={!terminalFailure}
+    />
+  );
 };

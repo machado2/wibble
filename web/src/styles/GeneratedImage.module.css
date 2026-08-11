@@ -6,6 +6,14 @@
     object-fit: contain;
 }
 
+.placeholder {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    min-width: 0;
+    object-fit: contain;
+}
+
 .imageleft, .imageright, .imagebetween {
     width: 30%;
 }
