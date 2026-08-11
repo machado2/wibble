@@ -5,7 +5,11 @@ import {
   RateLimitError,
 } from "@/core/errors";
 import prisma from "@/core/PrismaWibble";
-import { getWibbleConfig, type WriterConfig } from "../../../config-runtime";
+import {
+  getWibbleConfig,
+  type WibbleConfig,
+  type WriterConfig,
+} from "../../../config-runtime";
 import slugify from "slugify";
 import { v4 as uuidv4 } from "uuid";
 
@@ -58,11 +62,11 @@ const responseText = (response: any): string | null => {
   return text || null;
 };
 
-const providerApiKey = (writer: WriterConfig): string => {
+const providerApiKey = (config: WibbleConfig, writer: WriterConfig): string => {
   const key =
     writer.provider === "openrouter"
-      ? process.env.OPENROUTER_API_KEY?.trim()
-      : process.env.OPENAI_API_KEY?.trim() ?? process.env.OPENAI_KEY?.trim();
+      ? config.secrets.openrouter_api_key.trim()
+      : config.secrets.openai_api_key.trim();
   if (!key) {
     throw new ExternalServiceError(
       `Missing API key for writer ${writer.nickname}`
@@ -107,7 +111,7 @@ export class ContentGenerator {
     }
 
     const config = getWibbleConfig();
-    const apiKey = providerApiKey(writer);
+    const apiKey = providerApiKey(config, writer);
     const apiUrl =
       writer.provider === "openrouter"
         ? config.generation.openrouter_api_url
@@ -227,10 +231,11 @@ export class ContentGenerator {
     if (!config.generation.moderation_enabled) {
       return true;
     }
-    const apiKey =
-      process.env.OPENAI_API_KEY?.trim() ?? process.env.OPENAI_KEY?.trim();
+    const apiKey = config.secrets.openai_api_key.trim();
     if (!apiKey) {
-      throw new ExternalServiceError("Moderation requires OPENAI_API_KEY");
+      throw new ExternalServiceError(
+        "Moderation requires secrets.openai_api_key in config.ncl"
+      );
     }
     const response = await fetch(config.generation.moderation_api_url, {
       method: "POST",

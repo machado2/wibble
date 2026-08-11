@@ -1,4 +1,3 @@
-import dotenv from "dotenv";
 import { createRequire } from "node:module";
 import type {
   WibbleConfig,
@@ -6,21 +5,17 @@ import type {
   WriterProvider,
 } from "../../config-runtime";
 
-dotenv.config();
-
 const require = createRequire(import.meta.url);
 const { getWibbleConfig } = require("../../config-runtime/index.cjs") as {
   getWibbleConfig: () => WibbleConfig;
 };
 
-const optionalSecret = (key: string) => process.env[key]?.trim() || undefined;
-
-const requiredSecret = (key: string) => {
-  const value = optionalSecret(key);
-  if (!value) {
-    throw new Error(`Missing required environment variable ${key}`);
+const requiredSecret = (value: string, field: string) => {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`Missing required Nickel configuration ${field}`);
   }
-  return value;
+  return normalized;
 };
 
 export const writerForModel = (model: string): WriterConfig => {
@@ -44,9 +39,15 @@ export const writerForModel = (model: string): WriterConfig => {
 };
 
 export const languageApiKey = (provider: WriterProvider): string =>
-  requiredSecret(
-    provider === "openrouter" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY"
-  );
+  provider === "openrouter"
+    ? requiredSecret(
+        getWibbleConfig().secrets.openrouter_api_key,
+        "secrets.openrouter_api_key"
+      )
+    : requiredSecret(
+        getWibbleConfig().secrets.openai_api_key,
+        "secrets.openai_api_key"
+      );
 
 export const Config = {
   get coolDownSec() {
@@ -65,7 +66,7 @@ export const Config = {
     return getWibbleConfig().generation.moderation_enabled;
   },
   get moderationApiKey() {
-    return optionalSecret("OPENAI_API_KEY") ?? optionalSecret("OPENAI_KEY");
+    return getWibbleConfig().secrets.openai_api_key.trim() || undefined;
   },
   get moderationApiUrl() {
     return getWibbleConfig().generation.moderation_api_url;
@@ -83,7 +84,10 @@ export const Config = {
     return getWibbleConfig().app.images_dir;
   },
   get replicateApiToken() {
-    return requiredSecret("REPLICATE_API_TOKEN");
+    return requiredSecret(
+      getWibbleConfig().secrets.replicate_api_token,
+      "secrets.replicate_api_token"
+    );
   },
   get replicateApiUrl() {
     return getWibbleConfig().image.replicate_api_url;

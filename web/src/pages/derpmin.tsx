@@ -1,15 +1,18 @@
 // pages/admin.tsx
-import React from 'react';
-import dynamic from 'next/dynamic';
+import React from "react";
+import dynamic from "next/dynamic";
 import {
   GetServerSidePropsContext,
   NextApiRequest,
   NextApiResponse,
   NextPage,
-} from 'next';
-import { getServerEmail } from '@/core/serverSession';
-const DynamicAdminPanel = dynamic(() => import('@/admin/AdminPanel').then((mod) => mod.AdminPanel), { ssr: false });
-
+} from "next";
+import { getServerEmail } from "@/core/serverSession";
+import { getWibbleConfig } from "../../../config-runtime";
+const DynamicAdminPanel = dynamic(
+  () => import("@/admin/AdminPanel").then((mod) => mod.AdminPanel),
+  { ssr: false }
+);
 
 const AdminPage: NextPage<{ hideHeader: boolean }> = () => {
   return <DynamicAdminPanel />;
@@ -20,8 +23,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     context.req as NextApiRequest,
     context.res as NextApiResponse
   );
-  const adminEmail =
-    process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
+  const adminEmail = getWibbleConfig().secrets.admin_email;
 
   if (!email) {
     return {

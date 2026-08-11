@@ -1,5 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
 import type { NextApiRequest } from "next";
+import { getWibbleConfig } from "../../../config-runtime";
 
 const firstHeaderValue = (value: string | string[] | undefined) => {
   const header = Array.isArray(value) ? value[0] : value;
@@ -26,9 +27,10 @@ export const generationSafetyIdentifier = (
     return undefined;
   }
 
+  const config = getWibbleConfig();
   const secret =
-    process.env.SAFETY_IDENTIFIER_SECRET?.trim() ||
-    process.env.NEXTAUTH_SECRET?.trim();
+    config.secrets.safety_identifier_secret.trim() ||
+    config.secrets.nextauth_secret.trim();
   return secret
     ? createHmac("sha256", secret).update(identity).digest("hex")
     : createHash("sha256").update(identity).digest("hex");

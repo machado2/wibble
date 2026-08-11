@@ -10,6 +10,17 @@ export type WriterConfig = {
 };
 
 export type WibbleConfig = {
+  secrets: {
+    database_url: string;
+    nextauth_secret: string;
+    sso_client_secret: string;
+    admin_email: string;
+    safety_identifier_secret: string;
+    openai_api_key: string;
+    openrouter_api_key: string;
+    replicate_api_token: string;
+    loggly_token: string;
+  };
   app: {
     site_url: string;
     sso_public_url: string;

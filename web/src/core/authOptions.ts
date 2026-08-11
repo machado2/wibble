@@ -20,7 +20,7 @@ export const authOptions = (): NextAuthOptions => {
     type: "oauth",
     wellKnown: `${ssoIssuer}/.well-known/openid-configuration`,
     clientId: config.auth.sso_client_id,
-    clientSecret: process.env.SSO_CLIENT_SECRET ?? "",
+    clientSecret: config.secrets.sso_client_secret,
     authorization: {
       params: { scope: "openid profile email" },
     },
@@ -48,13 +48,13 @@ export const authOptions = (): NextAuthOptions => {
 
   return {
     providers: [ssoProvider],
-    secret: process.env.NEXTAUTH_SECRET ?? process.env.SSO_CLIENT_SECRET,
+    secret: config.secrets.nextauth_secret,
+    useSecureCookies: config.app.site_url.startsWith("https://"),
     callbacks: {
       async session(params) {
         const session = params.session as Session;
         const user = session?.user as UserWithRole | undefined;
-        const adminEmail =
-          process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
+        const adminEmail = config.secrets.admin_email;
         if (user && user.email === adminEmail) {
           user.role = "admin";
         }

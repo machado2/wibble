@@ -8,6 +8,18 @@ let Writer = {
 }
 in
 {
+  secrets = {
+    database_url = "",
+    nextauth_secret = "",
+    sso_client_secret = "",
+    admin_email = "",
+    safety_identifier_secret = "",
+    openai_api_key = "",
+    openrouter_api_key = "",
+    replicate_api_token = "",
+    loggly_token = "",
+  },
+
   app = {
     site_url = "https://wibble.fbmac.net",
     sso_public_url = "https://sso.fbmac.net",

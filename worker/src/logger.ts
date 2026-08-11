@@ -7,7 +7,7 @@ let activeSignature = "";
 
 const currentLogger = (): winston.Logger => {
   const config = getWibbleConfig();
-  const token = process.env.LOGGLY_TOKEN?.trim() ?? "";
+  const token = config.secrets.loggly_token.trim();
   const signature = JSON.stringify([
     token,
     config.logging.loggly_subdomain,

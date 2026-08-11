@@ -7,12 +7,11 @@ for the images.
 It uses a second repository for the content generation that happens in background, at
 https://github.com/machado2/wibble-worker
 
-Runtime settings and writer/model choices are defined in the repository root
-`config.ncl`. The application reloads valid changes automatically. Leave the
-writer blank in the creation form to choose randomly among the writers allowed
-for the signed-in user.
+Runtime settings, secrets, and writer/model choices are defined in the private
+repository-root `config.ncl`, created from the committed `config.ncl.example`.
+The application reloads valid changes automatically. Leave the writer blank in
+the creation form to choose randomly among the writers allowed for the signed-in
+user.
 
-The `.env` file is reserved for credentials and tokens, including
-`DATABASE_URL`, authentication secrets, `OPENAI_API_KEY`,
-`OPENROUTER_API_KEY`, and `REPLICATE_API_TOKEN`. The optional OpenAI moderation
-pre-check is disabled by default in Nickel.
+The application does not read `.env`. The optional OpenAI moderation pre-check
+is disabled by default in Nickel.

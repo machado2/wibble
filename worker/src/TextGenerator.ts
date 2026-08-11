@@ -73,7 +73,9 @@ class TextGenerator {
     }
     const moderationApiKey = Config.moderationApiKey;
     if (!moderationApiKey) {
-      throw new ExternalServiceError("Moderation requires OPENAI_API_KEY");
+      throw new ExternalServiceError(
+        "Moderation requires secrets.openai_api_key in config.ncl"
+      );
     }
     const response = await this.post(
       Config.moderationApiUrl,

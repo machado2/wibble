@@ -33,7 +33,7 @@ const localImage = async (image: image_cache): Promise<ImagePayload | null> => {
 const replicateImage = async (
   image: image_cache
 ): Promise<ImagePayload | null> => {
-  const token = process.env.REPLICATE_API_TOKEN;
+  const token = getWibbleConfig().secrets.replicate_api_token.trim();
   if (!token || !image.provider_job_url) return null;
 
   const predictionResponse = await fetch(image.provider_job_url, {

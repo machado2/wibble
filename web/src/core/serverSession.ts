@@ -1,11 +1,15 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { getToken } from "next-auth/jwt";
+import { getWibbleConfig } from "../../../config-runtime";
 
-const authSecret =
-  process.env.NEXTAUTH_SECRET ?? process.env.SSO_CLIENT_SECRET ?? "";
-
-const getServerToken = async (req: NextApiRequest) =>
-  getToken({ req, secret: authSecret });
+const getServerToken = async (req: NextApiRequest) => {
+  const config = getWibbleConfig();
+  return getToken({
+    req,
+    secret: config.secrets.nextauth_secret,
+    secureCookie: config.app.site_url.startsWith("https://"),
+  });
+};
 
 export const getServerEmail = async (
   req: NextApiRequest,
@@ -16,8 +20,7 @@ export const getServerEmail = async (
 };
 
 export const isServerAdmin = (email: string | null): boolean => {
-  const adminEmail =
-    process.env.ADMIN_EMAIL ?? process.env.REACT_ADMIN_EMAIL ?? "";
+  const adminEmail = getWibbleConfig().secrets.admin_email;
   return Boolean(email && adminEmail && email === adminEmail);
 };
 

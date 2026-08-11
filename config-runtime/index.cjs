@@ -24,7 +24,7 @@ const requiredBoolean = (value, field) => {
 const requiredNumber = (value, field, minimum = 0) => {
   if (typeof value !== "number" || !Number.isFinite(value) || value < minimum) {
     throw new Error(
-      `Invalid Nickel configuration: ${field} must be at least ${minimum}`,
+      `Invalid Nickel configuration: ${field} must be at least ${minimum}`
     );
   }
   return value;
@@ -35,8 +35,15 @@ const requiredStringArray = (value, field) => {
     throw new Error(`Invalid Nickel configuration: ${field} must be an array`);
   }
   return value.map((entry, index) =>
-    requiredString(entry, `${field}[${index}]`),
+    requiredString(entry, `${field}[${index}]`)
   );
+};
+
+const secretString = (value, field) => {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid Nickel configuration: ${field} must be a string`);
+  }
+  return value;
 };
 
 const validateWriter = (writer, index) => {
@@ -44,7 +51,7 @@ const validateWriter = (writer, index) => {
   const provider = requiredString(writer?.provider, `${field}.provider`);
   if (provider !== "openai" && provider !== "openrouter") {
     throw new Error(
-      `Invalid Nickel configuration: ${field}.provider must be openai or openrouter`,
+      `Invalid Nickel configuration: ${field}.provider must be openai or openrouter`
     );
   }
   return {
@@ -66,25 +73,63 @@ const validateConfig = (raw) => {
     : null;
   if (!writers || writers.length === 0) {
     throw new Error(
-      "Invalid Nickel configuration: generation.writers cannot be empty",
+      "Invalid Nickel configuration: generation.writers cannot be empty"
     );
   }
   const ids = new Set();
   for (const writer of writers) {
     if (ids.has(writer.id)) {
       throw new Error(
-        `Invalid Nickel configuration: duplicate writer id ${writer.id}`,
+        `Invalid Nickel configuration: duplicate writer id ${writer.id}`
       );
     }
     ids.add(writer.id);
   }
 
   return {
+    secrets: {
+      database_url: secretString(
+        raw.secrets?.database_url,
+        "secrets.database_url"
+      ),
+      nextauth_secret: secretString(
+        raw.secrets?.nextauth_secret,
+        "secrets.nextauth_secret"
+      ),
+      sso_client_secret: secretString(
+        raw.secrets?.sso_client_secret,
+        "secrets.sso_client_secret"
+      ),
+      admin_email: secretString(
+        raw.secrets?.admin_email,
+        "secrets.admin_email"
+      ),
+      safety_identifier_secret: secretString(
+        raw.secrets?.safety_identifier_secret,
+        "secrets.safety_identifier_secret"
+      ),
+      openai_api_key: secretString(
+        raw.secrets?.openai_api_key,
+        "secrets.openai_api_key"
+      ),
+      openrouter_api_key: secretString(
+        raw.secrets?.openrouter_api_key,
+        "secrets.openrouter_api_key"
+      ),
+      replicate_api_token: secretString(
+        raw.secrets?.replicate_api_token,
+        "secrets.replicate_api_token"
+      ),
+      loggly_token: secretString(
+        raw.secrets?.loggly_token,
+        "secrets.loggly_token"
+      ),
+    },
     app: {
       site_url: requiredString(raw.app?.site_url, "app.site_url"),
       sso_public_url: requiredString(
         raw.app?.sso_public_url,
-        "app.sso_public_url",
+        "app.sso_public_url"
       ),
       discord_url: requiredString(raw.app?.discord_url, "app.discord_url"),
       images_dir: requiredString(raw.app?.images_dir, "app.images_dir"),
@@ -92,82 +137,82 @@ const validateConfig = (raw) => {
     auth: {
       sso_issuer_url: requiredString(
         raw.auth?.sso_issuer_url,
-        "auth.sso_issuer_url",
+        "auth.sso_issuer_url"
       ),
       sso_client_id: requiredString(
         raw.auth?.sso_client_id,
-        "auth.sso_client_id",
+        "auth.sso_client_id"
       ),
     },
     generation: {
       writers,
       openai_api_url: requiredString(
         raw.generation?.openai_api_url,
-        "generation.openai_api_url",
+        "generation.openai_api_url"
       ),
       openrouter_api_url: requiredString(
         raw.generation?.openrouter_api_url,
-        "generation.openrouter_api_url",
+        "generation.openrouter_api_url"
       ),
       moderation_enabled: requiredBoolean(
         raw.generation?.moderation_enabled,
-        "generation.moderation_enabled",
+        "generation.moderation_enabled"
       ),
       moderation_api_url: requiredString(
         raw.generation?.moderation_api_url,
-        "generation.moderation_api_url",
+        "generation.moderation_api_url"
       ),
       max_output_tokens: requiredNumber(
         raw.generation?.max_output_tokens,
         "generation.max_output_tokens",
-        1,
+        1
       ),
       max_prompt_length: requiredNumber(
         raw.generation?.max_prompt_length,
         "generation.max_prompt_length",
-        1,
+        1
       ),
     },
     image: {
       mode: requiredString(raw.image?.mode, "image.mode"),
       replicate_api_url: requiredString(
         raw.image?.replicate_api_url,
-        "image.replicate_api_url",
+        "image.replicate_api_url"
       ),
       minimum_request_interval_seconds: requiredNumber(
         raw.image?.minimum_request_interval_seconds,
         "image.minimum_request_interval_seconds",
-        1,
+        1
       ),
     },
     worker: {
       cool_down_seconds: requiredNumber(
         raw.worker?.cool_down_seconds,
-        "worker.cool_down_seconds",
+        "worker.cool_down_seconds"
       ),
       idle_sleep_seconds: requiredNumber(
         raw.worker?.idle_sleep_seconds,
-        "worker.idle_sleep_seconds",
+        "worker.idle_sleep_seconds"
       ),
       wait_on_error_seconds: requiredNumber(
         raw.worker?.wait_on_error_seconds,
-        "worker.wait_on_error_seconds",
+        "worker.wait_on_error_seconds"
       ),
       update_scores_interval_seconds: requiredNumber(
         raw.worker?.update_scores_interval_seconds,
         "worker.update_scores_interval_seconds",
-        1,
+        1
       ),
     },
     logging: {
       loggly_subdomain: requiredString(
         raw.logging?.loggly_subdomain,
-        "logging.loggly_subdomain",
+        "logging.loggly_subdomain"
       ),
       web_tags: requiredStringArray(raw.logging?.web_tags, "logging.web_tags"),
       worker_tags: requiredStringArray(
         raw.logging?.worker_tags,
-        "logging.worker_tags",
+        "logging.worker_tags"
       ),
     },
   };

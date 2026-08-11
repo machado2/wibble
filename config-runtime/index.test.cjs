@@ -14,13 +14,16 @@ const forceNewMtime = (filePath) => {
 test("reloads valid Nickel edits and retains the last valid config", () => {
   const originalCwd = process.cwd();
   const temporaryDirectory = fs.mkdtempSync(
-    path.join(os.tmpdir(), "wibble-config-test-"),
+    path.join(os.tmpdir(), "wibble-config-test-")
   );
   const temporaryConfig = path.join(temporaryDirectory, "config.ncl");
   const originalConsoleError = console.error;
 
   try {
-    fs.copyFileSync(path.resolve(__dirname, "../config.ncl"), temporaryConfig);
+    fs.copyFileSync(
+      path.resolve(__dirname, "../config.ncl.example"),
+      temporaryConfig
+    );
     process.chdir(temporaryDirectory);
     runtime.resetConfigCacheForTests();
 
