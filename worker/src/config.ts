@@ -1,11 +1,17 @@
 import dotenv from "dotenv";
-import {
-  getWibbleConfig,
-  type WriterConfig,
-  type WriterProvider,
+import { createRequire } from "node:module";
+import type {
+  WibbleConfig,
+  WriterConfig,
+  WriterProvider,
 } from "../../config-runtime";
 
 dotenv.config();
+
+const require = createRequire(import.meta.url);
+const { getWibbleConfig } = require("../../config-runtime/index.cjs") as {
+  getWibbleConfig: () => WibbleConfig;
+};
 
 const optionalSecret = (key: string) => process.env[key]?.trim() || undefined;
 
