@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Datagrid,
   DateField,
@@ -6,9 +6,11 @@ import {
   List,
   NumberField,
   TextField,
+  TextInput,
   useRecordContext,
 } from "react-admin";
-import { Button, Card, Col, Row, Statistic } from "antd";
+import { PageHeader, StatusBadge, formatNumber } from "./AdminUI";
+import styles from "./Admin.module.css";
 
 type NotFoundStats = {
   uniqueUrls: number;
@@ -24,75 +26,133 @@ type NotFoundRecord = {
   generated_at?: string | null;
 };
 
+const filters = [
+  <TextInput key="url" source="url" label="URL" alwaysOn />,
+  <TextInput
+    key="generated_slug"
+    source="generated_slug"
+    label="Slug gerado"
+  />,
+];
+
 const Stats = () => {
   const [stats, setStats] = useState<NotFoundStats | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    void fetch("/api/admin/not-found-stats")
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<NotFoundStats>;
-      })
-      .then(setStats)
-      .catch((error) => console.error("Failed to load 404 statistics", error));
+  const loadStats = useCallback(async () => {
+    setFailed(false);
+    try {
+      const response = await fetch("/api/admin/not-found-stats");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      setStats((await response.json()) as NotFoundStats);
+    } catch (error) {
+      console.error("Failed to load 404 statistics", error);
+      setFailed(true);
+    }
   }, []);
 
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats]);
+
+  if (failed) {
+    return (
+      <div className={styles.formIntro}>
+        Os indicadores não puderam ser carregados. A lista abaixo continua
+        disponível.
+      </div>
+    );
+  }
+
+  const items = [
+    ["Acessos em URLs ausentes", stats?.totalHits],
+    ["URLs únicas", stats?.uniqueUrls],
+    ["Aguardando ação", stats?.unresolvedUrls],
+    ["Artigos gerados", stats?.generatedUrls],
+  ] as const;
+
   return (
-    <Card style={{ marginBottom: 16 }} loading={!stats}>
-      <Row gutter={16}>
-        <Col xs={24} sm={12} lg={6}><Statistic title="404 hits" value={stats?.totalHits ?? 0} /></Col>
-        <Col xs={24} sm={12} lg={6}><Statistic title="Unique URLs" value={stats?.uniqueUrls ?? 0} /></Col>
-        <Col xs={24} sm={12} lg={6}><Statistic title="Waiting" value={stats?.unresolvedUrls ?? 0} /></Col>
-        <Col xs={24} sm={12} lg={6}><Statistic title="Generated" value={stats?.generatedUrls ?? 0} /></Col>
-      </Row>
-    </Card>
+    <div className={styles.statsStrip} aria-busy={!stats}>
+      {items.map(([label, value]) => (
+        <div className={styles.statItem} key={label}>
+          <span>{label}</span>
+          <strong>{stats ? formatNumber(value) : "—"}</strong>
+        </div>
+      ))}
+    </div>
   );
 };
 
-const UrlField = () => {
+const UrlField = (_props?: { source?: string; label?: string }) => {
   const record = useRecordContext<NotFoundRecord>();
   if (!record) return null;
   return (
-    <a href={record.url} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+    <a
+      className={styles.textLink}
+      href={record.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => event.stopPropagation()}
+    >
       {record.url}
     </a>
   );
 };
 
-const GenerateButton = () => {
+const GenerateButton = (_props?: { label?: string }) => {
   const record = useRecordContext<NotFoundRecord>();
   if (!record) return null;
-  const destination = record.generated_at && record.generated_slug
-    ? `/content/${encodeURIComponent(record.generated_slug)}`
+  const generated = Boolean(record.generated_at && record.generated_slug);
+  const destination = generated
+    ? `/content/${encodeURIComponent(record.generated_slug as string)}`
     : `/create?url=${encodeURIComponent(record.url)}`;
+
   return (
-    <Button href={destination} type={record.generated_at ? "default" : "primary"}>
-      {record.generated_at
-        ? "Open article"
-        : record.generated_slug
-          ? "Retry / inspect"
-          : "Generate"}
-    </Button>
+    <a
+      href={destination}
+      className={`${styles.actionButton} ${
+        generated ? "" : styles.actionButtonPrimary
+      }`}
+    >
+      {generated ? "Abrir artigo" : record.generated_slug ? "Tentar novamente" : "Gerar artigo"}
+    </a>
   );
 };
 
 export const NotFoundRequestList = () => (
-  <>
+  <div className={styles.page}>
+    <PageHeader
+      eyebrow="Oportunidades"
+      title="Rotas 404"
+      description="Transforme demanda real em conteúdo: priorize URLs recorrentes e gere um artigo diretamente para o endereço esperado."
+    />
     <Stats />
-    <List sort={{ field: "last_seen_at", order: "DESC" }}>
+    <List
+      filters={filters}
+      sort={{ field: "last_seen_at", order: "DESC" }}
+      perPage={25}
+      title="Rotas 404"
+    >
       <Datagrid bulkActionButtons={false}>
-        <UrlField />
-        <NumberField source="hit_count" label="Hits" />
-        <DateField source="first_seen_at" showTime />
-        <DateField source="last_seen_at" showTime />
+        <UrlField source="url" label="URL" />
+        <NumberField source="hit_count" label="Acessos" />
+        <DateField source="last_seen_at" label="Último acesso" showTime />
         <FunctionField
           source="generated_at"
-          label="Generated"
-          render={(record: NotFoundRecord) => record.generated_at ? "Yes" : "No"}
+          label="Situação"
+          render={(record: NotFoundRecord) =>
+            record.generated_at ? (
+              <StatusBadge label="Resolvida" tone="success" />
+            ) : record.generated_slug ? (
+              <StatusBadge label="Falhou" tone="danger" />
+            ) : (
+              <StatusBadge label="Pendente" tone="warning" />
+            )
+          }
         />
-        <TextField source="generated_slug" />
+        <TextField source="generated_slug" label="Slug gerado" />
         <GenerateButton />
       </Datagrid>
     </List>
-  </>
+  </div>
 );
