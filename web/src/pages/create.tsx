@@ -6,14 +6,12 @@ import Head from "next/head";
 import styles from "@/styles/create.module.css";
 import { useSession } from "next-auth/react";
 import { isAdmin } from "@/core/isAdmin";
-import { ModelSelection } from "@/components/ModelSelection";
 
 const { TextArea } = Input;
 
 const GenerateNewArticle = () => {
   const [prompt, setPrompt] = useState<string>("");
   const [targetUrl, setTargetUrl] = useState<string>("");
-  const [model, setModel] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const router = useRouter();
   const { data: session } = useSession();
@@ -42,7 +40,6 @@ const GenerateNewArticle = () => {
     try {
       const response = await axios.post<{ slug: string }>("/api/create", {
         prompt: trimmedPrompt,
-        model,
         url: admin && targetUrl.trim() ? targetUrl.trim() : undefined,
       });
       router.push(`/content/${response.data.slug}`);
@@ -83,7 +80,6 @@ const GenerateNewArticle = () => {
             rows={10}
             autoFocus
           />
-          {admin && <ModelSelection value={model} onChange={setModel} />}
           <Button
             onClick={submit}
             type="primary"

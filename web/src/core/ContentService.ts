@@ -6,7 +6,7 @@ import { NewsListItem } from "./NewsListItem";
 import { dontWaitFor } from "./dontWaitFor";
 import { ContentGenerator } from "@/worker/ContentGenerator";
 import { DateTime } from "luxon";
-import modelSelector from "./ModelSelector";
+import { configuredTextModel } from "./configuredTextModel";
 
 export type ParsedResponse = {
   id?: string;
@@ -146,12 +146,9 @@ ${text}`;
   async generateForSuggestion(
     email: string | null,
     suggestion: string,
-    model?: string,
     requestedSlug?: string,
   ): Promise<content> {
-    if (!model) {
-      model = await modelSelector.selectNextModel();
-    }
+    const model = configuredTextModel();
     const titleDescription = await this.generator.generateTitleAndDescription(
       model,
       suggestion

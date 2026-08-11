@@ -25,11 +25,8 @@ const strConfig = (key: string, def?: string) => {
 };
 
 export const Config = {
-  gpt4MinCoolDownHours: numberConfig("GPT4_MIN_COOLDOWN_HOURS", 20),
-  gpt4MaxCoolDownHours: numberConfig("GPT4_MAX_COOLDOWN_HOURS", 28),
   coolDownSec: numberConfig("COOL_DOWN_SEC", 10),
   idleSleepSec: numberConfig("IDLE_SLEEP_SEC", 10),
-  gpt3DailyLimit: numberConfig("GPT3_DAILY_LIMIT", 1000),
   waitOnErrorSec: numberConfig("WAIT_ON_ERROR_SEC", 60),
   openAiApiKey: strConfig("OPENAI_API_KEY"),
   openAiApiUrl: strConfig(
@@ -37,10 +34,6 @@ export const Config = {
     "https://api.openai.com/v1/responses"
   ),
   databaseUrl: strConfig("DATABASE_URL"),
-  textModel: strConfig(
-    "LANGUAGE_MODEL",
-    strConfig("OPENAI_MODEL", strConfig("TEXT_MODEL", "gpt-3.5-turbo"))
-  ),
   imageMode: strConfig("IMAGE_MODE", "replicate"),
   replicateApiToken: strConfig("REPLICATE_API_TOKEN"),
   replicateApiUrl: strConfig(

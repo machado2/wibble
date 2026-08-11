@@ -4,12 +4,6 @@ import { getServerEmail } from "@/core/serverSession";
 import { normalizeArticleTarget } from "@/core/articleTarget";
 import { NotFoundRepository } from "@/core/NotFoundRepository";
 
-const replaceEmptyUndefined = (t: string | null | undefined): string | undefined => {
-  if (!t) return undefined;
-  if (t.trim() === "") return undefined;
-  return t.trim();
-};
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -50,11 +44,6 @@ export default async function handler(
         return;
       }
     }
-    const model =
-      email && email === adminEmail
-        ? replaceEmptyUndefined(req.body?.model)
-        : undefined;
-
     if (!prompt) {
       res.status(400).json({ error: "Missing prompt" });
       return;
@@ -68,7 +57,6 @@ export default async function handler(
     const content = await service.generateForSuggestion(
       email,
       prompt,
-      model,
       target?.slug,
     );
     if (target) {

@@ -79,18 +79,6 @@ export class ContentGenerator {
     process.env.OPENAI_API_KEY ?? process.env.OPENAI_KEY ?? "";
   private openAiApiUrl =
     process.env.OPENAI_API_URL ?? "https://api.openai.com/v1/responses";
-  private _model = (
-    process.env.LANGUAGE_MODEL ??
-    process.env.OPENAI_MODEL ??
-    process.env.TEXT_MODEL ??
-    "gpt-3.5-turbo"
-  )
-    .split(",")[0]
-    .trim();
-
-  get model(): string {
-    return this._model;
-  }
 
   // check if a content exists with the slug
   async checkSlug(slug: string): Promise<boolean> {
