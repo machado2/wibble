@@ -67,7 +67,7 @@ model content_vote {
 
 model image_cache {
   id                     String    @id @db.VarChar(100)
-  content_id             String    @db.VarChar(36)
+  content_id             String?   @db.VarChar(36)
   prompt_hash            String?   @db.VarChar(100)
   prompt                 String    @db.Text
   alt_text               String    @db.VarChar(1000)
