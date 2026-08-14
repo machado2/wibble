@@ -1,5 +1,12 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS build
+FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS base
+
+RUN apt-get update && \
+  apt-get install --yes --no-install-recommends ca-certificates openssl && \
+  apt-get clean && \
+  find /var/lib/apt/lists -type f -delete
+
+FROM base AS build
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -24,7 +31,7 @@ RUN --mount=type=secret,id=wibble_config,target=/run/secrets/wibble-config.json,
   WIBBLE_CONFIG_PATH=/run/secrets/wibble-config.json pnpm typecheck && \
   WIBBLE_CONFIG_PATH=/run/secrets/wibble-config.json pnpm build
 
-FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
+FROM base
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
