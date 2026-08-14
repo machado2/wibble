@@ -34,6 +34,7 @@ RUN --mount=type=secret,id=wibble_config,target=/run/secrets/wibble-config.json,
 FROM base
 
 ENV PNPM_HOME=/pnpm
+ENV COREPACK_HOME=/corepack
 ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
 ENV WIBBLE_CONFIG_PATH=/run/secrets/wibble-config.json
