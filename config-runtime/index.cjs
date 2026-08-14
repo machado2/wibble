@@ -219,6 +219,11 @@ const validateConfig = (raw) => {
 };
 
 const findConfigPath = () => {
+  const configuredPath = process.env.WIBBLE_CONFIG_PATH?.trim();
+  if (configuredPath) {
+    return path.resolve(configuredPath);
+  }
+
   let directory = process.cwd();
   for (;;) {
     const candidate = path.join(directory, "config.ncl");
@@ -241,11 +246,13 @@ const nickelBinary = () => {
 };
 
 const loadConfig = (configPath) => {
-  const json = execFileSync(nickelBinary(), ["export", configPath], {
-    encoding: "utf8",
-    timeout: 5000,
-    windowsHide: true,
-  });
+  const json = configPath.endsWith(".json")
+    ? fs.readFileSync(configPath, "utf8")
+    : execFileSync(nickelBinary(), ["export", configPath], {
+        encoding: "utf8",
+        timeout: 5000,
+        windowsHide: true,
+      });
   return validateConfig(JSON.parse(json));
 };
 
