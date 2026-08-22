@@ -11,7 +11,9 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
     const service = new ContentService();
     const email = await getServerEmail(req, res);
-    const data = await service.processSlug(email, slug as string);
+    const language =
+      typeof req.query.lang === "string" ? req.query.lang : undefined;
+    const data = await service.processSlug(email, slug as string, language);
     if (!data) {
       res.status(404).send("Not found");
       return;

@@ -8,29 +8,31 @@ datasource db {
 }
 
 model content {
-  id                     String         @id @db.Char(36)
-  slug                   String         @unique @db.VarChar(500)
-  content                String?        @db.Text
-  created_at             DateTime       @default(now()) @db.Timestamp(0)
-  generating             Boolean        @default(true)
-  generation_started_at  DateTime?      @db.Timestamp(0)
-  generation_finished_at DateTime?      @db.Timestamp(0)
+  id                     String                           @id @db.Char(36)
+  slug                   String                           @unique @db.VarChar(500)
+  content                String?                          @db.Text
+  created_at             DateTime                         @default(now()) @db.Timestamp(0)
+  generating             Boolean                          @default(true)
+  generation_started_at  DateTime?                        @db.Timestamp(0)
+  generation_finished_at DateTime?                        @db.Timestamp(0)
   flagged                Boolean
-  model                  String         @db.VarChar(100)
-  prompt_version         Int            @default(1)
-  fail_count             Int            @default(0)
-  description            String         @db.Text
-  image_id               String?        @db.VarChar(100)
-  title                  String         @db.VarChar(500)
-  user_input             String         @db.Text
-  view_count             Int            @default(0) @map("longview_count")
-  image_prompt           String?        @db.VarChar(1000)
-  user_email             String?        @db.VarChar(350)
-  votes                  Int            @default(0)
-  hot_score              Float          @default(100)
+  model                  String                           @db.VarChar(100)
+  prompt_version         Int                              @default(1)
+  fail_count             Int                              @default(0)
+  description            String                           @db.Text
+  image_id               String?                          @db.VarChar(100)
+  title                  String                           @db.VarChar(500)
+  user_input             String                           @db.Text
+  view_count             Int                              @default(0) @map("longview_count")
+  image_prompt           String?                          @db.VarChar(1000)
+  user_email             String?                          @db.VarChar(350)
+  votes                  Int                              @default(0)
+  hot_score              Float                            @default(100)
   generation_time_ms     Int?
-  published              Boolean        @default(false)
+  published              Boolean                          @default(false)
   votesRelation          content_vote[]
+  translations           content_translation[]
+  translationAttempts    translation_generation_attempt[]
 
   @@index([votes, view_count], map: "idx_content_votes_view_count")
   @@index([created_at, generating], map: "idx_content_created_at_generating")
@@ -38,21 +40,31 @@ model content {
   @@index([hot_score], map: "idx_content_hot_score")
 }
 
-model generation_schedule {
-  id       String   @id @db.VarChar(100)
-  next_run DateTime @db.Timestamp(0)
+model content_translation {
+  id            String   @id @db.Char(36)
+  content_id    String   @db.Char(36)
+  language_code String   @db.VarChar(35)
+  title         String   @db.VarChar(500)
+  description   String   @db.Text
+  content       String   @db.Text
+  model         String   @db.VarChar(100)
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+  source        content  @relation(fields: [content_id], references: [id], onDelete: Cascade)
+
+  @@unique([content_id, language_code])
+  @@index([content_id])
 }
 
-model not_found_request {
-  id             String    @id @db.VarChar(36)
-  url            String    @unique @db.VarChar(2000)
-  hit_count      Int       @default(1)
-  first_seen_at  DateTime  @default(now()) @db.Timestamp(0)
-  last_seen_at   DateTime  @default(now()) @db.Timestamp(0)
-  generated_slug String?   @db.VarChar(500)
-  generated_at   DateTime? @db.Timestamp(0)
+model translation_generation_attempt {
+  id            String   @id @db.Char(36)
+  user_email    String   @db.VarChar(350)
+  content_id    String   @db.Char(36)
+  language_code String   @db.VarChar(35)
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+  source        content  @relation(fields: [content_id], references: [id], onDelete: Cascade)
 
-  @@index([generated_at, hit_count, last_seen_at], map: "idx_not_found_request_admin")
+  @@index([user_email, created_at])
+  @@index([content_id, language_code])
 }
 
 model content_vote {
@@ -111,4 +123,21 @@ model history_generation_fail {
   reason     String?  @db.VarChar(1000)
   exception  String?  @db.Text
   content    String?  @db.Text
+}
+
+model generation_schedule {
+  id       String   @id @db.VarChar(100)
+  next_run DateTime @db.Timestamp(0)
+}
+
+model not_found_request {
+  id             String    @id @db.VarChar(36)
+  url            String    @unique @db.VarChar(2000)
+  hit_count      Int       @default(1)
+  first_seen_at  DateTime  @default(now()) @db.Timestamp(0)
+  last_seen_at   DateTime  @default(now()) @db.Timestamp(0)
+  generated_slug String?   @db.VarChar(500)
+  generated_at   DateTime? @db.Timestamp(0)
+
+  @@index([generated_at, hit_count, last_seen_at], map: "idx_not_found_request_admin")
 }

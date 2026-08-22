@@ -7,6 +7,14 @@ import { dontWaitFor } from "./dontWaitFor";
 import { ContentGenerator } from "@/worker/ContentGenerator";
 import { DateTime } from "luxon";
 import type { WriterConfig } from "../../../config-runtime";
+import { resolveSupportedTranslationLanguage } from "./translationLanguages";
+
+type TranslationView = {
+  title: string;
+  description: string;
+  content: string;
+  language_code: string;
+};
 
 export type ParsedResponse = {
   id?: string;
@@ -17,6 +25,8 @@ export type ParsedResponse = {
   datetime: string;
   votes?: number;
   currentVote?: number;
+  languageCode: string | null;
+  availableLanguages: string[];
 };
 
 export class ContentService {
@@ -53,16 +63,21 @@ ${text}`;
       loading: true,
       titleInContent: false,
       datetime: new Date().toISOString(),
+      languageCode: null,
+      availableLanguages: [],
     };
   }
 
   async parseResponse(
-    content: ContentWithCurrentVote
+    content: ContentWithCurrentVote,
+    translation: TranslationView | null = null,
+    availableLanguages: string[] = []
   ): Promise<ParsedResponse> {
+    const view = translation ?? content;
     const mdxSource = this.addFrontMatter(
-      content.title,
-      content.description,
-      content.content as string
+      view.title,
+      view.description,
+      view.content as string
     );
     const mdxData = await serialize(mdxSource, { parseFrontmatter: true });
     return {
@@ -79,12 +94,15 @@ ${text}`;
             ? -1
             : 1
           : 0,
+      languageCode: translation?.language_code ?? null,
+      availableLanguages,
     };
   }
 
   public async processSlug(
     email: string | null,
-    pslug: string
+    pslug: string,
+    requestedLanguage?: string
   ): Promise<ParsedResponse | null> {
     const slug = pslug.trim().toLowerCase();
 
@@ -115,8 +133,22 @@ ${text}`;
     if (content.content === null) {
       return await this.loadingResponse(content.title, content.description);
     }
+    let languageCode: string | null = null;
+    if (requestedLanguage) {
+      try {
+        languageCode = resolveSupportedTranslationLanguage(requestedLanguage);
+      } catch {
+        languageCode = null;
+      }
+    }
+    const [availableLanguages, translation] = await Promise.all([
+      this.repository.getTranslationLanguages(content.id),
+      languageCode
+        ? this.repository.getTranslation(content.id, languageCode)
+        : Promise.resolve(null),
+    ]);
     dontWaitFor(this.repository.incrementContentViewCount(content.id));
-    return this.parseResponse(content);
+    return this.parseResponse(content, translation, availableLanguages);
   }
 
   parseNewsListItem(content: ContentWithCurrentVote): NewsListItem {

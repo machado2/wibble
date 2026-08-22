@@ -18,14 +18,19 @@ import { VoteButtons } from "@/components/VoteButtons";
 import { getHumanReadableDate } from "@/core/getHumanReadableDate";
 import { NotFoundRepository } from "@/core/NotFoundRepository";
 import { articleTargetForSlug } from "@/core/articleTarget";
+import { ArticleTranslationControls } from "@/components/ArticleTranslationControls";
 import { getWibbleConfig } from "../../../../config-runtime";
 
 const defaultDescription = `Get the latest news with a touch of wobble from The Wibble,
 your source for the unpredictable and unsteady world of current events.`;
 const defaultTitle = "The Wibble";
 
-async function tryLoadContent(slug: string): Promise<ParsedResponse> {
-  const response = await fetch(`/api/content/${slug}`);
+async function tryLoadContent(
+  slug: string,
+  language?: string
+): Promise<ParsedResponse> {
+  const query = language ? `?lang=${encodeURIComponent(language)}` : "";
+  const response = await fetch(`/api/content/${slug}${query}`);
   if (!response.ok) {
     throw new Error(response.statusText);
   }
@@ -40,8 +45,15 @@ const mdxComponents = {
 function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
   const router = useRouter();
   const slug: string = router.query.slug as string;
+  const requestedLanguage =
+    typeof router.query.lang === "string" ? router.query.lang : undefined;
   const [parsedResponse, setParsedResponse] = useState<ParsedResponse>(data);
   const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setParsedResponse(data);
+    setError(false);
+  }, [data]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +63,7 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
           let keepTrying = parsedResponse.loading;
           while (keepTrying) {
             await new Promise((resolve) => setTimeout(resolve, 5000));
-            const newResponse = await tryLoadContent(slug);
+            const newResponse = await tryLoadContent(slug, requestedLanguage);
             if (cancelled) return;
             setParsedResponse(newResponse);
             keepTrying = newResponse.loading;
@@ -66,7 +78,7 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
     return () => {
       cancelled = true;
     };
-  }, [parsedResponse.loading, slug]);
+  }, [parsedResponse.loading, requestedLanguage, slug]);
 
   const title = (parsedResponse?.content?.frontmatter.title ||
     defaultTitle) as string;
@@ -90,7 +102,11 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
           }`}
         />
       </Head>
-      <Card className={styles.article} bordered={false}>
+      <Card
+        className={styles.article}
+        bordered={false}
+        lang={parsedResponse.languageCode ?? undefined}
+      >
         {slug ? (
           <Spin spinning={parsedResponse?.loading && !error}>
             {addTitle ? <h1>{title}</h1> : null}
@@ -98,6 +114,13 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
               <p className={styles.datetime}>
                 {getHumanReadableDate(parsedResponse?.datetime)}
               </p>
+            ) : null}
+            {!parsedResponse.loading ? (
+              <ArticleTranslationControls
+                slug={slug}
+                currentLanguage={parsedResponse.languageCode}
+                availableLanguages={parsedResponse.availableLanguages}
+              />
             ) : null}
             {error ? (
               <Alert message="Failed to load content." type="error" showIcon />
@@ -123,8 +146,8 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
 }
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
-  const { slug } = context.query;
-  if (!slug || Array.isArray(slug)) {
+  const { slug, lang } = context.query;
+  if (!slug || Array.isArray(slug) || Array.isArray(lang)) {
     return { notFound: true };
   }
 
@@ -135,7 +158,11 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       context.req as NextApiRequest,
       context.res as NextApiResponse
     );
-    const data = await service.processSlug(email, slug as string);
+    const data = await service.processSlug(
+      email,
+      slug as string,
+      typeof lang === "string" ? lang : undefined
+    );
     if (!data) {
       try {
         const target = articleTargetForSlug(slug, siteUrl);

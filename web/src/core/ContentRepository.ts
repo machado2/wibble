@@ -1,4 +1,9 @@
-import { Prisma, content, content_vote } from "@prisma/client";
+import {
+  Prisma,
+  content,
+  content_translation,
+  content_vote,
+} from "@prisma/client";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./PrismaWibble";
@@ -7,6 +12,16 @@ import { NewsListItem } from "./NewsListItem";
 export type ContentWithCurrentVote = content & {
   votesRelation?: content_vote[];
 };
+
+export class TranslationGenerationRateLimitError extends Error {
+  constructor(public readonly retryAfterSeconds: number) {
+    super("Translation generation limit reached");
+    this.name = "TranslationGenerationRateLimitError";
+  }
+}
+
+const TRANSLATION_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const TRANSLATION_LIMIT_PER_WINDOW = 10;
 
 export class ContentRepository {
   async registerContentGenerationFailure(slug: string, reason: string) {
@@ -158,6 +173,99 @@ export class ContentRepository {
       where: { slug },
       include: includeVotesRelation,
     });
+  }
+
+  async getTranslation(
+    contentId: string,
+    languageCode: string
+  ): Promise<content_translation | null> {
+    return prisma.content_translation.findUnique({
+      where: {
+        content_id_language_code: {
+          content_id: contentId,
+          language_code: languageCode,
+        },
+      },
+    });
+  }
+
+  async getTranslationLanguages(contentId: string): Promise<string[]> {
+    const translations = await prisma.content_translation.findMany({
+      where: { content_id: contentId },
+      select: { language_code: true },
+      orderBy: { language_code: "asc" },
+    });
+    return translations.map((translation) => translation.language_code);
+  }
+
+  async runTranslationGeneration(
+    contentId: string,
+    languageCode: string,
+    userEmail: string,
+    model: string,
+    generate: () => Promise<{ title: string; description: string; content: string }>
+  ): Promise<{ translation: content_translation; created: boolean }> {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - TRANSLATION_LIMIT_WINDOW_MS);
+    await prisma.translation_generation_attempt.deleteMany({
+      where: { created_at: { lt: cutoff } },
+    });
+
+    return prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${`translation-user:${userEmail.toLowerCase()}`}, 0))`;
+        await tx.$queryRaw`SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${`translation:${contentId}:${languageCode}`}, 0))`;
+
+        const existing = await tx.content_translation.findUnique({
+          where: {
+            content_id_language_code: {
+              content_id: contentId,
+              language_code: languageCode,
+            },
+          },
+        });
+        if (existing) return { translation: existing, created: false };
+
+        const attempts = await tx.translation_generation_attempt.findMany({
+          where: { user_email: userEmail.toLowerCase(), created_at: { gte: cutoff } },
+          select: { created_at: true },
+          orderBy: { created_at: "asc" },
+        });
+        if (attempts.length >= TRANSLATION_LIMIT_PER_WINDOW) {
+          const retryAt =
+            attempts[0].created_at.getTime() + TRANSLATION_LIMIT_WINDOW_MS;
+          throw new TranslationGenerationRateLimitError(
+            Math.max(1, Math.ceil((retryAt - now.getTime()) / 1000))
+          );
+        }
+
+        // Persist the paid attempt on a separate autocommit connection before the
+        // provider call. The surrounding advisory locks still serialize counting,
+        // while provider failures or transaction rollbacks cannot erase the charge.
+        await prisma.translation_generation_attempt.create({
+          data: {
+            id: uuidv4(),
+            user_email: userEmail.toLowerCase(),
+            content_id: contentId,
+            language_code: languageCode,
+          },
+        });
+        const translated = await generate();
+        const translation = await tx.content_translation.create({
+          data: {
+            id: uuidv4(),
+            content_id: contentId,
+            language_code: languageCode,
+            title: translated.title,
+            description: translated.description,
+            content: translated.content,
+            model,
+          },
+        });
+        return { translation, created: true };
+      },
+      { maxWait: 15_000, timeout: 120_000 }
+    );
   }
 
   async incrementContentViewCount(id: string) {
