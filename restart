@@ -1,3 +1,4 @@
-#/bin/bash
-pm2 restart wibble-web
-pm2 restart wibble-worker
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+sudo -n /home/fabio/services/mini-homeops/bin/homeops restart wibble
