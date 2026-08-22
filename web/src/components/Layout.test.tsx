@@ -39,5 +39,6 @@ describe("Layout global language control", () => {
 
     expect(title.parentElement?.parentElement?.contains(language)).toBe(true);
     expect(language.getAttribute("title")).toBeTruthy();
+    expect(language.textContent).toContain("ORIG");
   });
 });

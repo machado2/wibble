@@ -39,7 +39,7 @@ export const GlobalLanguageSelector = () => {
         onClick={() => setOpen((value) => !value)}
       >
         <GlobalOutlined aria-hidden="true" />
-        <span>{language ? language.split("-")[0].toUpperCase() : "EN"}</span>
+        <span>{language ? language.split("-")[0].toUpperCase() : "ORIG"}</span>
       </button>
       {open ? (
         <div className={styles.menu} role="menu" aria-label={copy.chooseLanguage}>
@@ -62,7 +62,7 @@ export const GlobalLanguageSelector = () => {
             onClick={() => { setOpen(false); void setLanguage(null); }}
           >
             <span>{copy.originalLanguage}</span>
-            <small>EN</small>
+            <small>—</small>
           </button>
         </div>
       ) : null}

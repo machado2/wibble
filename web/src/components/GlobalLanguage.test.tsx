@@ -2,7 +2,7 @@
 
 import React from "react";
 import { render, waitFor } from "@testing-library/react";
-import { GlobalLanguageProvider, useGlobalLanguage } from "./GlobalLanguage";
+import { GlobalLanguageProvider, globalCopyForLanguage, useGlobalLanguage } from "./GlobalLanguage";
 
 const replace = jest.fn().mockResolvedValue(true);
 const router = {
@@ -42,4 +42,16 @@ describe("GlobalLanguageProvider browser default", () => {
     expect(window.localStorage.getItem("wibble-global-language-v1")).toBe("pt-BR");
     expect(document.cookie).toContain("wibble_lang=pt-BR");
   });
+});
+
+describe("global UI copy", () => {
+  test.each(["es", "fr", "de", "it", "uk", "pl", "ja", "zh-CN", "ar", "hi"])(
+    "localizes selectable language %s instead of falling back to English",
+    (language) => {
+      const copy = globalCopyForLanguage(language);
+      expect(copy.chooseLanguage).not.toBe("Choose language");
+      expect(copy.promptDetails).not.toBe("How this image was requested");
+      expect(copy.siteDescription).not.toBe(globalCopyForLanguage("en").siteDescription);
+    }
+  );
 });
