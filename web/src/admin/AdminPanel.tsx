@@ -84,9 +84,23 @@ const adminTheme = {
     RaLayout: {
       styleOverrides: {
         root: {
+          width: "100%",
+          maxWidth: "100vw",
+          minWidth: 0,
+          "& .RaLayout-appFrame, & .RaLayout-contentWithSidebar": {
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
+          },
           "& .RaLayout-content": {
+            boxSizing: "border-box",
+            width: "100%",
             maxWidth: "1600px",
+            minWidth: 0,
             padding: "28px 30px 46px",
+            "@media (max-width: 720px)": {
+              padding: "20px 16px 32px",
+            },
           },
         },
       },

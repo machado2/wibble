@@ -84,6 +84,7 @@
 
 .page {
   width: 100%;
+  min-width: 0;
 }
 
 .pageHeader {
@@ -95,6 +96,7 @@
 }
 
 .pageHeaderCopy {
+  min-width: 0;
   max-width: 740px;
 }
 
@@ -138,6 +140,7 @@
 
 .metricGrid {
   display: grid;
+  min-width: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 20px;
@@ -197,11 +200,13 @@
 
 .dashboardGrid {
   display: grid;
+  min-width: 0;
   grid-template-columns: minmax(0, 1.65fr) minmax(270px, 0.75fr);
   gap: 20px;
 }
 
 .panel {
+  min-width: 0;
   border: 1px solid #e4e7ec;
   border-radius: 18px;
   background: #fff;
@@ -248,10 +253,16 @@
 
 .recentItem {
   display: grid;
+  min-width: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   padding: 15px 20px;
   border-bottom: 1px solid #f0f2f5;
+}
+
+.recentItem > div {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .recentItem:last-child,
@@ -600,7 +611,7 @@
 
   .dashboardGrid,
   .formGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -635,6 +646,6 @@
   }
 
   .recentItem {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
