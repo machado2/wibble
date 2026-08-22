@@ -8,4 +8,5 @@ export type NewsListItem = {
   votes: number;
   currentVote: number;
   hotScore: number;
+  translationState?: "translated" | "pending" | "failed";
 };

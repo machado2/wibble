@@ -29,6 +29,25 @@
     text-decoration: underline;
 }
 
+.translationStatus {
+    display: block;
+    width: fit-content;
+    margin: 4px 0;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #fff4db;
+    color: #8a5300;
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.72em;
+    font-weight: 600;
+}
+
+.translationError {
+    composes: translationStatus;
+    background: #fff0f0;
+    color: #a40000;
+}
+
 .description {
     margin-top: 5px;
     font-size: 0.9em;

@@ -8,10 +8,12 @@ import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "./PrismaWibble";
 import { NewsListItem } from "./NewsListItem";
+import { isAutomaticTranslationLanguage } from "./translationLanguages";
 
 export type ContentWithCurrentVote = content & {
   votesRelation?: content_vote[];
   translations?: Pick<content_translation, "title" | "description">[];
+  translationJobs?: Array<{ status: string }>;
 };
 
 export class TranslationGenerationRateLimitError extends Error {
@@ -54,6 +56,9 @@ export class ContentRepository {
       page_size = 20;
     }
 
+    const translationRequested = Boolean(
+      languageCode && isAutomaticTranslationLanguage(languageCode)
+    );
     const include = {
       ...(userEmail
         ? { votesRelation: { where: { user_email: userEmail } } }
@@ -63,6 +68,15 @@ export class ContentRepository {
             translations: {
               where: { language_code: languageCode },
               select: { title: true, description: true },
+              take: 1,
+            },
+          }
+        : {}),
+      ...(translationRequested
+        ? {
+            translationJobs: {
+              where: { language_code: languageCode },
+              select: { status: true },
               take: 1,
             },
           }
@@ -154,15 +168,21 @@ export class ContentRepository {
       take: page_size,
       include,
     });
-    return contents.map(this.parseNewsListItem);
+    return contents.map((content) =>
+      this.parseNewsListItem(content, translationRequested)
+    );
   }
 
-  parseNewsListItem(content: ContentWithCurrentVote): NewsListItem {
+  parseNewsListItem(
+    content: ContentWithCurrentVote,
+    translationRequested = false
+  ): NewsListItem {
     let currentVote = 0;
     if (content.votesRelation && content.votesRelation.length > 0) {
       currentVote = content.votesRelation[0].downvote ? -1 : 1;
     }
     const translation = content.translations?.[0];
+    const translationFailed = content.translationJobs?.[0]?.status === "failed";
     return {
       id: content.id,
       title: translation?.title ?? (content.title as string),
@@ -173,6 +193,13 @@ export class ContentRepository {
       votes: content.votes,
       currentVote,
       hotScore: content.hot_score ?? 0,
+      translationState: translationRequested
+        ? translation
+          ? "translated"
+          : translationFailed
+            ? "failed"
+            : "pending"
+        : undefined,
     };
   }
 

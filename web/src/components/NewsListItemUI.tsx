@@ -8,7 +8,7 @@ import { useGlobalLanguage } from "./GlobalLanguage";
 
 export const NewsListItemUI = (props: { item: NewsListItem }) => {
   const { item } = props;
-  const { language } = useGlobalLanguage();
+  const { copy, language } = useGlobalLanguage();
   const humanReadableDate = getHumanReadableDate(item.created_at);
 
   return (
@@ -30,6 +30,16 @@ export const NewsListItemUI = (props: { item: NewsListItem }) => {
       >
         {item.title}
       </Link>
+      {language && item.translationState === "pending" ? (
+        <span className={styles.translationStatus} aria-live="polite">
+          {copy.translatingArticle}
+        </span>
+      ) : null}
+      {language && item.translationState === "failed" ? (
+        <span className={styles.translationError} role="status">
+          {copy.translationFailed}
+        </span>
+      ) : null}
       <p className={styles.newsDate}>{humanReadableDate}</p>
       <p className={styles.description}>{item.description}</p>
       <div className={styles.bottom}>

@@ -1,6 +1,6 @@
 import { NewsListItem } from "@/core/NewsListItem";
 
-const fetchNewsAttempt = async (
+export const loadNewsOnce = async (
   pageSize: number,
   afterId: string | undefined,
   t: string | undefined,
@@ -51,7 +51,7 @@ export const loadNews = async (
   let failCount = 0;
   for (;;) {
     try {
-      return await fetchNewsAttempt(
+      return await loadNewsOnce(
         pageSize,
         afterId,
         t,
