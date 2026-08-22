@@ -23,8 +23,8 @@ export class TranslationGenerationRateLimitError extends Error {
   }
 }
 
-const TRANSLATION_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const TRANSLATION_LIMIT_PER_WINDOW = 10;
+export const TRANSLATION_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+export const TRANSLATION_LIMIT_PER_WINDOW = 10;
 
 export class ContentRepository {
   async registerContentGenerationFailure(slug: string, reason: string) {

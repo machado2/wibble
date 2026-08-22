@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FaCheck,
   FaExclamationTriangle,
   FaExternalLinkAlt,
   FaEye,
-  FaLanguage,
   FaNewspaper,
   FaPen,
   FaRoute,
@@ -56,8 +55,56 @@ type Overview = {
     attempts: number;
     created_at: string;
     updated_at: string;
+    next_attempt_at: string;
+    started_at: string | null;
+    completed_at: string | null;
     last_error: string | null;
   }>;
+  translationOperations: {
+    updatedAt: string;
+    cost: {
+      limit: number;
+      used: number;
+      remaining: number;
+      windowMinutes: number;
+      nextSlotAt: string | null;
+      exhausted: boolean;
+    };
+    queue: {
+      pending: number;
+      processing: number;
+      completed: number;
+      failed: number;
+      total: number;
+      settled: number;
+      progressPercent: number;
+      waitingForQuota: number;
+      oldestPendingAt: string | null;
+      nextAttemptAt: string | null;
+    };
+    throughput: {
+      completedLastHour: number;
+      completedLast24Hours: number;
+      averageDurationSeconds: number | null;
+    };
+    coverage: {
+      eligibleArticles: number;
+      activeLanguages: number;
+      translated: number;
+      possible: number;
+      percent: number;
+      languages: Array<{
+        languageCode: string;
+        translated: number;
+        pending: number;
+        processing: number;
+        completed: number;
+        failed: number;
+        waitingForQuota: number;
+        percent: number;
+      }>;
+    };
+  };
 };
 
 const translationStatus = (status: string) => {
@@ -97,24 +144,70 @@ const MetricCard = ({
   </div>
 );
 
+const ProgressBar = ({ value, tone = "default", label }: {
+  value: number;
+  tone?: "default" | "warning" | "success";
+  label: string;
+}) => (
+  <div
+    className={`${styles.progressTrack} ${styles[`progressTrack${tone[0].toUpperCase()}${tone.slice(1)}`]}`}
+    role="progressbar"
+    aria-label={label}
+    aria-valuemin={0}
+    aria-valuemax={100}
+    aria-valuenow={value}
+  >
+    <span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+  </div>
+);
+
+const formatDuration = (seconds: number | null) => {
+  if (seconds === null) return "—";
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  return `${Math.round(seconds / 60)} min`;
+};
+
 export const Dashboard = () => {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const overviewRequest = useRef<Promise<void> | null>(null);
 
-  const loadOverview = useCallback(async () => {
-    setError(null);
-    try {
-      const response = await fetch("/api/admin/overview");
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setOverview((await response.json()) as Overview);
-    } catch (loadError) {
-      console.error("Failed to load admin overview", loadError);
-      setError("Não foi possível carregar os indicadores agora.");
-    }
+  const loadOverview = useCallback(() => {
+    if (overviewRequest.current) return overviewRequest.current;
+    const request = (async () => {
+      setError(null);
+      try {
+        const response = await fetch("/api/admin/overview");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setOverview((await response.json()) as Overview);
+      } catch (loadError) {
+        console.error("Failed to load admin overview", loadError);
+        setError("Não foi possível atualizar os indicadores agora.");
+      }
+    })();
+    overviewRequest.current = request;
+    void request.finally(() => {
+      if (overviewRequest.current === request) overviewRequest.current = null;
+    });
+    return request;
   }, []);
 
   useEffect(() => {
-    void loadOverview();
+    let cancelled = false;
+    let refresh: number | undefined;
+    const scheduleRefresh = () => {
+      refresh = window.setTimeout(async () => {
+        if (!document.hidden) await loadOverview();
+        if (!cancelled) scheduleRefresh();
+      }, 15_000);
+    };
+    void loadOverview().finally(() => {
+      if (!cancelled) scheduleRefresh();
+    });
+    return () => {
+      cancelled = true;
+      if (refresh !== undefined) window.clearTimeout(refresh);
+    };
   }, [loadOverview]);
 
   const pendingImages = overview
@@ -133,6 +226,13 @@ export const Dashboard = () => {
         description="O pulso editorial do Wibble: o que está no ar, o que exige atenção e o que acabou de chegar."
       />
 
+      {overview && error ? (
+        <div className={styles.refreshWarning} role="status">
+          <span>{error} Os últimos dados válidos continuam visíveis.</span>
+          <button onClick={() => void loadOverview()}>Tentar novamente</button>
+        </div>
+      ) : null}
+
       {!overview && !error ? (
         <div className={`${styles.panel} ${styles.loadingState}`}>
           <div>
@@ -140,7 +240,7 @@ export const Dashboard = () => {
             <p>Reunindo os sinais da operação…</p>
           </div>
         </div>
-      ) : error ? (
+      ) : !overview && error ? (
         <div className={`${styles.panel} ${styles.errorState}`}>
           <div>
             <FaExclamationTriangle />
@@ -152,50 +252,134 @@ export const Dashboard = () => {
         </div>
       ) : overview ? (
         <>
-          <div className={styles.metricGrid}>
-            <MetricCard
-              icon={<FaNewspaper />}
-              value={overview.publishedArticles}
-              label="artigos publicados"
-              accent="#d9ff57"
-            />
-            <MetricCard
-              icon={<FaSpinner />}
-              value={overview.generatingArticles}
-              label="artigos em geração"
-              accent="#ffd166"
-            />
-            <MetricCard
-              icon={<FaRoute />}
-              value={overview.unresolvedUrls}
-              label="rotas 404 aguardando"
-              accent="#ff705e"
-            />
-            <MetricCard
-              icon={<FaSearch />}
-              value={overview.searchesLast24Hours}
-              label="buscas nas últimas 24h"
-              accent="#8db3ff"
-            />
-          </div>
-
           <section className={`${styles.panel} ${styles.translationPanel}`}>
             <div className={styles.panelHeader}>
-              <h2>Traduções em background</h2>
-              <FaLanguage />
+              <div>
+                <h2>Traduções em background</h2>
+                <span className={styles.liveUpdate}>
+                  Atualização automática · {formatDateTime(overview.translationOperations.updatedAt)}
+                </span>
+              </div>
+              <a className={styles.panelLink} href="#/translation_job">
+                Ver todos os jobs
+              </a>
             </div>
-            <div className={styles.translationSummary}>
-              <StatusBadge label={`${overview.translations.pending} pendentes`} tone="neutral" />
-              <StatusBadge
-                label={`${overview.translations.processing} em processamento`}
-                tone="warning"
-              />
-              <StatusBadge
-                label={`${overview.translations.completed} concluídas`}
-                tone="success"
-              />
-              <StatusBadge label={`${overview.translations.failed} falhas`} tone="danger" />
-              <span>{formatNumber(overview.translations.total)} traduções persistidas</span>
+
+            <div className={styles.operationsGrid}>
+              <article className={styles.operationCard}>
+                <span className={styles.operationLabel}>Orçamento automático</span>
+                <strong>
+                  {overview.translationOperations.cost.used} de {overview.translationOperations.cost.limit} usadas
+                </strong>
+                <ProgressBar
+                  value={(overview.translationOperations.cost.used / overview.translationOperations.cost.limit) * 100}
+                  tone={overview.translationOperations.cost.exhausted ? "warning" : "success"}
+                  label="Consumo da quota automática"
+                />
+                <span className={styles.operationHighlight}>
+                  {overview.translationOperations.cost.remaining} disponíveis agora
+                </span>
+                <p>
+                  Janela móvel de {overview.translationOperations.cost.windowMinutes} min.
+                  {overview.translationOperations.cost.exhausted && overview.translationOperations.cost.nextSlotAt
+                    ? ` Próxima vaga às ${formatDateTime(overview.translationOperations.cost.nextSlotAt)}.`
+                    : " Há capacidade disponível agora."}
+                </p>
+              </article>
+
+              <article className={styles.operationCard}>
+                <span className={styles.operationLabel}>Progresso da fila</span>
+                <strong>{overview.translationOperations.queue.progressPercent}% dos jobs encerrados</strong>
+                <ProgressBar
+                  value={overview.translationOperations.queue.progressPercent}
+                  label="Progresso da fila de traduções"
+                />
+                <span className={styles.operationHighlight}>
+                  {overview.translationOperations.queue.waitingForQuota} esperando a quota
+                </span>
+                <p>
+                  {overview.translationOperations.queue.pending} pendentes · {overview.translationOperations.queue.processing} processando · {overview.translationOperations.queue.failed} falharam
+                </p>
+              </article>
+
+              <article className={styles.operationCard}>
+                <span className={styles.operationLabel}>Cobertura persistida</span>
+                <strong>
+                  {overview.translationOperations.coverage.translated} de {overview.translationOperations.coverage.possible}
+                </strong>
+                <ProgressBar
+                  value={overview.translationOperations.coverage.percent}
+                  tone="success"
+                  label="Cobertura persistida das traduções"
+                />
+                <span className={styles.operationHighlight}>
+                  {overview.translationOperations.coverage.percent}% da cobertura solicitada
+                </span>
+                <p>
+                  {overview.translationOperations.coverage.eligibleArticles} artigos elegíveis × {overview.translationOperations.coverage.activeLanguages} idiomas já solicitados.
+                </p>
+              </article>
+            </div>
+
+            <div className={styles.costExplanation}>
+              <strong>Como o custo é controlado</strong>
+              <p>
+                O limite é global para toda a automação: no máximo {overview.translationOperations.cost.limit} gerações pagas por hora. Uma geração produz título, descrição e conteúdo; cache hits e espera por quota não consomem uma vaga.
+              </p>
+            </div>
+
+            <div className={styles.translationDetailsGrid}>
+              <div className={styles.coverageSection}>
+                <div className={styles.subsectionHeader}>
+                  <h3>Cobertura por idioma</h3>
+                  <span>{overview.translationOperations.coverage.activeLanguages} ativos</span>
+                </div>
+                <div className={styles.languageList}>
+                  {overview.translationOperations.coverage.languages.map((language) => (
+                    <div className={styles.languageRow} key={language.languageCode}>
+                      <div className={styles.languageHeading}>
+                        <strong>{language.languageCode.toUpperCase()}</strong>
+                        <span>{language.translated}/{overview.translationOperations.coverage.eligibleArticles} traduzidos</span>
+                        <b>{language.percent}%</b>
+                      </div>
+                      <ProgressBar
+                        value={language.percent}
+                        tone="success"
+                        label={`Cobertura de ${language.languageCode}`}
+                      />
+                      <div className={styles.languageMeta}>
+                        <span>{language.pending} pendentes</span>
+                        <span>{language.processing} processando</span>
+                        <span>{language.failed} falhas</span>
+                        {language.waitingForQuota ? <span>{language.waitingForQuota} na quota</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.queueFacts}>
+                <div className={styles.subsectionHeader}>
+                  <h3>Ritmo e espera</h3>
+                </div>
+                <dl>
+                  <div><dt>Concluídas na última hora</dt><dd>{overview.translationOperations.throughput.completedLastHour}</dd></div>
+                  <div><dt>Concluídas em 24h</dt><dd>{overview.translationOperations.throughput.completedLast24Hours}</dd></div>
+                  <div><dt>Tempo médio por geração</dt><dd>{formatDuration(overview.translationOperations.throughput.averageDurationSeconds)}</dd></div>
+                  <div><dt>Job pendente mais antigo</dt><dd>{overview.translationOperations.queue.oldestPendingAt ? formatDateTime(overview.translationOperations.queue.oldestPendingAt) : "—"}</dd></div>
+                  <div><dt>Próxima tentativa prevista</dt><dd>{overview.translationOperations.queue.nextAttemptAt ? formatDateTime(overview.translationOperations.queue.nextAttemptAt) : "—"}</dd></div>
+                </dl>
+              </div>
+            </div>
+
+            <div className={styles.subsectionHeaderWithPadding}>
+              <h3>Atividade recente</h3>
+              <div className={styles.translationSummary}>
+                <StatusBadge label={`${overview.translations.pending} pendentes`} tone="neutral" />
+                <StatusBadge label={`${overview.translations.processing} em processamento`} tone="warning" />
+                <StatusBadge label={`${overview.translations.completed} concluídas`} tone="success" />
+                <StatusBadge label={`${overview.translations.failed} falhas`} tone="danger" />
+              </div>
             </div>
             {overview.recentTranslationJobs.length ? (
               <ul className={styles.recentList}>
@@ -231,6 +415,33 @@ export const Dashboard = () => {
               <div className={styles.emptyState}>Nenhum job de tradução criado ainda.</div>
             )}
           </section>
+
+          <div className={styles.metricGrid}>
+            <MetricCard
+              icon={<FaNewspaper />}
+              value={overview.publishedArticles}
+              label="artigos publicados"
+              accent="#d9ff57"
+            />
+            <MetricCard
+              icon={<FaSpinner />}
+              value={overview.generatingArticles}
+              label="artigos em geração"
+              accent="#ffd166"
+            />
+            <MetricCard
+              icon={<FaRoute />}
+              value={overview.unresolvedUrls}
+              label="rotas 404 aguardando"
+              accent="#ff705e"
+            />
+            <MetricCard
+              icon={<FaSearch />}
+              value={overview.searchesLast24Hours}
+              label="buscas nas últimas 24h"
+              accent="#8db3ff"
+            />
+          </div>
 
           <div className={styles.dashboardGrid}>
             <section className={styles.panel}>
