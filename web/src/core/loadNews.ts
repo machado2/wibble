@@ -6,7 +6,8 @@ const fetchNewsAttempt = async (
   t: string | undefined,
   sort: string | undefined,
   searchTerm?: string,
-  model?: string
+  model?: string,
+  language?: string
 ): Promise<NewsListItem[]> => {
   const queryParams = new URLSearchParams({
     page_size: pageSize.toString(),
@@ -26,6 +27,9 @@ const fetchNewsAttempt = async (
   if (sort) {
     queryParams.set("sort", sort);
   }
+  if (language) {
+    queryParams.set("lang", language);
+  }
   const response = await fetch(`/api/list?${queryParams}`, {
     method: "GET",
   });
@@ -41,7 +45,8 @@ export const loadNews = async (
   t: string | undefined,
   sort: string | undefined,
   searchTerm?: string,
-  model?: string
+  model?: string,
+  language?: string
 ): Promise<NewsListItem[]> => {
   let failCount = 0;
   for (;;) {
@@ -52,7 +57,8 @@ export const loadNews = async (
         t,
         sort,
         searchTerm,
-        model
+        model,
+        language
       );
     } catch (error) {
       console.log(error);

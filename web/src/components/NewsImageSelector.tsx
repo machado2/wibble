@@ -12,11 +12,13 @@ export const NewsImageSelector = () => {
         case "1":
           router.push({
             pathname: "/",
+            query: router.query.lang ? { lang: router.query.lang } : {},
           });
           break;
         case "2":
           router.push({
             pathname: "/images",
+            query: router.query.lang ? { lang: router.query.lang } : {},
           });
           break;
       }

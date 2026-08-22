@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Spin, Card, Alert } from "antd";
 import Head from "next/head";
 import React from "react";
@@ -18,8 +18,9 @@ import { VoteButtons } from "@/components/VoteButtons";
 import { getHumanReadableDate } from "@/core/getHumanReadableDate";
 import { NotFoundRepository } from "@/core/NotFoundRepository";
 import { articleTargetForSlug } from "@/core/articleTarget";
-import { ArticleTranslationControls } from "@/components/ArticleTranslationControls";
+import { TransparentArticleTranslation } from "@/components/TransparentArticleTranslation";
 import { getWibbleConfig } from "../../../../config-runtime";
+import { resolveRequestLanguage } from "@/core/globalLanguageRequest";
 
 const defaultDescription = `Get the latest news with a touch of wobble from The Wibble,
 your source for the unpredictable and unsteady world of current events.`;
@@ -88,6 +89,13 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
   const description = (parsedResponse?.content?.frontmatter.description ||
     defaultDescription) as string;
   const addTitle = parsedResponse.titleInContent !== true;
+  const reloadTranslatedArticle = useCallback(async () => {
+    await router.replace(
+      { pathname: router.pathname, query: router.query },
+      undefined,
+      { scroll: false }
+    );
+  }, [router]);
 
   return (
     <>
@@ -116,10 +124,12 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
               </p>
             ) : null}
             {!parsedResponse.loading ? (
-              <ArticleTranslationControls
+              <TransparentArticleTranslation
                 slug={slug}
+                requestedLanguage={requestedLanguage}
                 currentLanguage={parsedResponse.languageCode}
                 availableLanguages={parsedResponse.availableLanguages}
+                onReady={reloadTranslatedArticle}
               />
             ) : null}
             {error ? (
@@ -151,6 +161,20 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     return { notFound: true };
   }
 
+  const languageResolution = resolveRequestLanguage(
+    typeof lang === "string" ? lang : undefined,
+    context.req.headers.cookie,
+    context.req.headers["accept-language"]
+  );
+  if (languageResolution.redirect && languageResolution.language) {
+    return {
+      redirect: {
+        destination: `/content/${encodeURIComponent(slug)}?lang=${encodeURIComponent(languageResolution.language)}`,
+        permanent: false,
+      },
+    };
+  }
+
   const service = new ContentService();
   const siteUrl = getWibbleConfig().app.site_url;
   try {
@@ -161,7 +185,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     const data = await service.processSlug(
       email,
       slug as string,
-      typeof lang === "string" ? lang : undefined
+      languageResolution.language ?? undefined
     );
     if (!data) {
       try {

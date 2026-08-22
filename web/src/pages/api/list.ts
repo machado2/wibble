@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { getServerEmail } from "@/core/serverSession";
 import { ContentRepository } from "@/core/ContentRepository";
+import { resolveSupportedTranslationLanguage } from "@/core/translationLanguages";
 
 const parseInteger = (
   value: string | string[] | undefined
@@ -27,6 +28,15 @@ export default async function handler(
     const repo = new ContentRepository();
     const period = (query.t as string) ?? undefined;
     const days = [undefined, 7, 30][["week", "month"].indexOf(period) + 1];
+    let languageCode: string | undefined;
+    const requestedLanguage = parseString(query.lang);
+    if (requestedLanguage) {
+      try {
+        languageCode = resolveSupportedTranslationLanguage(requestedLanguage);
+      } catch {
+        languageCode = undefined;
+      }
+    }
     const data = await repo.getNextPage(
       parseString(query.afterId),
       parseString(query.sort),
@@ -34,7 +44,8 @@ export default async function handler(
       parseInteger(query.pageSize),
       parseString(query.search),
       email ?? undefined,
-      parseString(query.model)
+      parseString(query.model),
+      languageCode
     );
 
     res.status(200).json(data);

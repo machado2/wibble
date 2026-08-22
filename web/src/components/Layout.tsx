@@ -13,6 +13,8 @@ import {
 import { signIn, signOut, useSession } from "next-auth/react";
 import { isAdmin } from "@/core/isAdmin";
 import { useRuntimeConfig } from "./useRuntimeConfig";
+import { GlobalLanguageSelector } from "./GlobalLanguageSelector";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 type LayoutProps = {
   children: ReactNode;
@@ -20,6 +22,7 @@ type LayoutProps = {
 
 function Layout({ children }: LayoutProps) {
   const { discordUrl, ssoUrl } = useRuntimeConfig();
+  const { copy, language } = useGlobalLanguage();
   const { data: session } = useSession();
   const isDerp = isAdmin(session);
   const login = () => signIn("sso", { callbackUrl: window.location.href });
@@ -44,15 +47,18 @@ function Layout({ children }: LayoutProps) {
           </Link>
         </Col>
         <Col flex="1 1 auto" style={{ textAlign: "center" }}>
-          <Link href="/" title="Home">
-            <h1>The Wibble</h1>
-          </Link>
+          <div className={styles.titleCluster}>
+            <Link href={{ pathname: "/", query: language ? { lang: language } : {} }} title={copy.home}>
+              <h1>The Wibble</h1>
+            </Link>
+            <GlobalLanguageSelector />
+          </div>
         </Col>
         <Col
           flex="0 1 auto"
           style={{ textAlign: "right", paddingRight: "16px" }}
         >
-          <Link href="/create" title="Generate new article">
+          <Link href="/create" title={copy.generateArticle}>
             <FaPlusCircle style={{ fontSize: "24px" }} />
           </Link>
         </Col>
@@ -70,7 +76,7 @@ function Layout({ children }: LayoutProps) {
           flex="0 1 auto"
           style={{ textAlign: "right", paddingRight: "16px" }}
         >
-          <Link href="/rss.xml" target="_blank" title="RSS Feed">
+          <Link href="/rss.xml" target="_blank" title={copy.rssFeed}>
             <FaRss style={{ fontSize: "24px" }} />
           </Link>
         </Col>
@@ -81,14 +87,14 @@ function Layout({ children }: LayoutProps) {
                 className={styles.authButton}
                 onClick={() => void logout()}
               >
-                <FaSignOutAlt style={{ fontSize: "24px" }} title="Sign-out" />
+                <FaSignOutAlt style={{ fontSize: "24px" }} title={copy.signOut} />
               </button>
             ) : (
               <button
                 className={styles.authButton}
                 onClick={() => void login()}
               >
-                <FaUserCircle style={{ fontSize: "24px" }} title="Sign-in" />
+                <FaUserCircle style={{ fontSize: "24px" }} title={copy.signIn} />
               </button>
             )}
           </div>

@@ -2,32 +2,45 @@ import { ImageInfoResponse } from "@/pages/api/imageinfo";
 import React, { useEffect, useRef, useState } from "react";
 
 import styles from "./ImageCaption.module.css";
+import { useGlobalLanguage, type GlobalCopy } from "../GlobalLanguage";
 
 export type ImageCaptionProps = {
   imgid: string;
   alt: string;
   prompt: string;
+  copy?: GlobalCopy;
 };
 
 export const ImageCaption: React.FC<ImageCaptionProps> = (props) => {
+  const globalLanguage = useGlobalLanguage();
+  const copy = props.copy ?? globalLanguage.copy;
   const captionRef = useRef<HTMLDivElement>(null);
   const [hasLoadedInfo, setHasLoadedInfo] = useState(false);
   const [imageInfo, setImageInfo] = useState<ImageInfoResponse | null>(null);
 
   useEffect(() => {
     const captionElement = captionRef.current;
+    const controller = new AbortController();
 
     if (!hasLoadedInfo && captionElement) {
       const observer = new IntersectionObserver(
-        async (entries) => {
+        (entries) => {
           const [entry] = entries;
           if (entry.isIntersecting) {
             setHasLoadedInfo(true);
             observer.disconnect();
-
-            const r = await fetch(`/api/imageinfo?id=${props.imgid}`);
-            const info = await r.json();
-            setImageInfo(info);
+            void (async () => {
+              try {
+                const response = await fetch(`/api/imageinfo?id=${props.imgid}`, {
+                  signal: controller.signal,
+                });
+                if (!response.ok) return;
+                const info = await response.json();
+                if (!controller.signal.aborted) setImageInfo(info);
+              } catch {
+                // The prompt passed by the article remains a readable fallback.
+              }
+            })();
           }
         },
         { root: null, rootMargin: "0px", threshold: 0.1 }
@@ -36,25 +49,22 @@ export const ImageCaption: React.FC<ImageCaptionProps> = (props) => {
       observer.observe(captionElement);
 
       return () => {
-        if (captionElement) {
-          observer.unobserve(captionElement);
-        }
+        controller.abort();
+        observer.disconnect();
       };
     }
+    return () => controller.abort();
   }, [hasLoadedInfo, props.imgid]);
 
   let prompt: string;
   let negativePrompt: string | undefined;
-  if (imageInfo?.prompt) {
-    const parts = imageInfo.prompt.split("###");
-    if (parts.length === 2) {
-      prompt = parts[0].trim();
-      negativePrompt = parts[1].trim();
-    } else {
-      prompt = imageInfo.prompt;
-    }
+  const rawPrompt = imageInfo?.prompt || props.prompt;
+  const parts = rawPrompt.split("###");
+  if (parts.length === 2) {
+    prompt = parts[0].trim();
+    negativePrompt = parts[1].trim();
   } else {
-    prompt = props.prompt;
+    prompt = rawPrompt;
   }
 
   return (
@@ -67,11 +77,17 @@ export const ImageCaption: React.FC<ImageCaptionProps> = (props) => {
     >
       <h3>{props.alt}</h3>
       <details>
-        <summary>PROMPT DETAILS</summary>
-        <p>PROMPT: {prompt}</p>
-        {negativePrompt && <p>NEGATIVE PROMPT: {negativePrompt}</p>}
-        <p>MODEL: {imageInfo?.model}</p>
-        <p>SEED: {imageInfo?.seed}</p>
+        <summary>{copy.promptDetails}</summary>
+        <p>{copy.promptMeaning}</p>
+        <p><strong>Prompt:</strong> {prompt}</p>
+        {negativePrompt ? (
+          <>
+            <p>{copy.negativePromptMeaning}</p>
+            <p><strong>Negative prompt:</strong> {negativePrompt}</p>
+          </>
+        ) : null}
+        {imageInfo?.model ? <p>{copy.model}: {imageInfo.model}</p> : null}
+        {imageInfo?.seed !== undefined ? <p>{copy.seed}: {imageInfo.seed}</p> : null}
       </details>
     </div>
   );

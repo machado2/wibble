@@ -29,12 +29,16 @@ const serveImage = (
       console.error(err);
     });
 
-  let prompt: string;
-  if (image?.parameters) {
-    const params = JSON.parse(image.parameters);
-    prompt = params?.prompt ?? image.prompt;
-  } else {
-    prompt = image.prompt;
+  let prompt = image.prompt;
+  if (image.parameters) {
+    try {
+      const params = JSON.parse(image.parameters);
+      if (typeof params?.prompt === "string" && params.prompt.length <= 20_000) {
+        prompt = params.prompt;
+      }
+    } catch {
+      // Keep the persisted prompt when legacy metadata is malformed.
+    }
   }
   const response: ImageInfoResponse = {
     id: image.id,

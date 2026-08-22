@@ -31,6 +31,7 @@ export default function ArticleList(props: ArticleListProps) {
   const afterId = readString("afterId");
   const t = readString("t");
   const sort = readString("sort");
+  const language = readString("lang");
 
   useEffect(() => {
     const reload = async () => {
@@ -41,7 +42,8 @@ export default function ArticleList(props: ArticleListProps) {
         t,
         sort,
         searchTerm,
-        model
+        model,
+        language
       );
       setNews(newNews);
     };
@@ -51,7 +53,7 @@ export default function ArticleList(props: ArticleListProps) {
     } else {
       dontWaitFor(reload());
     }
-  }, [props.latestNews, searchTerm, model, afterId, t, sort]);
+  }, [props.latestNews, searchTerm, model, afterId, t, sort, language]);
 
   if (!news) {
     return <p className={styles.loader}>Loading articles...</p>;

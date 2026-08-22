@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ImageCaption } from "./ImageCaption/ImageCaption";
 import { createRoot } from "react-dom/client";
 import { computeHash } from "@/core/computeHash";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 export type BoxedImageProps = {
   alt: string;
@@ -14,6 +15,7 @@ export type BoxedImageProps = {
 };
 
 export const BoxedImage = (props: BoxedImageProps) => {
+  const { copy } = useGlobalLanguage();
   const cssClass = props.className;
   const [captionUuid] = useState<string>(uuidv4());
   const [mounted, setMounted] = useState(false);
@@ -99,7 +101,7 @@ export const BoxedImage = (props: BoxedImageProps) => {
       }
       const root = createRoot(elCaption!);
       root.render(
-        <ImageCaption imgid={imgid!} alt={captionText} prompt={props.prompt!} />
+        <ImageCaption imgid={imgid!} alt={captionText} prompt={props.prompt!} copy={copy} />
       );
     }
   };
@@ -129,8 +131,17 @@ export const BoxedImage = (props: BoxedImageProps) => {
                 <img
                   ref={ref as any}
                   onClick={openLightbox}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void openLightbox(event as unknown as React.MouseEvent<Element, MouseEvent>);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={copy.viewImageDetails}
                   alt={captionText}
-                  title={captionText}
+                  title={`${captionText}. ${copy.viewImageDetails}`}
                   src={loadedImageUrl}
                   className={cssClass}
                   onError={() => setLoadedImageUrl(null)}
@@ -150,7 +161,7 @@ export const BoxedImage = (props: BoxedImageProps) => {
     <img
       src="/placeholder.jpeg"
       alt={captionText}
-      title={captionText}
+      title={`${captionText}. ${copy.viewImageDetails}`}
       className={placeholderClassName}
       aria-busy={!terminalFailure}
     />

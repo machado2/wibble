@@ -11,6 +11,7 @@ import { NewsListItem } from "./NewsListItem";
 
 export type ContentWithCurrentVote = content & {
   votesRelation?: content_vote[];
+  translations?: Pick<content_translation, "title" | "description">[];
 };
 
 export class TranslationGenerationRateLimitError extends Error {
@@ -46,15 +47,27 @@ export class ContentRepository {
     page_size: number | undefined,
     search: string | undefined,
     userEmail: string | undefined,
-    model?: string
+    model?: string,
+    languageCode?: string
   ): Promise<NewsListItem[]> {
     if (!page_size || page_size < 1 || page_size > 100) {
       page_size = 20;
     }
 
-    const includeVotesRelation = userEmail
-      ? { votesRelation: { where: { user_email: userEmail } } }
-      : undefined;
+    const include = {
+      ...(userEmail
+        ? { votesRelation: { where: { user_email: userEmail } } }
+        : {}),
+      ...(languageCode
+        ? {
+            translations: {
+              where: { language_code: languageCode },
+              select: { title: true, description: true },
+              take: 1,
+            },
+          }
+        : {}),
+    };
 
     const afterContent = afterId
       ? await prisma.content.findUnique({ where: { id: afterId } })
@@ -139,7 +152,7 @@ export class ContentRepository {
       },
       orderBy,
       take: page_size,
-      include: includeVotesRelation,
+      include,
     });
     return contents.map(this.parseNewsListItem);
   }
@@ -149,10 +162,11 @@ export class ContentRepository {
     if (content.votesRelation && content.votesRelation.length > 0) {
       currentVote = content.votesRelation[0].downvote ? -1 : 1;
     }
+    const translation = content.translations?.[0];
     return {
       id: content.id,
-      title: content.title as string,
-      description: content.description as string,
+      title: translation?.title ?? (content.title as string),
+      description: translation?.description ?? (content.description as string),
       imagePrompt: content.image_prompt ?? "",
       slug: content.slug,
       created_at: content.created_at.toISOString(),
