@@ -348,6 +348,33 @@
   line-height: 1.55;
 }
 
+.translationPanel {
+  margin-bottom: 20px;
+}
+
+.translationSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #edf0f4;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.translationError {
+  display: block;
+  max-width: 760px;
+  margin-top: 7px;
+  overflow: hidden;
+  color: #c53b29;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .errorState,
 .loadingState,
 .emptyState {

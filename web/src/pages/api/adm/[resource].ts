@@ -16,6 +16,14 @@ export const config = {
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   if (!(await requireSession(req, res))) return;
 
+  if (
+    req.query.resource === "translation_job" &&
+    !["getList", "getOne", "getMany", "getManyReference"].includes(req.body?.method)
+  ) {
+    res.status(405).json({ message: "Translation jobs are read-only" });
+    return;
+  }
+
   if (req.query.resource === "content" && req.body?.method === "delete") {
     const id = req.body?.params?.id;
     if (typeof id !== "string" || !id) {

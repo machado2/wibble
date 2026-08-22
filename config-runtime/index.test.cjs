@@ -21,9 +21,10 @@ test("reloads valid Nickel edits and retains the last valid config", () => {
   const originalConsoleError = console.error;
 
   try {
-    fs.copyFileSync(
-      path.resolve(__dirname, "../config.ncl.example"),
-      temporaryConfig
+    fs.writeFileSync(
+      temporaryConfig,
+      fs.readFileSync(path.resolve(__dirname, "../config.ncl.example"), "utf8")
+        .replace('translation_worker_secret = ""', 'translation_worker_secret = "test-worker-secret"')
     );
     process.chdir(temporaryDirectory);
     runtime.resetConfigCacheForTests();
@@ -64,9 +65,15 @@ test("loads an exported JSON config from WIBBLE_CONFIG_PATH", () => {
   const nickel = fs.existsSync(serverNickel) ? serverNickel : "nickel";
 
   try {
+    const preparedNickel = path.join(temporaryDirectory, "config.ncl");
+    fs.writeFileSync(
+      preparedNickel,
+      fs.readFileSync(path.resolve(__dirname, "../config.ncl.example"), "utf8")
+        .replace('translation_worker_secret = ""', 'translation_worker_secret = "test-worker-secret"')
+    );
     const exported = execFileSync(
       nickel,
-      ["export", path.resolve(__dirname, "../config.ncl.example")],
+      ["export", preparedNickel],
       { encoding: "utf8" }
     );
     fs.writeFileSync(temporaryConfig, exported);
@@ -82,6 +89,31 @@ test("loads an exported JSON config from WIBBLE_CONFIG_PATH", () => {
     } else {
       process.env.WIBBLE_CONFIG_PATH = originalConfiguredPath;
     }
+    runtime.resetConfigCacheForTests();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("rejects an empty translation worker secret", () => {
+  const temporaryDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wibble-empty-worker-secret-")
+  );
+  const temporaryConfig = path.join(temporaryDirectory, "config.ncl");
+  const originalCwd = process.cwd();
+
+  try {
+    fs.copyFileSync(
+      path.resolve(__dirname, "../config.ncl.example"),
+      temporaryConfig
+    );
+    process.chdir(temporaryDirectory);
+    runtime.resetConfigCacheForTests();
+    assert.throws(
+      () => runtime.getWibbleConfig(),
+      /translation_worker_secret must be a non-empty string/
+    );
+  } finally {
+    process.chdir(originalCwd);
     runtime.resetConfigCacheForTests();
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }

@@ -3,6 +3,7 @@ import { imageGenerationLoop } from "./ImageGenerationWorker";
 import express from "express";
 import logger from "./logger";
 import { updateScoresLoop } from "./updateHotScores";
+import { translationGenerationLoop } from "./TranslationWorker";
 
 logger.info("Starting wibble-worker...");
 
@@ -31,6 +32,7 @@ process.on("SIGTERM", () => {
 const promises = [
   contentGenerationLoop(),
   imageGenerationLoop(),
+  translationGenerationLoop(),
   updateScoresLoop(),
 ];
 

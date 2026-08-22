@@ -1,5 +1,6 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 const inFlight = new Map<string, Promise<void>>();
 const completed = new Set<string>();
@@ -20,13 +21,14 @@ export const TransparentArticleTranslation = ({
   onReady,
 }: Props) => {
   const { data: session, status } = useSession();
+  const { copy } = useGlobalLanguage();
   const [message, setMessage] = useState<string | null>(null);
   const email = session?.user?.email?.toLowerCase();
 
   useEffect(() => {
     if (!requestedLanguage || currentLanguage === requestedLanguage) return;
     if (status !== "authenticated" || !email) {
-      if (status === "unauthenticated") setMessage("Sign in to generate this translation.");
+      if (status === "unauthenticated") setMessage(copy.signInToTranslate);
       return;
     }
 
@@ -35,16 +37,16 @@ export const TransparentArticleTranslation = ({
     let request = inFlight.get(key);
     if (!request) {
       setMessage(availableLanguages.includes(requestedLanguage)
-        ? "Loading translation…"
-        : "Translating article…");
+        ? copy.loadingTranslation
+        : copy.translatingArticle);
       request = (async () => {
         const response = await fetch(`/api/translations/${encodeURIComponent(slug)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ language: requestedLanguage }),
         });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.error || "Translation could not be generated");
+        await response.json().catch(() => null);
+        if (!response.ok) throw new Error(copy.translationGenerationError);
         completed.add(key);
         await onReady();
       })();
@@ -54,10 +56,10 @@ export const TransparentArticleTranslation = ({
 
     let cancelled = false;
     request.catch((error) => {
-      if (!cancelled) setMessage(error instanceof Error ? error.message : "Translation failed");
+      if (!cancelled) setMessage(error instanceof Error ? error.message : copy.translationFailed);
     });
     return () => { cancelled = true; };
-  }, [availableLanguages, currentLanguage, email, onReady, requestedLanguage, slug, status]);
+  }, [availableLanguages, copy, currentLanguage, email, onReady, requestedLanguage, slug, status]);
 
   return message ? <small role="status">{message}</small> : null;
 };

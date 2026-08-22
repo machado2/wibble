@@ -13,6 +13,7 @@ export type WibbleConfig = {
   secrets: {
     database_url: string;
     nextauth_secret: string;
+    translation_worker_secret: string;
     sso_client_secret: string;
     admin_email: string;
     safety_identifier_secret: string;

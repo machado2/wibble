@@ -5,11 +5,13 @@ import { useRouter } from "next/router";
 import { dontWaitFor } from "@/core/dontWaitFor";
 import { ImageListItem } from "@/pages/api/images";
 import { ImageListItemUI } from "./ImageListItemUI";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 const PAGE_SIZE = 30;
 
 export default function ImageList() {
   const router = useRouter();
+  const { copy } = useGlobalLanguage();
   const [images, setImages] = useState<ImageListItem[] | undefined>(undefined);
   const [error, setError] = useState("");
 
@@ -58,21 +60,21 @@ export default function ImageList() {
       } catch (loadError) {
         console.error(loadError);
         setImages([]);
-        setError("Images could not be loaded.");
+        setError(copy.imagesLoadError);
       }
     };
 
     dontWaitFor(load());
-  }, [searchTerm, model, afterId, t, sort]);
+  }, [copy.imagesLoadError, searchTerm, model, afterId, t, sort]);
 
   if (!images) {
-    return <p>Loading images...</p>;
+    return <p>{copy.loadingImages}</p>;
   }
 
   return (
     <>
       {error ? <p role="alert">{error}</p> : null}
-      {!error && images.length === 0 ? <p>No images found.</p> : null}
+      {!error && images.length === 0 ? <p>{copy.noImages}</p> : null}
       <div className={styles.ImageListContainer}>
         {images.map((item) => (
           <div key={`${item.id}`} className={styles.ImageListItem}>
@@ -89,7 +91,7 @@ export default function ImageList() {
             query: { ...router.query, afterId: images[images.length - 1].id },
           }}
         >
-          Next Page
+          {copy.nextPage}
         </Link>
       ) : null}
     </>

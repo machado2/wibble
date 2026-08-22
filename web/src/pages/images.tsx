@@ -6,21 +6,21 @@ import { SortSelection } from "@/components/SortSelection";
 import ImageList from "@/components/ImageList";
 import { NewsImageSelector } from "@/components/NewsImageSelector";
 import { TimeSelection } from "@/components/TimeSelection";
+import { useGlobalLanguage } from "@/components/GlobalLanguage";
 
-const siteDescription = `Get the latest news with a touch of wobble from The Wibble,
-your source for the unpredictable and unsteady world of current events.`;
 const siteTitle = "The Wibble";
 
 export default function Page() {
+  const { copy } = useGlobalLanguage();
 
   const sortOptions = [
     {
       value: "recent",
-      label: "New",
+      label: copy.sortNew,
     },
     {
       value: "most_viewed",
-      label: "Views",
+      label: copy.sortViews,
     },
   ];
 
@@ -29,7 +29,7 @@ export default function Page() {
       <Head>
         <title>{siteTitle || "The Wibble"}</title>
         <meta property="og:title" content={siteTitle} />
-        <meta property="og:description" content={siteDescription} />
+        <meta property="og:description" content={copy.siteDescription} />
       </Head>
       <Card className={styles.maincard} bordered={false}>
         <div className={styles.selectors}>

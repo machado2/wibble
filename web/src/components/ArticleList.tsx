@@ -6,6 +6,7 @@ import { loadNews } from "@/core/loadNews";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { dontWaitFor } from "@/core/dontWaitFor";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 const PAGE_SIZE = 20;
 
@@ -15,6 +16,7 @@ export type ArticleListProps = {
 
 export default function ArticleList(props: ArticleListProps) {
   const router = useRouter();
+  const { copy } = useGlobalLanguage();
   const [news, setNews] = useState<NewsListItem[] | undefined>(
     props.latestNews
   );
@@ -56,13 +58,13 @@ export default function ArticleList(props: ArticleListProps) {
   }, [props.latestNews, searchTerm, model, afterId, t, sort, language]);
 
   if (!news) {
-    return <p className={styles.loader}>Loading articles...</p>;
+    return <p className={styles.loader}>{copy.loadingArticles}</p>;
   }
 
   return (
     <>
       {news.length === 0 ? (
-        <p className={styles.noMoreNews}>No articles found.</p>
+        <p className={styles.noMoreNews}>{copy.noArticles}</p>
       ) : null}
       {news.map((newsItem) => (
         <div key={`${newsItem.id}`} className={styles.newsItem}>
@@ -77,7 +79,7 @@ export default function ArticleList(props: ArticleListProps) {
             query: { ...router.query, afterId: news[news.length - 1].id },
           }}
         >
-          Next Page
+          {copy.nextPage}
         </Link>
       ) : null}
     </>

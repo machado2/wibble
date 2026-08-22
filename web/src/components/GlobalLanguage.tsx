@@ -2,7 +2,7 @@ import { useRouter } from "next/router";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { resolveSupportedTranslationLanguage } from "@/core/translationLanguages";
 
-export type GlobalCopy = {
+type SharedCopy = {
   chooseLanguage: string;
   originalLanguage: string;
   home: string;
@@ -19,7 +19,39 @@ export type GlobalCopy = {
   seed: string;
 };
 
-const ENGLISH_COPY: GlobalCopy = {
+type HomeCopy = {
+  newsTab: string;
+  imagesTab: string;
+  sortNew: string;
+  sortVotes: string;
+  sortViews: string;
+  periodWeek: string;
+  periodMonth: string;
+  periodAll: string;
+  searchPlaceholder: string;
+  loadingArticles: string;
+  noArticles: string;
+  nextPage: string;
+  upvote: string;
+  downvote: string;
+  voteSaveError: string;
+};
+
+type ExtraCopy = {
+  imagesLoadError: string;
+  loadingImages: string;
+  noImages: string;
+  signInToTranslate: string;
+  loadingTranslation: string;
+  translatingArticle: string;
+  translationGenerationError: string;
+  translationFailed: string;
+  contentLoadError: string;
+};
+
+export type GlobalCopy = SharedCopy & HomeCopy & ExtraCopy;
+
+const ENGLISH_COPY: SharedCopy = {
   chooseLanguage: "Choose language",
   originalLanguage: "Original language",
   home: "Home",
@@ -36,7 +68,7 @@ const ENGLISH_COPY: GlobalCopy = {
   seed: "Seed",
 };
 
-const PORTUGUESE_COPY: GlobalCopy = {
+const PORTUGUESE_COPY: SharedCopy = {
   chooseLanguage: "Escolher idioma",
   originalLanguage: "Idioma original",
   home: "Início",
@@ -53,7 +85,7 @@ const PORTUGUESE_COPY: GlobalCopy = {
   seed: "Semente",
 };
 
-const COPY_BY_LANGUAGE: Record<string, GlobalCopy> = {
+const COPY_BY_LANGUAGE: Record<string, SharedCopy> = {
   en: ENGLISH_COPY,
   pt: PORTUGUESE_COPY,
   es: {
@@ -218,13 +250,192 @@ const COPY_BY_LANGUAGE: Record<string, GlobalCopy> = {
   },
 };
 
+const ENGLISH_HOME_COPY: HomeCopy = {
+  newsTab: "News",
+  imagesTab: "Images",
+  sortNew: "New",
+  sortVotes: "Votes",
+  sortViews: "Views",
+  periodWeek: "Week",
+  periodMonth: "Month",
+  periodAll: "All",
+  searchPlaceholder: "Search",
+  loadingArticles: "Loading articles…",
+  noArticles: "No articles found.",
+  nextPage: "Next page",
+  upvote: "Upvote",
+  downvote: "Downvote",
+  voteSaveError: "Vote could not be saved.",
+};
+
+const HOME_COPY_BY_LANGUAGE: Record<string, HomeCopy> = {
+  en: ENGLISH_HOME_COPY,
+  pt: {
+    newsTab: "Notícias",
+    imagesTab: "Imagens",
+    sortNew: "Novos",
+    sortVotes: "Votos",
+    sortViews: "Visualizações",
+    periodWeek: "Semana",
+    periodMonth: "Mês",
+    periodAll: "Tudo",
+    searchPlaceholder: "Buscar",
+    loadingArticles: "Carregando artigos…",
+    noArticles: "Nenhum artigo encontrado.",
+    nextPage: "Próxima página",
+    upvote: "Votar a favor",
+    downvote: "Votar contra",
+    voteSaveError: "Não foi possível salvar o voto.",
+  },
+  es: {
+    newsTab: "Noticias", imagesTab: "Imágenes", sortNew: "Nuevos", sortVotes: "Votos",
+    sortViews: "Visualizaciones", periodWeek: "Semana", periodMonth: "Mes", periodAll: "Todo",
+    searchPlaceholder: "Buscar", loadingArticles: "Cargando artículos…", noArticles: "No se encontraron artículos.",
+    nextPage: "Página siguiente", upvote: "Votar a favor", downvote: "Votar en contra", voteSaveError: "No se pudo guardar el voto.",
+  },
+  fr: {
+    newsTab: "Actualités", imagesTab: "Images", sortNew: "Nouveaux", sortVotes: "Votes",
+    sortViews: "Vues", periodWeek: "Semaine", periodMonth: "Mois", periodAll: "Tout",
+    searchPlaceholder: "Rechercher", loadingArticles: "Chargement des articles…", noArticles: "Aucun article trouvé.",
+    nextPage: "Page suivante", upvote: "Vote positif", downvote: "Vote négatif", voteSaveError: "Le vote n’a pas pu être enregistré.",
+  },
+  de: {
+    newsTab: "Nachrichten", imagesTab: "Bilder", sortNew: "Neu", sortVotes: "Stimmen",
+    sortViews: "Aufrufe", periodWeek: "Woche", periodMonth: "Monat", periodAll: "Alle",
+    searchPlaceholder: "Suchen", loadingArticles: "Artikel werden geladen…", noArticles: "Keine Artikel gefunden.",
+    nextPage: "Nächste Seite", upvote: "Positiv bewerten", downvote: "Negativ bewerten", voteSaveError: "Die Stimme konnte nicht gespeichert werden.",
+  },
+  it: {
+    newsTab: "Notizie", imagesTab: "Immagini", sortNew: "Nuovi", sortVotes: "Voti",
+    sortViews: "Visualizzazioni", periodWeek: "Settimana", periodMonth: "Mese", periodAll: "Tutto",
+    searchPlaceholder: "Cerca", loadingArticles: "Caricamento articoli…", noArticles: "Nessun articolo trovato.",
+    nextPage: "Pagina successiva", upvote: "Voto positivo", downvote: "Voto negativo", voteSaveError: "Impossibile salvare il voto.",
+  },
+  uk: {
+    newsTab: "Новини", imagesTab: "Зображення", sortNew: "Нові", sortVotes: "Голоси",
+    sortViews: "Перегляди", periodWeek: "Тиждень", periodMonth: "Місяць", periodAll: "Усе",
+    searchPlaceholder: "Пошук", loadingArticles: "Завантаження статей…", noArticles: "Статей не знайдено.",
+    nextPage: "Наступна сторінка", upvote: "Підтримати", downvote: "Не підтримати", voteSaveError: "Не вдалося зберегти голос.",
+  },
+  pl: {
+    newsTab: "Wiadomości", imagesTab: "Obrazy", sortNew: "Nowe", sortVotes: "Głosy",
+    sortViews: "Wyświetlenia", periodWeek: "Tydzień", periodMonth: "Miesiąc", periodAll: "Wszystko",
+    searchPlaceholder: "Szukaj", loadingArticles: "Ładowanie artykułów…", noArticles: "Nie znaleziono artykułów.",
+    nextPage: "Następna strona", upvote: "Głos za", downvote: "Głos przeciw", voteSaveError: "Nie udało się zapisać głosu.",
+  },
+  ja: {
+    newsTab: "ニュース", imagesTab: "画像", sortNew: "新着", sortVotes: "投票",
+    sortViews: "閲覧数", periodWeek: "週間", periodMonth: "月間", periodAll: "すべて",
+    searchPlaceholder: "検索", loadingArticles: "記事を読み込み中…", noArticles: "記事が見つかりません。",
+    nextPage: "次のページ", upvote: "高評価", downvote: "低評価", voteSaveError: "投票を保存できませんでした。",
+  },
+  zh: {
+    newsTab: "新闻", imagesTab: "图片", sortNew: "最新", sortVotes: "投票",
+    sortViews: "浏览量", periodWeek: "本周", periodMonth: "本月", periodAll: "全部",
+    searchPlaceholder: "搜索", loadingArticles: "正在加载文章…", noArticles: "未找到文章。",
+    nextPage: "下一页", upvote: "赞成", downvote: "反对", voteSaveError: "无法保存投票。",
+  },
+  ar: {
+    newsTab: "الأخبار", imagesTab: "الصور", sortNew: "الأحدث", sortVotes: "الأصوات",
+    sortViews: "المشاهدات", periodWeek: "أسبوع", periodMonth: "شهر", periodAll: "الكل",
+    searchPlaceholder: "بحث", loadingArticles: "جارٍ تحميل المقالات…", noArticles: "لم يتم العثور على مقالات.",
+    nextPage: "الصفحة التالية", upvote: "تصويت مؤيد", downvote: "تصويت معارض", voteSaveError: "تعذر حفظ التصويت.",
+  },
+  hi: {
+    newsTab: "समाचार", imagesTab: "चित्र", sortNew: "नए", sortVotes: "वोट",
+    sortViews: "दृश्य", periodWeek: "सप्ताह", periodMonth: "महीना", periodAll: "सभी",
+    searchPlaceholder: "खोजें", loadingArticles: "लेख लोड हो रहे हैं…", noArticles: "कोई लेख नहीं मिला।",
+    nextPage: "अगला पृष्ठ", upvote: "समर्थन में वोट", downvote: "विरोध में वोट", voteSaveError: "वोट सहेजा नहीं जा सका।",
+  },
+};
+
+const ENGLISH_EXTRA_COPY: ExtraCopy = {
+  imagesLoadError: "Images could not be loaded.",
+  loadingImages: "Loading images…",
+  noImages: "No images found.",
+  signInToTranslate: "Sign in to generate this translation.",
+  loadingTranslation: "Loading translation…",
+  translatingArticle: "Translating article…",
+  translationGenerationError: "Translation could not be generated.",
+  translationFailed: "Translation failed.",
+  contentLoadError: "Failed to load content.",
+};
+
+const EXTRA_COPY_BY_LANGUAGE: Record<string, ExtraCopy> = {
+  en: ENGLISH_EXTRA_COPY,
+  pt: {
+    imagesLoadError: "Não foi possível carregar as imagens.",
+    loadingImages: "Carregando imagens…",
+    noImages: "Nenhuma imagem encontrada.",
+    signInToTranslate: "Entre para gerar esta tradução.",
+    loadingTranslation: "Carregando tradução…",
+    translatingArticle: "Traduzindo artigo…",
+    translationGenerationError: "Não foi possível gerar a tradução.",
+    translationFailed: "A tradução falhou.",
+    contentLoadError: "Não foi possível carregar o conteúdo.",
+  },
+  es: {
+    imagesLoadError: "No se pudieron cargar las imágenes.", loadingImages: "Cargando imágenes…", noImages: "No se encontraron imágenes.",
+    signInToTranslate: "Inicia sesión para generar esta traducción.", loadingTranslation: "Cargando traducción…", translatingArticle: "Traduciendo artículo…",
+    translationGenerationError: "No se pudo generar la traducción.", translationFailed: "La traducción falló.", contentLoadError: "No se pudo cargar el contenido.",
+  },
+  fr: {
+    imagesLoadError: "Impossible de charger les images.", loadingImages: "Chargement des images…", noImages: "Aucune image trouvée.",
+    signInToTranslate: "Connectez-vous pour générer cette traduction.", loadingTranslation: "Chargement de la traduction…", translatingArticle: "Traduction de l’article…",
+    translationGenerationError: "Impossible de générer la traduction.", translationFailed: "La traduction a échoué.", contentLoadError: "Impossible de charger le contenu.",
+  },
+  de: {
+    imagesLoadError: "Bilder konnten nicht geladen werden.", loadingImages: "Bilder werden geladen…", noImages: "Keine Bilder gefunden.",
+    signInToTranslate: "Melde dich an, um diese Übersetzung zu erstellen.", loadingTranslation: "Übersetzung wird geladen…", translatingArticle: "Artikel wird übersetzt…",
+    translationGenerationError: "Die Übersetzung konnte nicht erstellt werden.", translationFailed: "Die Übersetzung ist fehlgeschlagen.", contentLoadError: "Der Inhalt konnte nicht geladen werden.",
+  },
+  it: {
+    imagesLoadError: "Impossibile caricare le immagini.", loadingImages: "Caricamento immagini…", noImages: "Nessuna immagine trovata.",
+    signInToTranslate: "Accedi per generare questa traduzione.", loadingTranslation: "Caricamento traduzione…", translatingArticle: "Traduzione dell’articolo…",
+    translationGenerationError: "Impossibile generare la traduzione.", translationFailed: "La traduzione non è riuscita.", contentLoadError: "Impossibile caricare il contenuto.",
+  },
+  uk: {
+    imagesLoadError: "Не вдалося завантажити зображення.", loadingImages: "Завантаження зображень…", noImages: "Зображень не знайдено.",
+    signInToTranslate: "Увійдіть, щоб створити цей переклад.", loadingTranslation: "Завантаження перекладу…", translatingArticle: "Переклад статті…",
+    translationGenerationError: "Не вдалося створити переклад.", translationFailed: "Помилка перекладу.", contentLoadError: "Не вдалося завантажити вміст.",
+  },
+  pl: {
+    imagesLoadError: "Nie udało się załadować obrazów.", loadingImages: "Ładowanie obrazów…", noImages: "Nie znaleziono obrazów.",
+    signInToTranslate: "Zaloguj się, aby wygenerować to tłumaczenie.", loadingTranslation: "Ładowanie tłumaczenia…", translatingArticle: "Tłumaczenie artykułu…",
+    translationGenerationError: "Nie udało się wygenerować tłumaczenia.", translationFailed: "Tłumaczenie nie powiodło się.", contentLoadError: "Nie udało się załadować treści.",
+  },
+  ja: {
+    imagesLoadError: "画像を読み込めませんでした。", loadingImages: "画像を読み込み中…", noImages: "画像が見つかりません。",
+    signInToTranslate: "この翻訳を生成するにはログインしてください。", loadingTranslation: "翻訳を読み込み中…", translatingArticle: "記事を翻訳中…",
+    translationGenerationError: "翻訳を生成できませんでした。", translationFailed: "翻訳に失敗しました。", contentLoadError: "コンテンツを読み込めませんでした。",
+  },
+  zh: {
+    imagesLoadError: "无法加载图片。", loadingImages: "正在加载图片…", noImages: "未找到图片。",
+    signInToTranslate: "请登录以生成此翻译。", loadingTranslation: "正在加载翻译…", translatingArticle: "正在翻译文章…",
+    translationGenerationError: "无法生成翻译。", translationFailed: "翻译失败。", contentLoadError: "无法加载内容。",
+  },
+  ar: {
+    imagesLoadError: "تعذر تحميل الصور.", loadingImages: "جارٍ تحميل الصور…", noImages: "لم يتم العثور على صور.",
+    signInToTranslate: "سجّل الدخول لإنشاء هذه الترجمة.", loadingTranslation: "جارٍ تحميل الترجمة…", translatingArticle: "جارٍ ترجمة المقال…",
+    translationGenerationError: "تعذر إنشاء الترجمة.", translationFailed: "فشلت الترجمة.", contentLoadError: "تعذر تحميل المحتوى.",
+  },
+  hi: {
+    imagesLoadError: "चित्र लोड नहीं किए जा सके।", loadingImages: "चित्र लोड हो रहे हैं…", noImages: "कोई चित्र नहीं मिला।",
+    signInToTranslate: "यह अनुवाद बनाने के लिए साइन इन करें।", loadingTranslation: "अनुवाद लोड हो रहा है…", translatingArticle: "लेख का अनुवाद हो रहा है…",
+    translationGenerationError: "अनुवाद बनाया नहीं जा सका।", translationFailed: "अनुवाद विफल रहा।", contentLoadError: "सामग्री लोड नहीं की जा सकी।",
+  },
+};
 export const globalCopyForLanguage = (language: string | null): GlobalCopy => {
-  if (!language) return ENGLISH_COPY;
+  if (!language) return { ...ENGLISH_COPY, ...ENGLISH_HOME_COPY, ...ENGLISH_EXTRA_COPY };
   try {
     const locale = new Intl.Locale(language);
-    return COPY_BY_LANGUAGE[locale.language] ?? ENGLISH_COPY;
+    return {
+      ...(COPY_BY_LANGUAGE[locale.language] ?? ENGLISH_COPY),
+      ...(HOME_COPY_BY_LANGUAGE[locale.language] ?? ENGLISH_HOME_COPY),
+      ...(EXTRA_COPY_BY_LANGUAGE[locale.language] ?? ENGLISH_EXTRA_COPY),
+    };
   } catch {
-    return ENGLISH_COPY;
+    return { ...ENGLISH_COPY, ...ENGLISH_HOME_COPY, ...ENGLISH_EXTRA_COPY };
   }
 };
 
@@ -238,7 +449,7 @@ type GlobalLanguageValue = {
 
 const GlobalLanguageContext = createContext<GlobalLanguageValue>({
   language: null,
-  copy: ENGLISH_COPY,
+  copy: globalCopyForLanguage(null),
   setLanguage: async () => undefined,
 });
 

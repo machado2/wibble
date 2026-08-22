@@ -4,6 +4,7 @@ import {
   FaExclamationTriangle,
   FaExternalLinkAlt,
   FaEye,
+  FaLanguage,
   FaNewspaper,
   FaPen,
   FaRoute,
@@ -39,6 +40,31 @@ type Overview = {
   searchesLast24Hours: number;
   images: Record<string, number>;
   recentArticles: RecentArticle[];
+  translations: {
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
+    total: number;
+  };
+  recentTranslationJobs: Array<{
+    id: string;
+    slug: string;
+    title: string;
+    language_code: string;
+    status: "pending" | "processing" | "completed" | "failed";
+    attempts: number;
+    created_at: string;
+    updated_at: string;
+    last_error: string | null;
+  }>;
+};
+
+const translationStatus = (status: string) => {
+  if (status === "completed") return <StatusBadge label="Concluída" tone="success" />;
+  if (status === "processing") return <StatusBadge label="Processando" tone="warning" />;
+  if (status === "failed") return <StatusBadge label="Falhou" tone="danger" />;
+  return <StatusBadge label="Pendente" tone="neutral" />;
 };
 
 const articleStatus = (article: RecentArticle) => {
@@ -152,6 +178,59 @@ export const Dashboard = () => {
               accent="#8db3ff"
             />
           </div>
+
+          <section className={`${styles.panel} ${styles.translationPanel}`}>
+            <div className={styles.panelHeader}>
+              <h2>Traduções em background</h2>
+              <FaLanguage />
+            </div>
+            <div className={styles.translationSummary}>
+              <StatusBadge label={`${overview.translations.pending} pendentes`} tone="neutral" />
+              <StatusBadge
+                label={`${overview.translations.processing} em processamento`}
+                tone="warning"
+              />
+              <StatusBadge
+                label={`${overview.translations.completed} concluídas`}
+                tone="success"
+              />
+              <StatusBadge label={`${overview.translations.failed} falhas`} tone="danger" />
+              <span>{formatNumber(overview.translations.total)} traduções persistidas</span>
+            </div>
+            {overview.recentTranslationJobs.length ? (
+              <ul className={styles.recentList}>
+                {overview.recentTranslationJobs.map((job) => (
+                  <li className={styles.recentItem} key={job.id}>
+                    <div>
+                      <span className={styles.recentTitle}>{job.title}</span>
+                      <div className={styles.recentMeta}>
+                        {translationStatus(job.status)}
+                        <span>{job.language_code}</span>
+                        <span>·</span>
+                        <span>{job.attempts} tentativa(s)</span>
+                        <span>·</span>
+                        <span>{formatDateTime(job.updated_at)}</span>
+                      </div>
+                      {job.last_error ? (
+                        <span className={styles.translationError}>{job.last_error}</span>
+                      ) : null}
+                    </div>
+                    <a
+                      className={styles.iconLink}
+                      href={`/content/${job.slug}?lang=${encodeURIComponent(job.language_code)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Abrir tradução"
+                    >
+                      <FaExternalLinkAlt />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className={styles.emptyState}>Nenhum job de tradução criado ainda.</div>
+            )}
+          </section>
 
           <div className={styles.dashboardGrid}>
             <section className={styles.panel}>

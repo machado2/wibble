@@ -4,6 +4,7 @@ import classNames from "classnames";
 import { BiUpvote, BiDownvote } from "react-icons/bi";
 import { useEffect, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 export const VoteButtons = (props: {
   contentId?: string;
@@ -15,6 +16,7 @@ export const VoteButtons = (props: {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const { data: session } = useSession();
+  const { copy } = useGlobalLanguage();
 
   useEffect(() => {
     setVoteCount(props.votes);
@@ -60,13 +62,13 @@ export const VoteButtons = (props: {
         if (response.status === 401) {
           await signIn("sso", { callbackUrl: window.location.href });
         }
-        throw new Error("Vote could not be saved.");
+        throw new Error(copy.voteSaveError);
       }
     } catch (voteError) {
       console.error(voteError);
       setVoteCount(previousCount);
       setCurrentVote(previousVote);
-      setError("Vote could not be saved.");
+      setError(copy.voteSaveError);
     } finally {
       setSaving(false);
     }
@@ -84,7 +86,7 @@ export const VoteButtons = (props: {
       <button
         className={styles.upvoteButton}
         onClick={handleUpvote}
-        aria-label="Upvote"
+        aria-label={copy.upvote}
         disabled={saving}
       >
         <BiUpvote
@@ -95,7 +97,7 @@ export const VoteButtons = (props: {
       <button
         className={styles.downvoteButton}
         onClick={handleDownvote}
-        aria-label="Downvote"
+        aria-label={copy.downvote}
         disabled={saving}
       >
         <BiDownvote

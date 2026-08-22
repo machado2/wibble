@@ -21,9 +21,8 @@ import { articleTargetForSlug } from "@/core/articleTarget";
 import { TransparentArticleTranslation } from "@/components/TransparentArticleTranslation";
 import { getWibbleConfig } from "../../../../config-runtime";
 import { resolveRequestLanguage } from "@/core/globalLanguageRequest";
+import { useGlobalLanguage } from "@/components/GlobalLanguage";
 
-const defaultDescription = `Get the latest news with a touch of wobble from The Wibble,
-your source for the unpredictable and unsteady world of current events.`;
 const defaultTitle = "The Wibble";
 
 async function tryLoadContent(
@@ -44,6 +43,7 @@ const mdxComponents = {
 };
 
 function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
+  const { copy } = useGlobalLanguage();
   const router = useRouter();
   const slug: string = router.query.slug as string;
   const requestedLanguage =
@@ -84,10 +84,10 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
   const title = (parsedResponse?.content?.frontmatter.title ||
     defaultTitle) as string;
   const displayTitle = error
-    ? "Error"
+    ? copy.translationFailed
     : `${parsedResponse?.loading ? "[working...] " : ""}${title}`;
   const description = (parsedResponse?.content?.frontmatter.description ||
-    defaultDescription) as string;
+    copy.siteDescription) as string;
   const addTitle = parsedResponse.titleInContent !== true;
   const reloadTranslatedArticle = useCallback(async () => {
     await router.replace(
@@ -133,7 +133,7 @@ function SlugPage(data: ParsedResponse & { publicSiteUrl: string }) {
               />
             ) : null}
             {error ? (
-              <Alert message="Failed to load content." type="error" showIcon />
+              <Alert message={copy.contentLoadError} type="error" showIcon />
             ) : (
               <MDXRemote
                 components={mdxComponents}

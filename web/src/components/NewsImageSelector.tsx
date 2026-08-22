@@ -1,8 +1,10 @@
 import { Tabs } from "antd";
 import { useRouter } from "next/router";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 export const NewsImageSelector = () => {
   const router = useRouter();
+  const { copy } = useGlobalLanguage();
 
   const activeKey = router.pathname == "/images" ? "2" : "1";
 
@@ -27,11 +29,11 @@ export const NewsImageSelector = () => {
 
   const items = [
     {
-      label: "News",
+      label: copy.newsTab,
       key: "1",
     },
     {
-      label: "Images",
+      label: copy.imagesTab,
       key: "2",
     },
   ];

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/core/PrismaWibble";
 import { requireSession } from "@/core/serverSession";
+import { Prisma } from "@prisma/client";
 
 export default async function handler(
   req: NextApiRequest,
@@ -22,6 +23,9 @@ export default async function handler(
     searchesLast24Hours,
     imageStatuses,
     recentArticles,
+    translationStatuses,
+    totalTranslationRows,
+    recentTranslationJobs,
   ] = await Promise.all([
     prisma.content.count(),
     prisma.content.count({ where: { published: true, flagged: false } }),
@@ -50,11 +54,43 @@ export default async function handler(
         view_count: true,
       },
     }),
+    prisma.$queryRaw<Array<{ status: string; count: bigint }>>(Prisma.sql`
+      SELECT status, COUNT(*)::bigint AS count
+      FROM translation_job
+      GROUP BY status
+    `),
+    prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+      SELECT COUNT(*)::bigint AS count FROM content_translation
+    `),
+    prisma.$queryRaw<
+      Array<{
+        id: string;
+        slug: string;
+        title: string;
+        language_code: string;
+        status: string;
+        attempts: number;
+        created_at: Date;
+        updated_at: Date;
+        last_error: string | null;
+      }>
+    >(Prisma.sql`
+      SELECT j.id, c.slug, c.title, j.language_code, j.status, j.attempts,
+             j.created_at, j.updated_at, j.last_error
+      FROM translation_job j
+      JOIN content c ON c.id = j.content_id
+      ORDER BY j.updated_at DESC
+      LIMIT 8
+    `),
   ]);
 
   const images = imageStatuses.reduce<Record<string, number>>(
     (totals, item) => ({ ...totals, [item.status]: item._count._all }),
     {}
+  );
+  const translations = translationStatuses.reduce<Record<string, number>>(
+    (totals, item) => ({ ...totals, [item.status]: Number(item.count) }),
+    { pending: 0, processing: 0, completed: 0, failed: 0 }
   );
 
   res.status(200).json({
@@ -66,5 +102,7 @@ export default async function handler(
     searchesLast24Hours,
     images,
     recentArticles,
+    translations: { ...translations, total: Number(totalTranslationRows[0]?.count ?? 0) },
+    recentTranslationJobs,
   });
 }

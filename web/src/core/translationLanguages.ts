@@ -25,6 +25,16 @@ const POPULAR_LANGUAGE_CODES = [
   "hi",
 ] as const;
 
+const AUTOMATIC_LANGUAGE_CODES = new Set<string>(POPULAR_LANGUAGE_CODES);
+
+export const isAutomaticTranslationLanguage = (code: string): boolean => {
+  try {
+    return AUTOMATIC_LANGUAGE_CODES.has(resolveSupportedTranslationLanguage(code));
+  } catch {
+    return false;
+  }
+};
+
 export const normalizeLanguageCode = (value: string): string => {
   const candidate = value.trim();
   if (

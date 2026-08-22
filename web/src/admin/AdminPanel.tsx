@@ -9,6 +9,7 @@ import { dataProvider } from "ra-data-simple-prisma";
 import {
   FaExclamationTriangle,
   FaImages,
+  FaLanguage,
   FaNewspaper,
   FaRoute,
   FaSearch,
@@ -20,6 +21,7 @@ import { NotFoundRequestList } from "./NotFoundRequests";
 import { SearchHistoryList, GenerationFailureList } from "./Activity";
 import { Dashboard } from "./Dashboard";
 import { AdminLayout } from "./AdminLayout";
+import { TranslationJobList } from "./TranslationJobs";
 
 const prismaDataProvider = dataProvider("/api/adm");
 
@@ -197,6 +199,12 @@ export const AdminPanel: React.FC = () => (
       edit={ImageCacheEdit}
       icon={FaImages}
       options={{ label: "Imagens" }}
+    />
+    <Resource
+      name="translation_job"
+      list={TranslationJobList}
+      icon={FaLanguage}
+      options={{ label: "Traduções" }}
     />
     <Resource
       name="search_history"

@@ -56,6 +56,7 @@ const first = (...keys) => {
 const values = {
   database_url: first("DATABASE_URL"),
   nextauth_secret: first("NEXTAUTH_SECRET", "SSO_CLIENT_SECRET"),
+  translation_worker_secret: first("TRANSLATION_WORKER_SECRET"),
   sso_client_secret: first("SSO_CLIENT_SECRET"),
   admin_email: first("ADMIN_EMAIL", "REACT_ADMIN_EMAIL"),
   safety_identifier_secret: first(

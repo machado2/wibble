@@ -9,7 +9,7 @@ let failedMtimeMs = -1;
 
 const requiredString = (value, field) => {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`Invalid Nickel configuration: ${field} must be a string`);
+    throw new Error(`Invalid Nickel configuration: ${field} must be a non-empty string`);
   }
   return value.trim();
 };
@@ -95,6 +95,10 @@ const validateConfig = (raw) => {
       nextauth_secret: secretString(
         raw.secrets?.nextauth_secret,
         "secrets.nextauth_secret"
+      ),
+      translation_worker_secret: requiredString(
+        raw.secrets?.translation_worker_secret,
+        "secrets.translation_worker_secret"
       ),
       sso_client_secret: secretString(
         raw.secrets?.sso_client_secret,

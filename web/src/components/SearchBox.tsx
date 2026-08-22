@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Input } from "antd";
-import { CloseCircleOutlined } from "@ant-design/icons";
 import { useDebounce } from "use-debounce";
 import { useRouter } from "next/router";
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 const SearchBox = () => {
   const router = useRouter();
+  const { copy } = useGlobalLanguage();
   const searchTerm = (router.query.search as string) || undefined;
   const [inputValue, setInputValue] = useState(searchTerm);
   const [debouncedValue] = useDebounce(inputValue, 800);
@@ -41,9 +42,6 @@ const SearchBox = () => {
     }
   };
 
-  const handleClearSearch = () => {
-    setInputValue("");
-  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
@@ -53,20 +51,13 @@ const SearchBox = () => {
 
   return (
     <Input
-      placeholder="Search"
+      placeholder={copy.searchPlaceholder}
       value={inputValue}
       onChange={handleSearchChange}
       onKeyDown={handleKeyDown}
       style={{ marginBottom: "20px", marginTop: "20px" }}
       autoFocus
-      addonAfter={
-        inputValue && (
-          <CloseCircleOutlined
-            onClick={handleClearSearch}
-            style={{ cursor: "pointer" }}
-          />
-        )
-      }
+      allowClear
     />
   );
 };

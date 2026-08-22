@@ -18,6 +18,7 @@ test("migrates environment values into a valid private Nickel file", () => {
       [
         "DATABASE_URL='postgresql://user:password@localhost:5432/wibble'",
         'NEXTAUTH_SECRET="nextauth-secret"',
+        "TRANSLATION_WORKER_SECRET=translation-worker-secret",
         "SSO_CLIENT_SECRET=sso-secret",
         "ADMIN_EMAIL=admin@example.com",
         "OPENAI_API_KEY=openai-test-key",
@@ -51,6 +52,10 @@ test("migrates environment values into a valid private Nickel file", () => {
       "postgresql://user:password@localhost:5432/wibble"
     );
     assert.equal(exported.secrets.nextauth_secret, "nextauth-secret");
+    assert.equal(
+      exported.secrets.translation_worker_secret,
+      "translation-worker-secret"
+    );
     assert.equal(exported.secrets.safety_identifier_secret, "nextauth-secret");
     assert.equal(exported.secrets.openai_api_key, "openai-test-key");
     assert.equal(exported.secrets.openrouter_api_key, "openrouter-test-key");

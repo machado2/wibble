@@ -1,25 +1,17 @@
 import { Select } from "antd";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-
-const options = [
-  {
-    value: "week",
-    label: "Week",
-  },
-  {
-    value: "month",
-    label: "Month",
-  },
-  {
-    value: "all",
-    label: "All",
-  },
-];
+import { useGlobalLanguage } from "./GlobalLanguage";
 
 export const TimeSelection = () => {
   const router = useRouter();
+  const { copy } = useGlobalLanguage();
   const [period, setPeriod] = useState<string | undefined>(undefined);
+  const options = [
+    { value: "week", label: copy.periodWeek },
+    { value: "month", label: copy.periodMonth },
+    { value: "all", label: copy.periodAll },
+  ];
 
   useEffect(() => {
     const currentPeriod = router.query.t as string | undefined;
