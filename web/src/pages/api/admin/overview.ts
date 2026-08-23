@@ -3,9 +3,9 @@ import prisma from "@/core/PrismaWibble";
 import { requireSession } from "@/core/serverSession";
 import { Prisma } from "@prisma/client";
 import {
-  TRANSLATION_LIMIT_PER_WINDOW,
+  getTranslationHourlyLimit,
   TRANSLATION_LIMIT_WINDOW_MS,
-} from "@/core/ContentRepository";
+} from "@/core/translationQuota";
 import { BACKGROUND_TRANSLATION_IDENTITY } from "@/core/TranslationQueueService";
 import { buildTranslationOperations } from "@/core/translationOperations";
 
@@ -37,6 +37,7 @@ export default async function handler(
     translationAttempts,
     translationQueueTiming,
     translationLanguages,
+    translationHourlyLimit,
   ] = await Promise.all([
     prisma.content.count(),
     prisma.content.count({ where: { published: true, flagged: false } }),
@@ -103,7 +104,13 @@ export default async function handler(
       SELECT created_at
       FROM translation_generation_attempt
       WHERE user_email = ${BACKGROUND_TRANSLATION_IDENTITY}
-        AND created_at >= ${translationWindowStart}
+        AND created_at >= GREATEST(
+          ${translationWindowStart},
+          COALESCE(
+            (SELECT budget_reset_at FROM translation_runtime_setting WHERE id = 'automatic'),
+            ${translationWindowStart}
+          )
+        )
       ORDER BY created_at ASC
     `),
     prisma.$queryRaw<
@@ -190,6 +197,7 @@ export default async function handler(
       GROUP BY languages.language_code
       ORDER BY translated DESC, languages.language_code ASC
     `),
+    getTranslationHourlyLimit(prisma),
   ]);
 
   const images = imageStatuses.reduce<Record<string, number>>(
@@ -203,7 +211,7 @@ export default async function handler(
   const queueTiming = translationQueueTiming[0];
   const translationOperations = buildTranslationOperations({
     now,
-    limit: TRANSLATION_LIMIT_PER_WINDOW,
+    limit: translationHourlyLimit,
     windowMs: TRANSLATION_LIMIT_WINDOW_MS,
     eligibleArticles: publishedArticles,
     attempts: translationAttempts.map((attempt) => attempt.created_at),

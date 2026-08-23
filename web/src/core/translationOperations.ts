@@ -1,3 +1,5 @@
+import { nextTranslationSlotAt } from "./translationQuota";
+
 export type TranslationStatusCounts = {
   pending: number;
   processing: number;
@@ -35,11 +37,9 @@ export const buildTranslationOperations = (input: TranslationOperationsInput) =>
   const attempts = input.attempts
     .filter((attempt) => attempt.getTime() >= input.now.getTime() - input.windowMs)
     .sort((left, right) => left.getTime() - right.getTime());
-  const used = Math.min(attempts.length, input.limit);
+  const used = attempts.length;
   const remaining = Math.max(0, input.limit - used);
-  const nextSlotAt = used > 0
-    ? new Date(attempts[0].getTime() + input.windowMs)
-    : null;
+  const nextSlotAt = nextTranslationSlotAt(attempts, input.limit, input.windowMs);
   const total = Object.values(input.statusCounts).reduce((sum, count) => sum + count, 0);
   const settled = input.statusCounts.completed + input.statusCounts.failed;
   const activeLanguages = input.languages.length;

@@ -25,7 +25,9 @@ const POPULAR_LANGUAGE_CODES = [
   "hi",
 ] as const;
 
-const AUTOMATIC_LANGUAGE_CODES = new Set<string>(POPULAR_LANGUAGE_CODES);
+// The public catalog is not an authorization list for paid background work.
+// Automatic languages remain empty until an explicit product policy is configured.
+const AUTOMATIC_LANGUAGE_CODES = new Set<string>();
 
 export const isAutomaticTranslationLanguage = (code: string): boolean => {
   try {

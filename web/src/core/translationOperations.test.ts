@@ -33,6 +33,30 @@ test("summarizes the rolling automatic budget without exposing its identity", ()
   expect(JSON.stringify(result)).not.toContain("background-translations@");
 });
 
+test("reports real overage and the first slot that actually restores capacity", () => {
+  const attempts = Array.from({ length: 7 }, (_, index) =>
+    new Date(`2026-08-22T11:0${index}:00.000Z`)
+  );
+  const result = buildTranslationOperations({
+    now,
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    eligibleArticles: 0,
+    attempts,
+    statusCounts: { pending: 0, processing: 0, completed: 0, failed: 0 },
+    waitingForQuota: 0,
+    oldestPendingAt: null,
+    nextAttemptAt: null,
+    completedLastHour: 0,
+    completedLast24Hours: 0,
+    averageDurationSeconds: null,
+    languages: [],
+  });
+
+  expect(result.cost.used).toBe(7);
+  expect(result.cost.nextSlotAt).toBe("2026-08-22T12:02:00.000Z");
+});
+
 test("calculates queue progress and honest per-language coverage", () => {
   const result = buildTranslationOperations({
     now,

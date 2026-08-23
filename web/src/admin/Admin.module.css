@@ -950,6 +950,44 @@
   color: #fff;
 }
 
+.queuePanel {
+  min-width: 0;
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid #dfe4eb;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.05);
+}
+
+.queueHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.queueHeader h2, .historyHeader h2 { margin: 4px 0 5px; color: #101828; font-family: Georgia, "Times New Roman", serif; font-size: 22px; }
+.queueHeader p, .historyHeader p { margin: 0; color: #667085; font-size: 12px; }
+.sectionEyebrow { color: #345fa8; font-size: 10px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.queueBudget { display: grid; flex: 0 0 auto; gap: 3px; min-width: 150px; padding: 12px 14px; border-radius: 12px; background: #101a2e; color: #fff; }
+.queueBudget strong { font-size: 20px; }
+.queueBudget span { color: #cbd5e1; font-size: 10px; }
+.quotaControls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin: 18px 0; padding: 14px; border-radius: 12px; background: #f7f9fc; }
+.quotaForm { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px; }
+.quotaForm label { width: 100%; color: #475467; font-size: 10px; font-weight: 800; }
+.quotaForm input { box-sizing: border-box; width: 92px; min-height: 42px; padding: 8px 10px; border: 1px solid #cbd2dc; border-radius: 9px; background: #fff; color: #101828; font-size: 16px; font-weight: 800; }
+.quotaForm button, .resetButton, .removeJobButton { min-height: 42px; padding: 9px 13px; border: 1px solid #101a2e; border-radius: 9px; background: #101a2e; color: #fff; cursor: pointer; font-size: 11px; font-weight: 800; }
+.resetButton { border-color: #c53b29; background: #fff; color: #a52f22; }
+.quotaForm button:disabled, .resetButton:disabled, .removeJobButton:disabled { border-color: #d0d5dd; background: #eaecf0; color: #98a2b3; cursor: not-allowed; }
+.quotaHint { align-self: center; color: #667085; font-size: 10px; }
+.operationMessage { margin-bottom: 12px; padding: 10px 12px; border: 1px solid #b8d7c4; border-radius: 9px; background: #eef9f2; color: #187a41; font-size: 11px; font-weight: 750; }
+.operationalQueue { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.queueItem { display: grid; min-width: 0; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid #e4e7ec; border-radius: 12px; }
+.queuePosition { color: #345fa8; font-size: 15px; font-weight: 900; text-align: center; }
+.queueIdentity { display: grid; min-width: 0; gap: 4px; }
+.queueIdentity > div { display: flex; align-items: center; gap: 8px; }
+.queueIdentity > strong, .queueIdentity > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queueIdentity > strong { color: #1d2939; font-size: 12px; }
+.queueIdentity > span { color: #7a8699; font-size: 10px; }
+.queueIdentity .queueError { color: #a52f22; }
+.removeJobButton { min-width: 90px; border-color: #d75c4d; background: #fff; color: #b13628; }
+.historyHeader { margin: 10px 0 14px; }
+
 @media (max-width: 1100px) {
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1036,6 +1074,14 @@
     gap: 12px;
     padding: 12px;
   }
+
+  .queuePanel { padding: 14px; }
+  .queueHeader { flex-direction: column; }
+  .queueBudget { box-sizing: border-box; width: 100%; }
+  .quotaControls, .quotaForm { align-items: stretch; flex-direction: column; }
+  .quotaForm input, .quotaForm button, .resetButton { width: 100%; }
+  .queueItem { grid-template-columns: 38px minmax(0, 1fr); }
+  .removeJobButton { grid-column: 1 / -1; width: 100%; }
 }
 
 @media (max-width: 430px) {

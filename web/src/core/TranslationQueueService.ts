@@ -7,10 +7,18 @@ import {
 } from "./ArticleTranslationService";
 import { resolveSupportedTranslationLanguage } from "./translationLanguages";
 import { generationSafetyIdentifier } from "./generationIdentity";
+import {
+  availableTranslationQueueCapacity,
+  BACKGROUND_TRANSLATION_IDENTITY,
+  DEFAULT_TRANSLATION_HOURLY_LIMIT,
+  getTranslationQuotaPolicy,
+  TRANSLATION_LIMIT_WINDOW_MS,
+} from "./translationQuota";
+export { BACKGROUND_TRANSLATION_IDENTITY } from "./translationQuota";
 
 const MAX_VISIBLE_BATCH = 20;
 const MAX_ATTEMPTS = 3;
-export const BACKGROUND_TRANSLATION_IDENTITY = "background-translations@wibble.internal";
+
 
 export type TranslationQueueJob = {
   id: string;
@@ -25,6 +33,7 @@ type QueueRepository = {
   enqueue(slugs: string[], languageCode: string, requestedBy: string): Promise<number>;
   claimNext(): Promise<TranslationQueueJob | null>;
   complete(id: string, leaseId: string): Promise<void>;
+  rejectQuota(id: string, leaseId: string, error: string): Promise<void>;
   retry(
     id: string,
     leaseId: string,
@@ -50,35 +59,70 @@ type ClaimedRow = {
 export class PrismaTranslationQueueRepository implements QueueRepository {
   async enqueue(slugs: string[], languageCode: string, requestedBy: string): Promise<number> {
     if (slugs.length === 0) return 0;
-    const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT c.id
-      FROM content c
-      WHERE c.slug IN (${Prisma.join(slugs)})
-        AND c.published = true
-        AND c.flagged = false
-        AND c.content IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM content_translation t
-          WHERE t.content_id = c.id AND t.language_code = ${languageCode}
-        )
-      LIMIT ${MAX_VISIBLE_BATCH}
-    `);
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT 1::int AS locked
+        FROM pg_advisory_xact_lock(hashtextextended(${`translation-user:${requestedBy}`}, 0))
+      `);
+      const policy =
+        requestedBy === BACKGROUND_TRANSLATION_IDENTITY
+          ? await getTranslationQuotaPolicy(tx)
+          : { hourlyLimit: DEFAULT_TRANSLATION_HOURLY_LIMIT, budgetResetAt: null };
+      const windowCutoff = new Date(Date.now() - TRANSLATION_LIMIT_WINDOW_MS);
+      const cutoff =
+        policy.budgetResetAt && policy.budgetResetAt > windowCutoff
+          ? policy.budgetResetAt
+          : windowCutoff;
+      const [usedAttempts, activeJobs] = await Promise.all([
+        tx.translation_generation_attempt.count({
+          where: { user_email: requestedBy, created_at: { gte: cutoff } },
+        }),
+        tx.translation_job.count({
+          where: { requested_by: requestedBy, status: { in: ["pending", "processing"] } },
+        }),
+      ]);
+      const capacity = Math.min(
+        MAX_VISIBLE_BATCH,
+        availableTranslationQueueCapacity(policy.hourlyLimit, usedAttempts, activeJobs)
+      );
+      if (capacity === 0) return 0;
 
-    let queued = 0;
-    for (const row of rows) {
-      const changed = await prisma.$executeRaw`
-        INSERT INTO translation_job (
-          id, content_id, language_code, requested_by, status,
-          attempts, created_at, updated_at, next_attempt_at
-        ) VALUES (
-          ${uuidv4()}, ${row.id}, ${languageCode}, ${requestedBy}, 'pending',
-          0, NOW(), NOW(), DATE_TRUNC('second', NOW())
-        )
-        ON CONFLICT (content_id, language_code) DO NOTHING
-      `;
-      queued += Number(changed > 0);
-    }
-    return queued;
+      const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT c.id
+        FROM content c
+        WHERE c.slug IN (${Prisma.join(slugs)})
+          AND c.published = true
+          AND c.flagged = false
+          AND c.content IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM content_translation t
+            WHERE t.content_id = c.id AND t.language_code = ${languageCode}
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM translation_job existing
+            WHERE existing.content_id = c.id
+              AND existing.language_code = ${languageCode}
+          )
+        ORDER BY c.created_at DESC, c.id ASC
+        LIMIT ${capacity}
+      `);
+
+      let queued = 0;
+      for (const row of rows) {
+        const changed = await tx.$executeRaw`
+          INSERT INTO translation_job (
+            id, content_id, language_code, requested_by, status,
+            attempts, created_at, updated_at, next_attempt_at
+          ) VALUES (
+            ${uuidv4()}, ${row.id}, ${languageCode}, ${requestedBy}, 'pending',
+            0, NOW(), NOW(), NOW()
+          )
+          ON CONFLICT (content_id, language_code) DO NOTHING
+        `;
+        queued += Number(changed > 0);
+      }
+      return queued;
+    });
   }
 
   async claimNext(): Promise<TranslationQueueJob | null> {
@@ -93,7 +137,7 @@ export class PrismaTranslationQueueRepository implements QueueRepository {
           ) OR (
             j.status = 'processing' AND j.started_at < NOW() - INTERVAL '15 minutes'
           )
-          ORDER BY j.created_at ASC
+          ORDER BY j.created_at ASC, j.id ASC
           FOR UPDATE SKIP LOCKED
           LIMIT 1
         )
@@ -128,6 +172,17 @@ export class PrismaTranslationQueueRepository implements QueueRepository {
       UPDATE translation_job
       SET status = 'completed', completed_at = NOW(), updated_at = NOW(),
           last_error = NULL, lease_id = NULL
+      WHERE id = ${id} AND status = 'processing' AND lease_id = ${leaseId}
+    `;
+    if (changed !== 1) throw new Error("Translation job lease was lost");
+  }
+
+  async rejectQuota(id: string, leaseId: string, error: string): Promise<void> {
+    const changed = await prisma.$executeRaw`
+      UPDATE translation_job
+      SET status = 'failed', completed_at = NOW(), updated_at = NOW(),
+          attempts = GREATEST(attempts - 1, 0),
+          last_error = ${error}, lease_id = NULL
       WHERE id = ${id} AND status = 'processing' AND lease_id = ${leaseId}
     `;
     if (changed !== 1) throw new Error("Translation job lease was lost");
@@ -186,7 +241,7 @@ export class TranslationQueueService {
 
   async processNext(): Promise<
     | { processed: false }
-    | { processed: true; status: "completed" | "pending" | "failed" }
+    | { processed: true; status: "completed" | "pending" | "failed" | "rejected" }
   > {
     const job = await this.repository.claimNext();
     if (!job) return { processed: false };
@@ -203,14 +258,8 @@ export class TranslationQueueService {
       return { processed: true, status: "completed" };
     } catch (error) {
       if (error instanceof ArticleTranslationError && error.statusCode === 429) {
-        await this.repository.retry(
-          job.id,
-          job.leaseId,
-          error.retryAfterSeconds ?? 60,
-          "Limite temporário de traduções",
-          true
-        );
-        return { processed: true, status: "pending" };
+        await this.repository.rejectQuota(job.id, job.leaseId, "Quota de traduções esgotada");
+        return { processed: true, status: "rejected" };
       }
       if (job.attempts < MAX_ATTEMPTS) {
         await this.repository.retry(

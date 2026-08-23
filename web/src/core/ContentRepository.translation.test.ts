@@ -147,4 +147,36 @@ describe("ContentRepository article translations", () => {
     expect((prisma as any).translation_generation_attempt.create).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });
+
+  test("uses the durable automatic quota and supports pausing with a zero limit", async () => {
+    const tx = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ hourly_limit: 0 }]),
+      content_translation: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+      },
+      translation_generation_attempt: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    (prisma as any).$transaction.mockImplementation((callback: any) => callback(tx));
+    const generate = jest.fn();
+
+    await expect(
+      new ContentRepository().runTranslationGeneration(
+        "article-id",
+        "pt-BR",
+        "background-translations@wibble.internal",
+        "writer",
+        generate
+      )
+    ).rejects.toMatchObject({ name: "TranslationGenerationRateLimitError" });
+
+    expect((prisma as any).translation_generation_attempt.create).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+  });
 });

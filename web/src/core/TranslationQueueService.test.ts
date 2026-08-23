@@ -20,6 +20,7 @@ const repository = () => ({
   claimNext: jest.fn().mockResolvedValue(job),
   complete: jest.fn().mockResolvedValue(undefined),
   retry: jest.fn().mockResolvedValue(undefined),
+  rejectQuota: jest.fn().mockResolvedValue(undefined),
   fail: jest.fn().mockResolvedValue(undefined),
 });
 
@@ -30,7 +31,8 @@ const translator = () => ({
 describe("TranslationQueueService", () => {
   test("uses a distinct global identity for automatic background cost control", () => {
     expect(BACKGROUND_TRANSLATION_IDENTITY).toBe("background-translations@wibble.internal");
-    expect(isAutomaticTranslationLanguage("pt-BR")).toBe(true);
+    expect(isAutomaticTranslationLanguage("pt-BR")).toBe(false);
+    expect(isAutomaticTranslationLanguage("es")).toBe(false);
     expect(isAutomaticTranslationLanguage("nl")).toBe(false);
   });
 
@@ -68,20 +70,19 @@ describe("TranslationQueueService", () => {
     expect(repo.complete).toHaveBeenCalledWith("job-1", "lease-1");
   });
 
-  test("reschedules quota exhaustion without marking the job failed", async () => {
+  test("rejects quota exhaustion permanently instead of leaving work queued", async () => {
     const repo = repository();
     const generate = translator();
     generate.generate.mockRejectedValue(new ArticleTranslationError("limited", 429, 120));
     const service = new TranslationQueueService({ repository: repo, translator: generate as any });
 
-    expect(await service.processNext()).toEqual({ processed: true, status: "pending" });
-    expect(repo.retry).toHaveBeenCalledWith(
+    expect(await service.processNext()).toEqual({ processed: true, status: "rejected" });
+    expect(repo.rejectQuota).toHaveBeenCalledWith(
       "job-1",
       "lease-1",
-      120,
-      "Limite temporário de traduções",
-      true
+      "Quota de traduções esgotada"
     );
+    expect(repo.retry).not.toHaveBeenCalled();
     expect(repo.fail).not.toHaveBeenCalled();
   });
 

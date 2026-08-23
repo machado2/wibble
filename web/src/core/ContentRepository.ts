@@ -9,6 +9,14 @@ import { v4 as uuidv4 } from "uuid";
 import prisma from "./PrismaWibble";
 import { NewsListItem } from "./NewsListItem";
 import { isAutomaticTranslationLanguage } from "./translationLanguages";
+import {
+  BACKGROUND_TRANSLATION_IDENTITY,
+  DEFAULT_TRANSLATION_HOURLY_LIMIT,
+  getTranslationQuotaPolicy,
+  TRANSLATION_LIMIT_WINDOW_MS,
+} from "./translationQuota";
+
+export { TRANSLATION_LIMIT_WINDOW_MS } from "./translationQuota";
 
 export type ContentWithCurrentVote = content & {
   votesRelation?: content_vote[];
@@ -23,8 +31,7 @@ export class TranslationGenerationRateLimitError extends Error {
   }
 }
 
-export const TRANSLATION_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-export const TRANSLATION_LIMIT_PER_WINDOW = 10;
+export const TRANSLATION_LIMIT_PER_WINDOW = DEFAULT_TRANSLATION_HOURLY_LIMIT;
 
 export class ContentRepository {
   async registerContentGenerationFailure(slug: string, reason: string) {
@@ -267,12 +274,24 @@ export class ContentRepository {
         });
         if (existing) return { translation: existing, created: false };
 
+        const normalizedUserEmail = userEmail.toLowerCase();
+        const policy =
+          normalizedUserEmail === BACKGROUND_TRANSLATION_IDENTITY
+            ? await getTranslationQuotaPolicy(tx)
+            : { hourlyLimit: DEFAULT_TRANSLATION_HOURLY_LIMIT, budgetResetAt: null };
+        const effectiveCutoff =
+          policy.budgetResetAt && policy.budgetResetAt > cutoff
+            ? policy.budgetResetAt
+            : cutoff;
         const attempts = await tx.translation_generation_attempt.findMany({
-          where: { user_email: userEmail.toLowerCase(), created_at: { gte: cutoff } },
+          where: { user_email: normalizedUserEmail, created_at: { gte: effectiveCutoff } },
           select: { created_at: true },
           orderBy: { created_at: "asc" },
         });
-        if (attempts.length >= TRANSLATION_LIMIT_PER_WINDOW) {
+        if (policy.hourlyLimit === 0) {
+          throw new TranslationGenerationRateLimitError(300);
+        }
+        if (attempts.length >= policy.hourlyLimit) {
           const retryAt =
             attempts[0].created_at.getTime() + TRANSLATION_LIMIT_WINDOW_MS;
           throw new TranslationGenerationRateLimitError(
