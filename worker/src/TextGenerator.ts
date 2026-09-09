@@ -1,6 +1,7 @@
 import {
   ContentModerationError,
   ExternalServiceError,
+  PermanentExternalServiceError,
   RateLimitError,
 } from "./errors";
 import logger from "./logger";
@@ -11,6 +12,7 @@ import {
   writerForModel,
 } from "./config";
 import type { WriterProvider } from "../../config-runtime";
+import { GENERATION_TIMEOUT_MS } from "./generationPolicy";
 
 type Message = { role: "system" | "user"; content: string };
 
@@ -54,13 +56,20 @@ class TextGenerator {
           : {}),
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
     });
     const payload = await response.json().catch(() => null);
     if (response.status === 429) {
       throw new RateLimitError();
     }
     if (!response.ok) {
-      throw new ExternalServiceError(
+      const ErrorType =
+        response.status >= 400 &&
+        response.status < 500 &&
+        ![408, 409, 425, 429].includes(response.status)
+          ? PermanentExternalServiceError
+          : ExternalServiceError;
+      throw new ErrorType(
         `External model request failed with HTTP ${response.status}`
       );
     }

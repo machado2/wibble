@@ -2,6 +2,12 @@ import { Prisma, content, content_vote } from "@prisma/client";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
 import logger from "./logger";
+import {
+  ABANDONED_PROCESSING_MINUTES,
+  generationErrorMessage,
+  generationRetryDelaySeconds,
+  shouldPermanentlyFailGeneration,
+} from "./generationPolicy";
 
 import prisma from "./PrismaWibble";
 
@@ -99,14 +105,36 @@ export class ContentRepository {
   }
 
   async getNextContentToGenerate(): Promise<content | null> {
-    return await prisma.content.findFirst({
-      where: {
-        flagged: false,
-        generating: true,
-        published: false,
-      },
-      orderBy: [{ votes: "desc" }, { created_at: "asc" }],
-    });
+    const rows = await prisma.$queryRaw<content[]>`
+      WITH candidate AS (
+        SELECT id
+        FROM content
+        WHERE flagged = false
+          AND generating = true
+          AND published = false
+          AND fail_count < 5
+          AND (
+            (generation_status IN ('pending', 'retry_wait') AND next_generation_at <= NOW())
+            OR (
+              generation_status = 'processing'
+              AND generation_started_at < NOW() - (${ABANDONED_PROCESSING_MINUTES} * INTERVAL '1 minute')
+            )
+          )
+        ORDER BY votes DESC, next_generation_at ASC, created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      UPDATE content AS queued
+      SET generation_status = 'processing',
+          generation_started_at = NOW(),
+          generation_finished_at = NULL,
+          last_generation_error = NULL,
+          fail_count = fail_count + 1
+      FROM candidate
+      WHERE queued.id = candidate.id
+      RETURNING queued.*
+    `;
+    return rows[0] ?? null;
   }
 
   async vote(contentId: string, email: string, downvote: boolean) {
@@ -222,15 +250,6 @@ export class ContentRepository {
     );
   }
 
-  async startTextGeneration(content: content) {
-    await prisma.content.update({
-      where: { id: content.id },
-      data: {
-        generation_started_at: DateTime.utc().toJSDate(),
-      },
-    });
-  }
-
   async finishTextGeneration(
     slug: string,
     generated_content: string,
@@ -257,6 +276,8 @@ export class ContentRepository {
             image_prompt: imagePrompt,
             generation_time_ms: timeEllapsedMs,
             published: true,
+            generation_status: "completed",
+            last_generation_error: null,
           },
         }),
         prisma.not_found_request.updateMany({
@@ -278,26 +299,30 @@ export class ContentRepository {
           generating: false,
           flagged: true,
           generation_finished_at: DateTime.utc().toJSDate(),
+          generation_status: "rejected",
         },
       });
     }
   }
 
-  async failGeneration(slug: string) {
+  async failGeneration(slug: string, error: unknown, permanent = false) {
     const content = await this.getContent(slug);
     if (content) {
-      const failCount = (content.fail_count ?? 0) + 1;
-      if (failCount > 5) {
-        await this.finishFlagged(slug);
-      } else {
-        await prisma.content.update({
-          where: { slug },
-          data: {
-            fail_count: failCount,
-            created_at: DateTime.utc().toJSDate(),
-          },
-        });
-      }
+      const attempt = content.fail_count;
+      const failed = shouldPermanentlyFailGeneration(attempt, permanent);
+      const retryAt = DateTime.utc().plus({
+        seconds: generationRetryDelaySeconds(attempt),
+      });
+      await prisma.content.update({
+        where: { slug },
+        data: {
+          generating: !failed,
+          generation_status: failed ? "failed" : "retry_wait",
+          next_generation_at: retryAt.toJSDate(),
+          generation_finished_at: failed ? DateTime.utc().toJSDate() : null,
+          last_generation_error: generationErrorMessage(error),
+        },
+      });
     }
   }
 

@@ -498,6 +498,8 @@ export class ContentRepository {
           user_email: userEmail,
           model,
           published: false,
+          generation_status: "pending",
+          next_generation_at: DateTime.utc().toJSDate(),
         },
       });
     } catch (error) {
@@ -543,6 +545,8 @@ export class ContentRepository {
           image_id: imageId,
           image_prompt: imagePrompt,
           published: true,
+          generation_status: "completed",
+          last_generation_error: null,
         },
       });
     } else {
@@ -559,6 +563,7 @@ export class ContentRepository {
           generating: false,
           flagged: true,
           generation_finished_at: DateTime.utc().toJSDate(),
+          generation_status: "rejected",
         },
       });
     }

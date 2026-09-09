@@ -10,6 +10,7 @@ import { ImageRepository } from "./ImageRepository";
 import { image_cache, content } from "@prisma/client";
 import logger from "./logger";
 import { SleepCoolDown, SleepOnError } from "./sleep";
+import { PermanentExternalServiceError } from "./errors";
 
 class GenerationTask {
   private generator: ContentGenerator;
@@ -22,7 +23,6 @@ class GenerationTask {
   }
 
   async createContent(content: content) {
-    await this.repository.startTextGeneration(content);
     return await this.generator.generateContent(
       content.title,
       content.description,
@@ -109,7 +109,10 @@ class GenerationTask {
       generatedContent
     );
     if (!isValid) {
-      await this.repository.failGeneration(content.slug);
+      await this.repository.failGeneration(
+        content.slug,
+        "Generated content failed validation"
+      );
       return;
     }
     const imageIds: image_cache[] = await Promise.all(
@@ -140,16 +143,34 @@ class GenerationTask {
 export const contentGenerationLoop = async () => {
   logger.info("Starting content generation loop");
   for (;;) {
+    const repo = new ContentRepository();
+    let queuedContent: content | null = null;
     try {
-      const repo = new ContentRepository();
-      const content = await repo.getNextContentToGenerate();
-      if (content) {
-        const task = new GenerationTask(content.model, repo);
-        await task.run(content);
+      queuedContent = await repo.getNextContentToGenerate();
+      if (queuedContent) {
+        const task = new GenerationTask(queuedContent.model, repo);
+        await task.run(queuedContent);
       }
     } catch (error: any) {
-      logger.info(`Generation failed: ${error}`);
-      await SleepOnError();
+      logger.error(
+        `Generation failed for ${queuedContent?.slug ?? "unknown job"}: ${error}`
+      );
+      if (queuedContent) {
+        try {
+          await repo.failGeneration(
+            queuedContent.slug,
+            error,
+            error instanceof PermanentExternalServiceError
+          );
+        } catch (persistenceError) {
+          logger.error(
+            `Failed to persist generation failure for ${queuedContent.slug}: ${persistenceError}`
+          );
+          await SleepOnError();
+        }
+      } else {
+        await SleepOnError();
+      }
     }
     await SleepCoolDown();
   }

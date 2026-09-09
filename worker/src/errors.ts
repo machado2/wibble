@@ -19,6 +19,13 @@ export class ExternalServiceError extends Error {
   }
 }
 
+export class PermanentExternalServiceError extends ExternalServiceError {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermanentExternalServiceError";
+  }
+}
+
 export class PermanentImageGenerationError extends Error {
   constructor(message: string = "Image generation failed permanently") {
     super(message);
