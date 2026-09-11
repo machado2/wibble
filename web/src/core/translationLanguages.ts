@@ -26,8 +26,10 @@ const POPULAR_LANGUAGE_CODES = [
 ] as const;
 
 // The public catalog is not an authorization list for paid background work.
-// Automatic languages remain empty until an explicit product policy is configured.
-const AUTOMATIC_LANGUAGE_CODES = new Set<string>();
+// Automatic targets are always English + Brazilian Portuguese; the original
+// language of each article is detected first so we never translate en->en
+// or pt-BR->pt-BR.
+const AUTOMATIC_LANGUAGE_CODES = new Set<string>(["en", "pt-BR"]);
 
 export const isAutomaticTranslationLanguage = (code: string): boolean => {
   try {

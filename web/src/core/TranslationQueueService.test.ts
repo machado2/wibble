@@ -17,6 +17,7 @@ const job: TranslationQueueJob = {
 
 const repository = () => ({
   enqueue: jest.fn().mockResolvedValue(2),
+  getContentsBySlug: jest.fn().mockResolvedValue([]),
   claimNext: jest.fn().mockResolvedValue(job),
   complete: jest.fn().mockResolvedValue(undefined),
   retry: jest.fn().mockResolvedValue(undefined),
@@ -31,7 +32,8 @@ const translator = () => ({
 describe("TranslationQueueService", () => {
   test("uses a distinct global identity for automatic background cost control", () => {
     expect(BACKGROUND_TRANSLATION_IDENTITY).toBe("background-translations@wibble.internal");
-    expect(isAutomaticTranslationLanguage("pt-BR")).toBe(false);
+    expect(isAutomaticTranslationLanguage("pt-BR")).toBe(true);
+    expect(isAutomaticTranslationLanguage("en")).toBe(true);
     expect(isAutomaticTranslationLanguage("es")).toBe(false);
     expect(isAutomaticTranslationLanguage("nl")).toBe(false);
   });
@@ -95,5 +97,46 @@ describe("TranslationQueueService", () => {
 
     expect(await service.processNext()).toEqual({ processed: true, status: "failed" });
     expect(repo.fail).toHaveBeenCalledWith("job-1", "lease-1", "Falha ao gerar tradução");
+  });
+
+  test("enqueues only Portuguese for an English original", async () => {
+    const repo = repository();
+    repo.enqueue.mockResolvedValue(1);
+    repo.getContentsBySlug.mockResolvedValue([
+      { slug: "story", title: "The big news", description: "A story", content: "The quick and the article" },
+    ]);
+    const service = new TranslationQueueService({ repository: repo, translator: translator() as any });
+
+    const count = await service.enqueueAutomatic(["STORY"]);
+    expect(count).toBe(1);
+    expect(repo.enqueue).toHaveBeenCalledTimes(1);
+    expect(repo.enqueue).toHaveBeenCalledWith(["story"], "pt-BR", BACKGROUND_TRANSLATION_IDENTITY);
+  });
+
+  test("enqueues only English for a Brazilian Portuguese original", async () => {
+    const repo = repository();
+    repo.enqueue.mockResolvedValue(1);
+    repo.getContentsBySlug.mockResolvedValue([
+      { slug: "story", title: "A notícia", description: "Uma história", content: "Não para com que como também" },
+    ]);
+    const service = new TranslationQueueService({ repository: repo, translator: translator() as any });
+
+    const count = await service.enqueueAutomatic(["story"]);
+    expect(count).toBe(1);
+    expect(repo.enqueue).toHaveBeenCalledWith(["story"], "en", BACKGROUND_TRANSLATION_IDENTITY);
+  });
+
+  test("enqueues both targets for a non-English/Portuguese original", async () => {
+    const repo = repository();
+    repo.enqueue.mockResolvedValue(1);
+    repo.getContentsBySlug.mockResolvedValue([
+      { slug: "story", title: "Новини", description: "Історія", content: "Це український текст статті" },
+    ]);
+    const service = new TranslationQueueService({ repository: repo, translator: translator() as any });
+
+    const count = await service.enqueueAutomatic(["story"]);
+    expect(count).toBe(2);
+    expect(repo.enqueue).toHaveBeenCalledWith(["story"], "en", BACKGROUND_TRANSLATION_IDENTITY);
+    expect(repo.enqueue).toHaveBeenCalledWith(["story"], "pt-BR", BACKGROUND_TRANSLATION_IDENTITY);
   });
 });

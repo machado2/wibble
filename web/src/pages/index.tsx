@@ -16,11 +16,7 @@ import { NewsImageSelector } from "@/components/NewsImageSelector";
 import { TimeSelection } from "@/components/TimeSelection";
 import { globalCopyForLanguage } from "@/components/GlobalLanguage";
 import { resolveRequestLanguage } from "@/core/globalLanguageRequest";
-import {
-  BACKGROUND_TRANSLATION_IDENTITY,
-  TranslationQueueService,
-} from "@/core/TranslationQueueService";
-import { isAutomaticTranslationLanguage } from "@/core/translationLanguages";
+import { TranslationQueueService } from "@/core/TranslationQueueService";
 
 const siteTitle = "The Wibble";
 const PAGE_SIZE = 20;
@@ -111,16 +107,15 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       model,
       languageCode ?? undefined
     );
-    if (languageCode && isAutomaticTranslationLanguage(languageCode)) {
-      try {
-        await new TranslationQueueService().enqueueVisible(
-          latestNews.map((article) => article.slug),
-          languageCode,
-          BACKGROUND_TRANSLATION_IDENTITY
-        );
-      } catch (queueError) {
-        console.error("Could not enqueue background translations", queueError);
-      }
+    try {
+      // Always enqueue the automatic translations (English + Brazilian
+      // Portuguese, minus the article's detected original language) so every
+      // article becomes available in both target languages over time.
+      await new TranslationQueueService().enqueueAutomatic(
+        latestNews.map((article) => article.slug)
+      );
+    } catch (queueError) {
+      console.error("Could not enqueue background translations", queueError);
     }
 
     const props: HomeProps = { latestNews, languageCode };

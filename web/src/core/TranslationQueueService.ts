@@ -8,6 +8,10 @@ import {
 import { resolveSupportedTranslationLanguage } from "./translationLanguages";
 import { generationSafetyIdentifier } from "./generationIdentity";
 import {
+  automaticTranslationTargets,
+  detectOriginalLanguage,
+} from "./originalLanguage";
+import {
   availableTranslationQueueCapacity,
   BACKGROUND_TRANSLATION_IDENTITY,
   DEFAULT_TRANSLATION_HOURLY_LIMIT,
@@ -31,6 +35,12 @@ export type TranslationQueueJob = {
 
 type QueueRepository = {
   enqueue(slugs: string[], languageCode: string, requestedBy: string): Promise<number>;
+  getContentsBySlug(slugs: string[]): Promise<Array<{
+    slug: string;
+    title: string;
+    description: string;
+    content: string | null;
+  }>>;
   claimNext(): Promise<TranslationQueueJob | null>;
   complete(id: string, leaseId: string): Promise<void>;
   rejectQuota(id: string, leaseId: string, error: string): Promise<void>;
@@ -59,8 +69,7 @@ type ClaimedRow = {
 export class PrismaTranslationQueueRepository implements QueueRepository {
   async enqueue(slugs: string[], languageCode: string, requestedBy: string): Promise<number> {
     if (slugs.length === 0) return 0;
-    return prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`
+    return prisma.$transaction(async (tx) => {      await tx.$queryRaw(Prisma.sql`
         SELECT 1::int AS locked
         FROM pg_advisory_xact_lock(hashtextextended(${`translation-user:${requestedBy}`}, 0))
       `);
@@ -123,6 +132,17 @@ export class PrismaTranslationQueueRepository implements QueueRepository {
       }
       return queued;
     });
+  }
+
+  async getContentsBySlug(
+    slugs: string[]
+  ): Promise<Array<{ slug: string; title: string; description: string; content: string | null }>> {
+    if (slugs.length === 0) return [];
+    const rows = await prisma.content.findMany({
+      where: { slug: { in: slugs } },
+      select: { slug: true, title: true, description: true, content: true },
+    });
+    return rows;
   }
 
   async claimNext(): Promise<TranslationQueueJob | null> {
@@ -237,6 +257,32 @@ export class TranslationQueueService {
       new Set(requestedSlugs.map((slug) => slug.trim().toLowerCase()).filter(Boolean))
     ).slice(0, MAX_VISIBLE_BATCH);
     return this.repository.enqueue(slugs, languageCode, requestedBy.trim().toLowerCase());
+  }
+
+  async enqueueAutomatic(requestedSlugs: string[]): Promise<number> {
+    const slugs = Array.from(
+      new Set(requestedSlugs.map((slug) => slug.trim().toLowerCase()).filter(Boolean))
+    ).slice(0, MAX_VISIBLE_BATCH);
+    if (slugs.length === 0) return 0;
+    const contents = await this.repository.getContentsBySlug(slugs);
+    const slugsByTarget = new Map<string, string[]>();
+    for (const article of contents) {
+      const original = detectOriginalLanguage(article);
+      for (const target of automaticTranslationTargets(original)) {
+        const bucket = slugsByTarget.get(target) ?? [];
+        bucket.push(article.slug);
+        slugsByTarget.set(target, bucket);
+      }
+    }
+    let queued = 0;
+    for (const [target, targetSlugs] of slugsByTarget) {
+      queued += await this.repository.enqueue(
+        targetSlugs,
+        target,
+        BACKGROUND_TRANSLATION_IDENTITY
+      );
+    }
+    return queued;
   }
 
   async processNext(): Promise<

@@ -9,6 +9,7 @@ import {
   languageLabel,
   resolveSupportedTranslationLanguage,
 } from "./translationLanguages";
+import { detectOriginalLanguage, isSameAsOriginal } from "./originalLanguage";
 
 type ArticleRecord = {
   id: string;
@@ -98,6 +99,10 @@ export class ArticleTranslationService {
   ): Promise<GenerationResult> {
     const languageCode = resolveSupportedTranslationLanguage(requestedLanguage);
     const article = await this.requireArticle(slug);
+    const original = detectOriginalLanguage(article);
+    if (isSameAsOriginal(languageCode, original)) {
+      throw new ArticleTranslationError("The article is already in this language", 400);
+    }
     const existing = await this.repository.getTranslation(article.id, languageCode);
     if (existing) return { translation: existing, created: false };
 
