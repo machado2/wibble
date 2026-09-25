@@ -30,23 +30,23 @@ test("reloads valid Nickel edits and retains the last valid config", () => {
     runtime.resetConfigCacheForTests();
 
     const first = runtime.getWibbleConfig();
-    assert.equal(first.generation.writers[0].nickname, "Luna");
+    assert.equal(first.generation.writers[0].nickname, "DeepSeek Flash");
 
     const edited = fs
       .readFileSync(temporaryConfig, "utf8")
-      .replace('nickname = "Luna"', 'nickname = "Reloaded Luna"');
+      .replace('nickname = "DeepSeek Flash"', 'nickname = "Reloaded DeepSeek"');
     fs.writeFileSync(temporaryConfig, edited);
     forceNewMtime(temporaryConfig);
 
     const reloaded = runtime.getWibbleConfig();
-    assert.equal(reloaded.generation.writers[0].nickname, "Reloaded Luna");
+    assert.equal(reloaded.generation.writers[0].nickname, "Reloaded DeepSeek");
 
     fs.writeFileSync(temporaryConfig, "{ generation = { writers = [] } }");
     forceNewMtime(temporaryConfig);
 
     console.error = () => {};
     const retained = runtime.getWibbleConfig();
-    assert.equal(retained.generation.writers[0].nickname, "Reloaded Luna");
+    assert.equal(retained.generation.writers[0].nickname, "Reloaded DeepSeek");
   } finally {
     console.error = originalConsoleError;
     process.chdir(originalCwd);
@@ -82,7 +82,7 @@ test("loads an exported JSON config from WIBBLE_CONFIG_PATH", () => {
 
     const config = runtime.getWibbleConfig();
     assert.equal(config.app.site_url, "https://wibble.fbmac.net");
-    assert.equal(config.generation.writers[0].nickname, "Luna");
+    assert.equal(config.generation.writers[0].nickname, "DeepSeek Flash");
   } finally {
     if (originalConfiguredPath === undefined) {
       delete process.env.WIBBLE_CONFIG_PATH;
@@ -111,6 +111,88 @@ test("rejects an empty translation worker secret", () => {
     assert.throws(
       () => runtime.getWibbleConfig(),
       /translation_worker_secret must be a non-empty string/
+    );
+  } finally {
+    process.chdir(originalCwd);
+    runtime.resetConfigCacheForTests();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+const loadExampleConfig = (temporaryDirectory, transform) => {
+  const temporaryConfig = path.join(temporaryDirectory, "config.ncl");
+  const source = fs
+    .readFileSync(path.resolve(__dirname, "../config.ncl.example"), "utf8")
+    .replace(
+      'translation_worker_secret = ""',
+      'translation_worker_secret = "test-worker-secret"'
+    );
+  fs.writeFileSync(temporaryConfig, transform ? transform(source) : source);
+  return temporaryConfig;
+};
+
+test("loads a config without OpenAI settings", () => {
+  const temporaryDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wibble-no-openai-")
+  );
+  const originalCwd = process.cwd();
+
+  try {
+    loadExampleConfig(temporaryDirectory);
+    process.chdir(temporaryDirectory);
+    runtime.resetConfigCacheForTests();
+
+    const config = runtime.getWibbleConfig();
+    assert.equal(config.secrets.openai_api_key, "");
+    assert.equal(config.generation.openai_api_url, "");
+    assert.equal(config.generation.moderation_api_url, "");
+    assert.equal(config.generation.writers.length, 1);
+    assert.equal(config.generation.writers[0].provider, "openrouter");
+  } finally {
+    process.chdir(originalCwd);
+    runtime.resetConfigCacheForTests();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("rejects an openai writer without OpenAI credentials", () => {
+  const temporaryDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wibble-openai-writer-")
+  );
+  const originalCwd = process.cwd();
+
+  try {
+    loadExampleConfig(temporaryDirectory, (source) =>
+      source.replace('provider = "openrouter"', 'provider = "openai"')
+    );
+    process.chdir(temporaryDirectory);
+    runtime.resetConfigCacheForTests();
+    assert.throws(
+      () => runtime.getWibbleConfig(),
+      /openai writers require secrets\.openai_api_key and generation\.openai_api_url/
+    );
+  } finally {
+    process.chdir(originalCwd);
+    runtime.resetConfigCacheForTests();
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("rejects moderation without OpenAI credentials", () => {
+  const temporaryDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wibble-moderation-")
+  );
+  const originalCwd = process.cwd();
+
+  try {
+    loadExampleConfig(temporaryDirectory, (source) =>
+      source.replace("moderation_enabled = false", "moderation_enabled = true")
+    );
+    process.chdir(temporaryDirectory);
+    runtime.resetConfigCacheForTests();
+    assert.throws(
+      () => runtime.getWibbleConfig(),
+      /moderation_enabled requires secrets\.openai_api_key and generation\.moderation_api_url/
     );
   } finally {
     process.chdir(originalCwd);

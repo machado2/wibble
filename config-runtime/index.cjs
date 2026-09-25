@@ -46,6 +46,16 @@ const secretString = (value, field) => {
   return value;
 };
 
+const optionalString = (value, field) => {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (typeof value !== "string") {
+    throw new Error(`Invalid Nickel configuration: ${field} must be a string`);
+  }
+  return value.trim();
+};
+
 const validateWriter = (writer, index) => {
   const field = `generation.writers[${index}]`;
   const provider = requiredString(writer?.provider, `${field}.provider`);
@@ -86,6 +96,36 @@ const validateConfig = (raw) => {
     ids.add(writer.id);
   }
 
+  const openaiApiKey = optionalString(
+    raw.secrets?.openai_api_key,
+    "secrets.openai_api_key"
+  );
+  const openaiApiUrl = optionalString(
+    raw.generation?.openai_api_url,
+    "generation.openai_api_url"
+  );
+  const moderationApiUrl = optionalString(
+    raw.generation?.moderation_api_url,
+    "generation.moderation_api_url"
+  );
+  const moderationEnabled = requiredBoolean(
+    raw.generation?.moderation_enabled,
+    "generation.moderation_enabled"
+  );
+  if (
+    writers.some((writer) => writer.provider === "openai") &&
+    (!openaiApiKey || !openaiApiUrl)
+  ) {
+    throw new Error(
+      "Invalid Nickel configuration: openai writers require secrets.openai_api_key and generation.openai_api_url"
+    );
+  }
+  if (moderationEnabled && (!openaiApiKey || !moderationApiUrl)) {
+    throw new Error(
+      "Invalid Nickel configuration: generation.moderation_enabled requires secrets.openai_api_key and generation.moderation_api_url"
+    );
+  }
+
   return {
     secrets: {
       database_url: secretString(
@@ -112,10 +152,7 @@ const validateConfig = (raw) => {
         raw.secrets?.safety_identifier_secret,
         "secrets.safety_identifier_secret"
       ),
-      openai_api_key: secretString(
-        raw.secrets?.openai_api_key,
-        "secrets.openai_api_key"
-      ),
+      openai_api_key: openaiApiKey,
       openrouter_api_key: secretString(
         raw.secrets?.openrouter_api_key,
         "secrets.openrouter_api_key"
@@ -150,22 +187,13 @@ const validateConfig = (raw) => {
     },
     generation: {
       writers,
-      openai_api_url: requiredString(
-        raw.generation?.openai_api_url,
-        "generation.openai_api_url"
-      ),
+      openai_api_url: openaiApiUrl,
       openrouter_api_url: requiredString(
         raw.generation?.openrouter_api_url,
         "generation.openrouter_api_url"
       ),
-      moderation_enabled: requiredBoolean(
-        raw.generation?.moderation_enabled,
-        "generation.moderation_enabled"
-      ),
-      moderation_api_url: requiredString(
-        raw.generation?.moderation_api_url,
-        "generation.moderation_api_url"
-      ),
+      moderation_enabled: moderationEnabled,
+      moderation_api_url: moderationApiUrl,
       max_output_tokens: requiredNumber(
         raw.generation?.max_output_tokens,
         "generation.max_output_tokens",

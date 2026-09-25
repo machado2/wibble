@@ -2,7 +2,7 @@ let Writer = {
   id | String,
   nickname | String,
   slug | String,
-  provider | String,
+  provider | String, # "openrouter" or "openai"
   available | Bool,
   admin_only | Bool,
 }
@@ -15,6 +15,7 @@ in
     sso_client_secret = "",
     admin_email = "",
     safety_identifier_secret = "",
+    # Optional: only writers with provider = "openai" (and moderation) need it.
     openai_api_key = "",
     openrouter_api_key = "",
     replicate_api_token = "",
@@ -36,26 +37,19 @@ in
   generation = {
     writers | Array Writer = [
       {
-        id = "luna",
-        nickname = "Luna",
-        slug = "gpt-5.6-luna",
-        provider = "openai",
-        available = true,
-        admin_only = false,
-      },
-      {
         id = "deepseek-flash",
         nickname = "DeepSeek Flash",
         slug = "deepseek/deepseek-v4-flash-0731",
         provider = "openrouter",
-        available = false,
-        admin_only = true,
+        available = true,
+        admin_only = false,
       },
     ],
-    openai_api_url = "https://api.openai.com/v1/responses",
     openrouter_api_url = "https://openrouter.ai/api/v1/chat/completions",
+    # Optional OpenAI support: writers with provider = "openai" also require
+    # generation.openai_api_url, and moderation additionally requires
+    # generation.moderation_api_url (both backed by secrets.openai_api_key).
     moderation_enabled = false,
-    moderation_api_url = "https://api.openai.com/v1/moderations",
     max_output_tokens = 16000,
     max_prompt_length = 2000,
   },
