@@ -8,7 +8,7 @@ export type PublicRuntimeConfig = {
 };
 
 export const defaultPublicRuntimeConfig: PublicRuntimeConfig = {
-  discordUrl: "https://discord.gg/qwATcUrFe",
+  discordUrl: "https://discord.gg/Ev2J94xDNY",
   ssoUrl: "https://sso.fbmac.net",
   maxPromptLength: 2000,
   writers: [],

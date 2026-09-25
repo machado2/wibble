@@ -24,7 +24,7 @@ in
   app = {
     site_url = "https://wibble.fbmac.net",
     sso_public_url = "https://sso.fbmac.net",
-    discord_url = "https://discord.gg/qwATcUrFe",
+    discord_url = "https://discord.gg/Ev2J94xDNY",
     images_dir = "/data/images",
   },
 
