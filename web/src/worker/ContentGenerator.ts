@@ -270,8 +270,12 @@ const assertSafeUrl = (value: unknown, image: boolean) => {
 
 const assertNoRawMdx = (content: string) => {
   const withoutMarkers = content.replace(PRESERVE_MARKER, "WIBBLE_PRESERVED");
+  // `-->` is intentionally allowed: the MDX compiler treats a bare arrow as
+  // inert text (it only matters inside `<!-- ... -->`, whose opener is still
+  // rejected here), and rejecting it broke translations of harmless code spans
+  // such as `toaster --> cityhall`.
   if (
-    /<\/?[A-Za-z][^>]*>|<!--|-->|[{}]/.test(withoutMarkers) ||
+    /<\/?[A-Za-z][^>]*>|<!--|[{}]/.test(withoutMarkers) ||
     /^\s*(?:import\s.+\sfrom\s+|export\s+(?:default|const|let|var|function|class|\{))/m.test(
       withoutMarkers
     )
@@ -449,6 +453,10 @@ export class ContentGenerator {
             model: writer.slug,
             messages,
             max_tokens: config.generation.max_output_tokens,
+            // deepseek-v4-flash defaults to high reasoning effort on OpenRouter,
+            // which can burn the whole output budget before any content comes
+            // back (finish_reason "length" with content: null).
+            reasoning: { enabled: false },
             ...(safetyIdentifier ? { user: safetyIdentifier } : {}),
             ...(jsonOutput ? { response_format: { type: "json_object" } } : {}),
           }
@@ -487,7 +495,9 @@ export class ContentGenerator {
     }
     const content = responseText(payload);
     if (content == null) {
-      throw new ExternalServiceError();
+      throw new ExternalServiceError(
+        "Language model returned no usable content"
+      );
     }
     console.info("Language model request completed", {
       writer: writer.id,

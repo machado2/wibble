@@ -303,6 +303,12 @@ export class TranslationQueueService {
       await this.repository.complete(job.id, job.leaseId);
       return { processed: true, status: "completed" };
     } catch (error) {
+      console.error("Translation generation attempt failed", {
+        jobId: job.id,
+        languageCode: job.languageCode,
+        error:
+          error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
       if (error instanceof ArticleTranslationError && error.statusCode === 429) {
         await this.repository.rejectQuota(job.id, job.leaseId, "Quota de traduções esgotada");
         return { processed: true, status: "rejected" };

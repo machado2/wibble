@@ -131,6 +131,9 @@ class TextGenerator {
             model,
             messages,
             max_tokens: Config.maxOutputTokens,
+            // OpenRouter reasoning models may spend the whole output budget on
+            // thinking and return no content at all.
+            reasoning: { enabled: false },
             ...(safetyIdentifier ? { user: safetyIdentifier } : {}),
           }
         : {

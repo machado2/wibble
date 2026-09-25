@@ -281,4 +281,101 @@ describe("ContentGenerator article translations", () => {
       )
     ).rejects.toThrow();
   });
+
+  test("translates content containing bare --> arrows in code spans", async () => {
+    const generator = new ContentGenerator();
+    const ask = jest.spyOn(generator, "askGpt").mockResolvedValue(
+      JSON.stringify({
+        title: "Traduzido",
+        description: "Traduzido",
+        content: "Texto `torradeira --> prefeitura --> café` traduzido",
+      })
+    );
+
+    await expect(
+      generator.generateTranslation(
+        writer,
+        {
+          title: "Original",
+          description: "Original",
+          content: "Original `toaster --> cityhall --> breakfast` text",
+        },
+        "Portuguese (Brazil)"
+      )
+    ).resolves.toMatchObject({
+      content: "Texto `torradeira --> prefeitura --> café` traduzido",
+    });
+    expect(ask).toHaveBeenCalledTimes(1);
+  });
+
+  test("still rejects HTML comments in a model response", async () => {
+    const generator = new ContentGenerator();
+    jest.spyOn(generator, "askGpt").mockResolvedValue(
+      JSON.stringify({
+        title: "Translated",
+        description: "Translated",
+        content: "Safe <!-- hidden --> text",
+      })
+    );
+
+    await expect(
+      generator.generateTranslation(
+        writer,
+        {
+          title: "Original",
+          description: "Original",
+          content: "Original body",
+        },
+        "English"
+      )
+    ).rejects.toThrow();
+  });
+});
+
+describe("ContentGenerator OpenRouter requests", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    mockGetWibbleConfig.mockReset();
+  });
+
+  test("disables reasoning so the output budget cannot be spent thinking", async () => {
+    mockGetWibbleConfig.mockReturnValue({
+      app: { site_url: "https://wibble.fbmac.net" },
+      secrets: { openrouter_api_key: "test-key", openai_api_key: "" },
+      generation: {
+        moderation_enabled: false,
+        openrouter_api_url: "https://openrouter.ai/api/v1/chat/completions",
+        openai_api_url: "",
+        max_output_tokens: 16000,
+      },
+    } as ReturnType<typeof getWibbleConfig>);
+    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: "resposta" } }] }),
+    } as Response);
+
+    const generator = new ContentGenerator();
+    await expect(
+      generator.askGpt(
+        {
+          id: "deepseek-flash",
+          nickname: "DeepSeek Flash",
+          slug: "deepseek/deepseek-v4-flash-0731",
+          provider: "openrouter",
+          available: true,
+          admin_only: false,
+        },
+        "prompt",
+        undefined,
+        true
+      )
+    ).resolves.toBe("resposta");
+
+    const body = JSON.parse(
+      String((fetchSpy.mock.calls[0][1] as RequestInit).body)
+    );
+    expect(body.reasoning).toEqual({ enabled: false });
+    expect(body.model).toBe("deepseek/deepseek-v4-flash-0731");
+  });
 });
